@@ -1,0 +1,36 @@
+<customlist scriptid="customlist_elm_canal">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Canal</name>
+  <customvalues>
+    <customvalue scriptid="val_733482_7564430_334">
+      <isinactive>F</isinactive>
+      <value>Alprestamo</value>
+    </customvalue>
+    <customvalue scriptid="val_733483_7564430_503">
+      <isinactive>F</isinactive>
+      <value>Fingurú</value>
+    </customvalue>
+    <customvalue scriptid="val_733484_7564430_955">
+      <isinactive>F</isinactive>
+      <value>Landing 1</value>
+    </customvalue>
+    <customvalue scriptid="val_733485_7564430_320">
+      <isinactive>F</isinactive>
+      <value>Landing 2</value>
+    </customvalue>
+    <customvalue scriptid="val_2953996_7564430_336">
+      <isinactive>F</isinactive>
+      <value>Tlprs</value>
+    </customvalue>
+    <customvalue scriptid="val_2953997_7564430_649">
+      <isinactive>F</isinactive>
+      <value>Tuprs</value>
+    </customvalue>
+    <customvalue scriptid="val_2954051_7564430_362">
+      <isinactive>F</isinactive>
+      <value>Google</value>
+    </customvalue>
+  </customvalues>
+</customlist>

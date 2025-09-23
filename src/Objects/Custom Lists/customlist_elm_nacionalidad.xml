@@ -1,0 +1,16 @@
+<customlist scriptid="customlist_elm_nacionalidad">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Nacionalidad</name>
+  <customvalues>
+    <customvalue scriptid="val_2284451_7564430_274">
+      <isinactive>F</isinactive>
+      <value>Uruguayo</value>
+    </customvalue>
+    <customvalue scriptid="val_2284452_7564430_967">
+      <isinactive>F</isinactive>
+      <value>Extranjero</value>
+    </customvalue>
+  </customvalues>
+</customlist>

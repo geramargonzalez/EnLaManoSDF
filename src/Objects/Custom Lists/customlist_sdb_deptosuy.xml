@@ -1,0 +1,84 @@
+<customlist scriptid="customlist_sdb_deptosuy">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Departamentos de Uruguay</name>
+  <customvalues>
+    <customvalue scriptid="val_642440_7564430_364">
+      <isinactive>F</isinactive>
+      <value>Artigas</value>
+    </customvalue>
+    <customvalue scriptid="val_642441_7564430_988">
+      <isinactive>F</isinactive>
+      <value>Canelones</value>
+    </customvalue>
+    <customvalue scriptid="val_642442_7564430_304">
+      <isinactive>F</isinactive>
+      <value>Cerro Largo</value>
+    </customvalue>
+    <customvalue scriptid="val_642443_7564430_661">
+      <isinactive>F</isinactive>
+      <value>Colonia</value>
+    </customvalue>
+    <customvalue scriptid="val_642444_7564430_126">
+      <isinactive>F</isinactive>
+      <value>Durazno</value>
+    </customvalue>
+    <customvalue scriptid="val_642445_7564430_529">
+      <isinactive>F</isinactive>
+      <value>Flores</value>
+    </customvalue>
+    <customvalue scriptid="val_642446_7564430_983">
+      <isinactive>F</isinactive>
+      <value>Florida</value>
+    </customvalue>
+    <customvalue scriptid="val_642447_7564430_776">
+      <isinactive>F</isinactive>
+      <value>Lavalleja</value>
+    </customvalue>
+    <customvalue scriptid="val_642448_7564430_876">
+      <isinactive>F</isinactive>
+      <value>Maldonado</value>
+    </customvalue>
+    <customvalue scriptid="val_642449_7564430_710">
+      <isinactive>F</isinactive>
+      <value>Montevideo</value>
+    </customvalue>
+    <customvalue scriptid="val_642450_7564430_959">
+      <isinactive>F</isinactive>
+      <value>Paysandú</value>
+    </customvalue>
+    <customvalue scriptid="val_642451_7564430_131">
+      <isinactive>F</isinactive>
+      <value>Río Negro</value>
+    </customvalue>
+    <customvalue scriptid="val_642452_7564430_648">
+      <isinactive>F</isinactive>
+      <value>Rivera</value>
+    </customvalue>
+    <customvalue scriptid="val_642453_7564430_960">
+      <isinactive>F</isinactive>
+      <value>Rocha</value>
+    </customvalue>
+    <customvalue scriptid="val_642454_7564430_686">
+      <isinactive>F</isinactive>
+      <value>Salto</value>
+    </customvalue>
+    <customvalue scriptid="val_642455_7564430_771">
+      <isinactive>F</isinactive>
+      <value>San José</value>
+    </customvalue>
+    <customvalue scriptid="val_642456_7564430_234">
+      <isinactive>F</isinactive>
+      <value>Soriano</value>
+    </customvalue>
+    <customvalue scriptid="val_642457_7564430_612">
+      <isinactive>F</isinactive>
+      <value>Tacuarembó</value>
+    </customvalue>
+    <customvalue scriptid="val_642458_7564430_362">
+      <isinactive>F</isinactive>
+      <value>Treinta y tres</value>
+    </customvalue>
+  </customvalues>
+</customlist>

@@ -1,0 +1,40 @@
+<customlist scriptid="customlist_elm_actividad">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Actividad</name>
+  <customvalues>
+    <customvalue scriptid="val_726686_7564430_916">
+      <isinactive>F</isinactive>
+      <value>Privado</value>
+    </customvalue>
+    <customvalue scriptid="val_726687_7564430_659">
+      <isinactive>F</isinactive>
+      <value>Publico</value>
+    </customvalue>
+    <customvalue scriptid="val_726688_7564430_250">
+      <isinactive>F</isinactive>
+      <value>Jubilado</value>
+    </customvalue>
+    <customvalue scriptid="val_727113_7564430_626">
+      <isinactive>T</isinactive>
+      <value>banco</value>
+    </customvalue>
+    <customvalue scriptid="val_727114_7564430_994">
+      <isinactive>T</isinactive>
+      <value>financiera</value>
+    </customvalue>
+    <customvalue scriptid="val_727115_7564430_536">
+      <isinactive>F</isinactive>
+      <value>Independiente</value>
+    </customvalue>
+    <customvalue scriptid="val_727116_7564430_980">
+      <isinactive>T</isinactive>
+      <value>policia</value>
+    </customvalue>
+    <customvalue scriptid="val_731794_7564430_922">
+      <isinactive>F</isinactive>
+      <value>Sin Especificar</value>
+    </customvalue>
+  </customvalues>
+</customlist>

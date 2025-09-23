@@ -1,0 +1,52 @@
+<customlist scriptid="customlist_elm_reject_reason">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Motivo de Rechazo</name>
+  <customvalues>
+    <customvalue scriptid="val_733389_7564430_140">
+      <isinactive>F</isinactive>
+      <value>Lista Negra</value>
+    </customvalue>
+    <customvalue scriptid="val_733390_7564430_198">
+      <isinactive>F</isinactive>
+      <value>Mocasist</value>
+    </customvalue>
+    <customvalue scriptid="val_733391_7564430_941">
+      <isinactive>F</isinactive>
+      <value>BCU</value>
+    </customvalue>
+    <customvalue scriptid="val_733392_7564430_762">
+      <isinactive>F</isinactive>
+      <value>No hay oferta</value>
+    </customvalue>
+    <customvalue scriptid="val_733553_7564430_836">
+      <isinactive>F</isinactive>
+      <value>Repetido Rechazado</value>
+    </customvalue>
+    <customvalue scriptid="val_733950_7564430_413">
+      <isinactive>F</isinactive>
+      <value>Repetido Especial</value>
+    </customvalue>
+    <customvalue scriptid="val_2953691_7564430_285">
+      <isinactive>F</isinactive>
+      <value>Estafa</value>
+    </customvalue>
+    <customvalue scriptid="val_2953692_7564430_287">
+      <isinactive>F</isinactive>
+      <value>Edad</value>
+    </customvalue>
+    <customvalue scriptid="val_2953693_7564430_887">
+      <isinactive>F</isinactive>
+      <value>No cumple requisitos</value>
+    </customvalue>
+    <customvalue scriptid="val_2953694_7564430_500">
+      <isinactive>F</isinactive>
+      <value>Clearing</value>
+    </customvalue>
+    <customvalue scriptid="val_2953695_7564430_260">
+      <isinactive>F</isinactive>
+      <value>Datos incorrectos</value>
+    </customvalue>
+  </customvalues>
+</customlist>

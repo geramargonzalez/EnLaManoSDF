@@ -1,0 +1,24 @@
+<customlist scriptid="customlist_sdb_estadocivil">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Estado Civil</name>
+  <customvalues>
+    <customvalue scriptid="val_642403_7564430_298">
+      <isinactive>F</isinactive>
+      <value>Soltero/a</value>
+    </customvalue>
+    <customvalue scriptid="val_642404_7564430_704">
+      <isinactive>F</isinactive>
+      <value>Casado/a</value>
+    </customvalue>
+    <customvalue scriptid="val_642405_7564430_375">
+      <isinactive>F</isinactive>
+      <value>Divorciado/a</value>
+    </customvalue>
+    <customvalue scriptid="val_642406_7564430_540">
+      <isinactive>F</isinactive>
+      <value>Viudo/a</value>
+    </customvalue>
+  </customvalues>
+</customlist>

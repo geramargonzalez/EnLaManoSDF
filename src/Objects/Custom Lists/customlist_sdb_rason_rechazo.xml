@@ -1,0 +1,32 @@
+<customlist scriptid="customlist_sdb_rason_rechazo">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Razon de Rechazo</name>
+  <customvalues>
+    <customvalue scriptid="val_726974_7564430_217">
+      <isinactive>F</isinactive>
+      <value>Mala calificación en BCU</value>
+    </customvalue>
+    <customvalue scriptid="val_726975_7564430_510">
+      <isinactive>F</isinactive>
+      <value>Incumplimientos con financiera</value>
+    </customvalue>
+    <customvalue scriptid="val_726976_7564430_635">
+      <isinactive>F</isinactive>
+      <value>Perfil crediticio</value>
+    </customvalue>
+    <customvalue scriptid="val_726977_7564430_218">
+      <isinactive>F</isinactive>
+      <value>Extranjero</value>
+    </customvalue>
+    <customvalue scriptid="val_726978_7564430_778">
+      <isinactive>F</isinactive>
+      <value>Edad</value>
+    </customvalue>
+    <customvalue scriptid="val_726979_7564430_799">
+      <isinactive>F</isinactive>
+      <value>Antigüedad laboral</value>
+    </customvalue>
+  </customvalues>
+</customlist>

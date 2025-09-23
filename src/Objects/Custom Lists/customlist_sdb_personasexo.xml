@@ -1,0 +1,20 @@
+<customlist scriptid="customlist_sdb_personasexo">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Persona Sexo</name>
+  <customvalues>
+    <customvalue scriptid="val_642409_7564430_271">
+      <isinactive>F</isinactive>
+      <value>Masculino</value>
+    </customvalue>
+    <customvalue scriptid="val_642410_7564430_564">
+      <isinactive>F</isinactive>
+      <value>Femenino</value>
+    </customvalue>
+    <customvalue scriptid="val_642411_7564430_754">
+      <isinactive>F</isinactive>
+      <value>No especifica</value>
+    </customvalue>
+  </customvalues>
+</customlist>

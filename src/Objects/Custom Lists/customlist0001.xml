@@ -1,0 +1,12 @@
+<customlist scriptid="customlist0001">
+  <description>Debería mostrar todos los ingresos de interesados, en cualquier estado, por fecha de ingreso.</description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Interesados_GP</name>
+  <customvalues>
+    <customvalue scriptid="val_731090_7564430_779">
+      <isinactive>F</isinactive>
+      <value>XX</value>
+    </customvalue>
+  </customvalues>
+</customlist>

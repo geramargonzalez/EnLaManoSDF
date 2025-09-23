@@ -1,0 +1,20 @@
+<customlist scriptid="customlist_elm_vale_historico">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Estado Vale</name>
+  <customvalues>
+    <customvalue scriptid="val_5721159_7564430_980">
+      <isinactive>F</isinactive>
+      <value>Cliente con vale activo</value>
+    </customvalue>
+    <customvalue scriptid="val_5721160_7564430_500">
+      <isinactive>F</isinactive>
+      <value>Cliente sin vale activo</value>
+    </customvalue>
+    <customvalue scriptid="val_5721161_7564430_606">
+      <isinactive>F</isinactive>
+      <value>Cliente sin vale historico</value>
+    </customvalue>
+  </customvalues>
+</customlist>

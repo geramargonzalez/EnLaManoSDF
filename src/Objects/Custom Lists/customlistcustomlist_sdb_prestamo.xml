@@ -1,0 +1,20 @@
+<customlist scriptid="customlistcustomlist_sdb_prestamo">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Préstamo </name>
+  <customvalues>
+    <customvalue scriptid="val_725692_7564430_865">
+      <isinactive>F</isinactive>
+      <value>Monto solicitado</value>
+    </customvalue>
+    <customvalue scriptid="val_725693_7564430_800">
+      <isinactive>F</isinactive>
+      <value>Monto Ofrecido</value>
+    </customvalue>
+    <customvalue scriptid="val_725694_7564430_814">
+      <isinactive>F</isinactive>
+      <value>Monto Otorgado </value>
+    </customvalue>
+  </customvalues>
+</customlist>

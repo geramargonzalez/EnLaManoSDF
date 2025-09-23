@@ -1,0 +1,24 @@
+<customlist scriptid="customlist_elm_servicios">
+  <description></description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Servicios</name>
+  <customvalues>
+    <customvalue scriptid="val_733432_7564430_120">
+      <isinactive>F</isinactive>
+      <value>Proveedor Externo</value>
+    </customvalue>
+    <customvalue scriptid="val_733433_7564430_652">
+      <isinactive>F</isinactive>
+      <value>Web y Landing</value>
+    </customvalue>
+    <customvalue scriptid="val_733434_7564430_164">
+      <isinactive>F</isinactive>
+      <value>Manual</value>
+    </customvalue>
+    <customvalue scriptid="val_5738548_7564430_779">
+      <isinactive>F</isinactive>
+      <value>RENOVACIÓN</value>
+    </customvalue>
+  </customvalues>
+</customlist>
