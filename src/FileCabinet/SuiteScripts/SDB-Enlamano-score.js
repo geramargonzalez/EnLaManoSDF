@@ -71,7 +71,7 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             });
 
             var responseBody = JSON.parse(objResponse?.body);
-            log.debug('Response body', responseBody);
+           // log.debug('Response body', responseBody);
 
             // Check if response contains errors
             if (responseBody.hasOwnProperty('errores')) {
@@ -104,7 +104,7 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             }
 
             data = JSON.parse(data?.datosBcu);
-            log.debug("datosBcu: ", data);
+           // log.debug("datosBcu: ", data);
             var nombre = data.data?.Nombre
             logTxt += '<P> => datosBcu: </P>' + JSON.stringify(data) + "<P/>";
 

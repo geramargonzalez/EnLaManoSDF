@@ -25,6 +25,8 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                         [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_elm_aprobado","anyof","15"]],
                         "AND", 
                        ["custentity_elm_lead_repetido_original","anyof","@NONE@"]
+                       /*  ,"AND",
+                       ["custentity_sdb_nrdocumento","is","48925220"] */
                     ],
                     columns:
                     [
@@ -43,7 +45,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                  
                  // Enviar email si hay más de 40 leads con error BCU
                  const threashold = runtime.getCurrentScript().getParameter({ name: 'custscript_elm_umbral_toler' }) || 30;
-                 if (searchResultCount > threashold) {
+                  if (searchResultCount > threashold) {
                      sendHighVolumeAlert(searchResultCount);
                  }
         
@@ -86,8 +88,10 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
     
                       if (!infoRepetido?.id) { 
                          
+                     
                            const score = scoreLib.scoreFinal(docNumber);
-                           const bcuData = auxLib.extractBcuData(score);
+                           log.debug('Score', JSON.stringify(score));
+                            const bcuData = auxLib.extractBcuData(score);
                            const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
                            const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
                            const cantEntidadesT2 = t2Info?.entidades.length || 0;
@@ -98,7 +102,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                            const t2Quals = bcuData.t2Qualifications?.map(q => q.calificacion);
                            // Get all qualification values from T6  
                            const t6Quals = bcuData.t6Qualifications?.map(q => q.calificacion);
-
+ 
 
                             // Manejo de rechazo BCU con calificación visible
                             if (score?.error_reglas) {
@@ -122,6 +126,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                             }
     
                             if (score && score.score > objScriptParam.scoreMin) {
+                              log.audit('Score Inside');
                                const status = service == objScriptParam.serviceExternal ? objScriptParam.estadoLatente : objScriptParam.pendienteDeEvaluacion;
                                let leadId = auxLib.convertToLead(preLeadId, score, objScriptParam.leadStatus, status);
                                if (score.error_reglas == null) {
@@ -160,6 +165,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                                   log.audit('Error', 'No hay oferta para el documento: ' + docNumber);
                                   auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, montoCuotaObj?.montoCuotaName, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, t2Quals, t6Quals);
                                }
+                            } else {
+                              auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, 'Score Minimo', score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, score?.calificacionMinima, t6Quals);
+
                             }
     
                    
@@ -412,7 +420,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
              const logTitle = 'sendHighVolumeAlert';
              try {
                  log.audit(logTitle, `Iniciando función de alerta - ${leadCount} leads encontrados`);
-                 log.audit(logTitle, `Umbral actual: 40 leads`);
+                 log.audit(logTitle, `Umbral actual: 30 leads`);
                  
                 /*  if (leadCount <= 40) {
                      log.audit(logTitle, `No se enviará email - cantidad ${leadCount} no supera umbral de 40`);
@@ -427,8 +435,12 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                  // Obtener parámetros de email del script
                //   const emailRecipients = scriptObj.getParameter({ name: 'custscript_elm_email_recipients_bcu' }) || 'admin@empresa.com';
                  const emailCC = scriptObj.getParameter({ name: 'custscript_elm_email_cc_bcu' }) || 'ssilvera@enlamano.com.uy';
-                 const emailRecipients = 'mcampodonico@enlamano.com.uy,geramargonzalez@gmail.com,cshearer@enlamano.com.uy';
-                 const author = scriptObj.getParameter({ name: 'custscript_elm_autor_bcu' });
+                 const emailRecipients = 'mcampodonico@enlamano.com.uy, cshearer@enlamano.com.uy';
+                 const author = scriptObj.getParameter({ name: 'custscript_elm_autor_' });
+
+                 log.debug(logTitle, `Email recipients: ${emailRecipients}`);
+                 log.debug(logTitle, `Email CC: ${emailCC}`);
+                 log.debug(logTitle, `Email Author: ${author}`);
                  // Preparar contenido del email
                  const currentDateTime = new Date().toLocaleString('es-ES', {
                      year: 'numeric',
