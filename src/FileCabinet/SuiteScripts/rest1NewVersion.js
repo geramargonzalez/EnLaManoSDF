@@ -69,10 +69,9 @@ function (search, scoreLib, runtime, auxLib, record) {
             aprobado: params.estadoRepRechazado,
             rejectReason: params.rechazoBlacklist,
             repetidoOriginalId: infoRep.id
-          });
-          auxLib.createListRepetido(docNumber, `${infoRep.firstName} ${infoRep.lastName}`);
+          })
         } else {
-          auxLib.submitFieldsEntity(preLeadId, params?.estadoRechazado, params?.rechazoBlacklist);
+          auxLib.submitFieldsEntity(preLeadId, params?.estadoBlacklist, params?.rechazoBlacklist);
         }
         auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
         return response; // EARLY RETURN
@@ -91,9 +90,8 @@ function (search, scoreLib, runtime, auxLib, record) {
             rejectReason: params.rechazoMocasist,
             repetidoOriginalId: infoRep.id
           });
-          auxLib.createListRepetido(docNumber, `${infoRep.firstName} ${infoRep.lastName}`);
         } else {
-          auxLib.submitFieldsEntity(preLeadId, params.estadoRechazado, params.rechazoMocasist);
+          auxLib.submitFieldsEntity(preLeadId, params.estadoMocasist, params.rechazoMocasist);
         }
         auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
         return response; // EARLY RETURN
@@ -101,6 +99,7 @@ function (search, scoreLib, runtime, auxLib, record) {
 
       // ---------- Si NO está latente hoy (flujo “normal”) ----------
       if (notLatente) {
+        
         if (!infoRep?.id) {
           // Caso NUEVO → Scoring & BCU
           const score = scoreLib.scoreFinal(docNumber);
@@ -388,7 +387,13 @@ function (search, scoreLib, runtime, auxLib, record) {
       scoreMin: toNum(s.getParameter({ name: 'custscript_score_minimo' })),
       estadoLatente: s.getParameter({ name: 'custscript_elm_estado_latente' }),
       NohayInfoBCU: s.getParameter({ name: 'custscript_elm_no_hay_info_bcu_pm' }),
-      estadoErrorBCU: s.getParameter({ name: 'custscript_elm_estado_bcu' })
+      estadoErrorBCU: s.getParameter({ name: 'custscript_elm_estado_bcu' }),
+      estadoMocasist: s.getParameter({
+         name: 'custscript_elm_est_mocasist'
+      }),
+      estadoBlacklist: s.getParameter({
+         name: 'custscript_elm_est_blacklist'
+        })
     };
   }
 

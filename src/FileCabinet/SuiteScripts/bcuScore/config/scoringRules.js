@@ -8,7 +8,12 @@ define(['N/search', 'N/log'], function (search, log) {
 
     // Configuración por defecto (fallback si falla carga desde NetSuite)
     // PRE-COMPILADAS para máxima velocidad - NO requiere parsing JSON
-    var DEFAULT_RULES = {
+    const DEFAULT_RULES = {
+        // NOTA: La sección 'coefficients' está comentada porque actualmente NO se usa en el scoring principal.
+        // El scoring usa exclusivamente los coeficientes 'binned' (WOE) de abajo.
+        // Esta sección está reservada para futuras extensiones (scoring híbrido, validaciones adicionales).
+        // Si necesitas activarla, descomenta y agrega los campos correspondientes en customrecord_sdb_score.
+        /*
         coefficients: {
             vigente: { weight: -0.05, threshold: 100000, maxImpact: -0.3 },
             vencido: { weight: -0.15, threshold: 10000, maxImpact: -0.5 },
@@ -19,6 +24,29 @@ define(['N/search', 'N/log'], function (search, log) {
                 '1A': 0, '1C': -0.1, '2A': -0.2, '2B': -0.4, '0': -0.3,
                 'N/C': -0.25, 'N': -0.3, '3': -0.6, '4': -0.8, '5': -1.0
             }
+        },
+        */
+        // Valores por defecto para coeficientes "binned" (WOE) extraídos del record de Score
+        // ESTOS SON LOS COEFICIENTES QUE SE USAN ACTUALMENTE EN EL SCORING
+        binned: {
+            banco_binned: 0.0038032,
+            ent_t6_binned: 0.0026394,
+            intercept: 0.2114816,
+            t6_cred_dir_comp_binned: 0.0028341,
+            vig_noauto_t6_coop_binned: 0.0033394,
+            t0_bbva_binned: 0.0045863,
+            cont_t0_fucac_binned: 0.0038189,
+            t0_scotia_binned: 0.0034926,
+            t0_asi_binned: 0.0037215,
+            brou_grupo_binned: 0.0037486,
+            emp_valor_binned: 0.0059208,
+            t0_fnb_binned: 0.0014982,
+            t0_santa_binned: 0.0006744,
+            t6_binned: 0.0005706,
+            cred_dir_binned: 0.0002515,
+            t6_creditel_binned: 0.0003315,
+            t6_oca_binned: 0.0042904,
+            t6_pronto_binned: 0.0016738
         },
         baseScore: 0.7,
         rejectionRules: {
@@ -37,9 +65,10 @@ define(['N/search', 'N/log'], function (search, log) {
         }
     };
 
-    var _cachedRules = null;
-    var _lastCacheTime = null;
-    var CACHE_DURATION_MS = 1800000; // 30 minutos - caché más largo
+    let _cachedRules = null;
+    let _lastCacheTime = null;
+    let CACHE_DURATION_MS = 1800000; // 30 minutos - caché más largo
+    const scoreNetsuiteID = 1; // ID fijo del record customrecord_sdb_score
 
     /**
      * OPTIMIZADO: Obtiene reglas con caché agresivo y fallback inmediato
@@ -53,7 +82,7 @@ define(['N/search', 'N/log'], function (search, log) {
         try {
             // Intentar carga rápida desde NetSuite (timeout corto)
             var customRules = loadRulesFromNetSuite();
-            if (customRules && scoringRules.validateRules && scoringRules.validateRules(customRules)) {
+            if (customRules && validateRules(customRules)) {
                 _cachedRules = customRules;
                 _lastCacheTime = Date.now();
                 return customRules;
@@ -74,67 +103,87 @@ define(['N/search', 'N/log'], function (search, log) {
         return DEFAULT_RULES;
     }
 
-    /**
+    /** 
      * Carga reglas personalizadas desde customrecord_sdb_score
+     * OPTIMIZADO: usa lookupFields directo (más rápido que saved search)
      */
     function loadRulesFromNetSuite() {
         try {
-            var scoreSearch = search.create({
+            // OPTIMIZACIÓN: lookupFields es más rápido que search.create + getRange
+            // Carga TODOS los campos en una sola llamada para minimizar latencia
+            const record = search.lookupFields({
                 type: 'customrecord_sdb_score',
-                filters: [
-                    ['isinactive', 'is', 'F'] // Solo registros activos
-                ],
+                id: scoreNetsuiteID,
                 columns: [
-                    'custrecord_sdb_score_coefficient',
-                    'custrecord_sdb_score_threshold',
-                    'custrecord_sdb_score_max_impact',
+                    // Campos básicos (algunos comentados porque no se usan)
                     'custrecord_sdb_score_base_score',
-                    'custrecord_sdb_score_rejection_rules',
-                    'custrecord_sdb_score_rating_penalties'
+                    // 'custrecord_sdb_score_rejection_rules', // COMENTADO: Campo probablemente no existe
+                    'custrecord_sdb_banco_binned',
+                    'custrecord_sdb_ent_t6_binned',
+                    'custrecord_sdb_intercept',
+                    'custrecord_sdb_t6_cred_dir_comp_binned',
+                    'custrecord_sdb_vig_noauto_t6_coop_binned',
+                    'custrecord_sdb_woe_cont_t0_bbva_binned',
+                    'custrecord_sdb_woe_cont_t0_fucac_binned',
+                    'custrecord_sdb_woe_cont_t0_scotia_binned',
+                    'custrecord_sdb_woe_t0_asi_binned',
+                    'custrecord_sdb_woe_t0_brou_grupo_binned',
+                    'custrecord_sdb_woe_t0_emp_valor_binned',
+                    'custrecord_sdb_woe_t0_fnb_binned',
+                    'custrecord_sdb_woe_t0_santa_binned',
+                    'custrecord_sdb_woe_t6_binned',
+                    'custrecord_sdb_woe_t6_cred_dir_binned',
+                    'custrecord_sdb_woe_t6_creditel_binned',
+                    'custrecord_sdb_woe_t6_oca_binned',
+                    'custrecord_sdb_woe_t6_pronto_binned',
+                    // 'custrecord_sdb_score_coefficient', // COMENTADO: Campo probablemente no existe
+                    // 'custrecord_sdb_score_threshold', // COMENTADO: Campo no existe en custom record
+                    // 'custrecord_sdb_score_vigente_max', // COMENTADO: Campo probablemente no existe
+                    'custrecord_sdb_score_base_score'
+                    // 'custrecord_sdb_score_vencido_weight', // COMENTADO: Campo probablemente no existe
+                    // 'custrecord_sdb_score_rating_penalties' // COMENTADO: Campo probablemente no existe
                 ]
             });
 
-            var searchResult = scoreSearch.run().getRange(0, 1);
-            
-            if (searchResult.length === 0) {
-                log.debug({
-                    title: 'Scoring Rules',
-                    details: 'No custom scoring rules found in NetSuite'
-                });
-                return null;
+            // Helper para parsear valores de lookupFields (pueden venir como array o valor directo)
+            function getFieldValue(fieldName) {
+                var raw = record[fieldName];
+                if (!raw) return null;
+                // lookupFields puede devolver array [{ value, text }] o valor directo
+                if (Array.isArray(raw) && raw.length > 0) {
+                    return raw[0].value || raw[0];
+                }
+                return raw;
             }
-
-            var record = searchResult[0];
             
             // Construir objeto de reglas desde campos del record
-            var customRules = {
-                coefficients: {
-                    vigente: {
-                        weight: parseFloat(record.getValue('custrecord_sdb_score_vigente_weight')) || DEFAULT_RULES.coefficients.vigente.weight,
-                        threshold: parseFloat(record.getValue('custrecord_sdb_score_vigente_threshold')) || DEFAULT_RULES.coefficients.vigente.threshold,
-                        maxImpact: parseFloat(record.getValue('custrecord_sdb_score_vigente_max')) || DEFAULT_RULES.coefficients.vigente.maxImpact
-                    },
-                    vencido: {
-                        weight: parseFloat(record.getValue('custrecord_sdb_score_vencido_weight')) || DEFAULT_RULES.coefficients.vencido.weight,
-                        threshold: parseFloat(record.getValue('custrecord_sdb_score_vencido_threshold')) || DEFAULT_RULES.coefficients.vencido.threshold,
-                        maxImpact: parseFloat(record.getValue('custrecord_sdb_score_vencido_max')) || DEFAULT_RULES.coefficients.vencido.maxImpact
-                    },
-                    castigado: {
-                        weight: parseFloat(record.getValue('custrecord_sdb_score_castigado_weight')) || DEFAULT_RULES.coefficients.castigado.weight,
-                        threshold: parseFloat(record.getValue('custrecord_sdb_score_castigado_threshold')) || DEFAULT_RULES.coefficients.castigado.threshold,
-                        maxImpact: parseFloat(record.getValue('custrecord_sdb_score_castigado_max')) || DEFAULT_RULES.coefficients.castigado.maxImpact
-                    },
-                    entityCount: {
-                        weight: parseFloat(record.getValue('custrecord_sdb_score_entity_weight')) || DEFAULT_RULES.coefficients.entityCount.weight,
-                        threshold: parseFloat(record.getValue('custrecord_sdb_score_entity_threshold')) || DEFAULT_RULES.coefficients.entityCount.threshold,
-                        maxImpact: parseFloat(record.getValue('custrecord_sdb_score_entity_max')) || DEFAULT_RULES.coefficients.entityCount.maxImpact
-                    },
-                    ratingPenalties: parseRatingPenalties(record.getValue('custrecord_sdb_score_rating_penalties'))
-                },
-                baseScore: parseFloat(record.getValue('custrecord_sdb_score_base_score')) || DEFAULT_RULES.baseScore,
-                rejectionRules: parseRejectionRules(record.getValue('custrecord_sdb_score_rejection_rules')),
+            const customRules = {
+                baseScore: parseFloat(getFieldValue('custrecord_sdb_score_base_score')) || DEFAULT_RULES.baseScore,
+                rejectionRules: DEFAULT_RULES.rejectionRules, // parseRejectionRules(getFieldValue('custrecord_sdb_score_rejection_rules')), // COMENTADO: Campo no existe
                 periods: DEFAULT_RULES.periods, // Usar configuración estática
                 trending: DEFAULT_RULES.trending // Usar configuración estática
+            };
+
+            // Mapear valores binned (WOE) desde lookupFields
+            customRules.binned = {
+                banco_binned: parseFloat(getFieldValue('custrecord_sdb_banco_binned')) || DEFAULT_RULES.binned.banco_binned,
+                ent_t6_binned: parseFloat(getFieldValue('custrecord_sdb_ent_t6_binned')) || DEFAULT_RULES.binned.ent_t6_binned,
+                intercept: parseFloat(getFieldValue('custrecord_sdb_intercept')) || DEFAULT_RULES.binned.intercept,
+                t6_cred_dir_comp_binned: parseFloat(getFieldValue('custrecord_sdb_t6_cred_dir_comp_binned')) || DEFAULT_RULES.binned.t6_cred_dir_comp_binned,
+                vig_noauto_t6_coop_binned: parseFloat(getFieldValue('custrecord_sdb_vig_noauto_t6_coop_binned')) || DEFAULT_RULES.binned.vig_noauto_t6_coop_binned,
+                t0_bbva_binned: parseFloat(getFieldValue('custrecord_sdb_woe_cont_t0_bbva_binned')) || DEFAULT_RULES.binned.t0_bbva_binned,
+                cont_t0_fucac_binned: parseFloat(getFieldValue('custrecord_sdb_woe_cont_t0_fucac_binned')) || DEFAULT_RULES.binned.cont_t0_fucac_binned,
+                t0_scotia_binned: parseFloat(getFieldValue('custrecord_sdb_woe_cont_t0_scotia_binned')) || DEFAULT_RULES.binned.t0_scotia_binned,
+                t0_asi_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t0_asi_binned')) || DEFAULT_RULES.binned.t0_asi_binned,
+                brou_grupo_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t0_brou_grupo_binned')) || DEFAULT_RULES.binned.brou_grupo_binned,
+                emp_valor_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t0_emp_valor_binned')) || DEFAULT_RULES.binned.emp_valor_binned,
+                t0_fnb_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t0_fnb_binned')) || DEFAULT_RULES.binned.t0_fnb_binned,
+                t0_santa_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t0_santa_binned')) || DEFAULT_RULES.binned.t0_santa_binned,
+                t6_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_binned')) || DEFAULT_RULES.binned.t6_binned,
+                cred_dir_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_cred_dir_binned')) || DEFAULT_RULES.binned.cred_dir_binned,
+                t6_creditel_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_creditel_binned')) || DEFAULT_RULES.binned.t6_creditel_binned,
+                t6_oca_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_oca_binned')) || DEFAULT_RULES.binned.t6_oca_binned,
+                t6_pronto_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_pronto_binned')) || DEFAULT_RULES.binned.t6_pronto_binned
             };
 
             return customRules;
@@ -215,10 +264,14 @@ define(['N/search', 'N/log'], function (search, log) {
         }
 
         // Validar estructura básica
-        if (!rules.coefficients || !rules.baseScore || !rules.rejectionRules) {
+        // NOTA: coefficients validación comentada - no se usa actualmente
+        // if (!rules.coefficients || !rules.baseScore || !rules.rejectionRules) {
+        if (!rules.baseScore || !rules.rejectionRules) {
             return false;
         }
 
+        // NOTA: Validación de coefficients comentada - reservada para uso futuro
+        /*
         // Validar coeficientes
         var requiredCoeffs = ['vigente', 'vencido', 'castigado', 'entityCount'];
         for (var i = 0; i < requiredCoeffs.length; i++) {
@@ -229,10 +282,16 @@ define(['N/search', 'N/log'], function (search, log) {
                 return false;
             }
         }
+        */
 
         // Validar base score
         if (typeof rules.baseScore !== 'number' || 
             rules.baseScore < 0 || rules.baseScore > 1) {
+            return false;
+        }
+
+        // Validar binned (WOE) si están presentes - estos SÍ se usan
+        if (rules.binned && typeof rules.binned !== 'object') {
             return false;
         }
 

@@ -107,7 +107,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                             // Manejo de rechazo BCU con calificación visible
                             if (score?.error_reglas) {
                                let approvalStatus = objScriptParam.estadoRechazado;
-                               if (score.error_reglas == 500) {
+                               if (score.error_reglas == 500 || score.error_reglas == 400) {
                                   approvalStatus = 15;
                                }
      
@@ -293,11 +293,11 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                       }
                    } else {
                       log.audit('Error', 'El documento ' + docNumber + ' pertenece a Mocasist.');
-                      auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoMocasist);
+                      auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoMocasist, objScriptParam.rechazoMocasist);
                    }
                 } else {
                    log.audit('Error', 'El documento ' + docNumber + ' pertenece a la Lista Negra.');
-                   auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoBlacklist);
+                   auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoBlacklist, objScriptParam.rechazoBlacklist);
                 }
             } catch (e) {
                 log.error(logTitle, e.message);
@@ -357,7 +357,13 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                   }),
                   serviceExternal: scriptObj.getParameter({
                      name: 'custscript_elm_serv_externo_pm'
-                  })
+                  }),
+                  estadoMocasist: scriptObj.getParameter({
+                     name: 'custscript_elm_estado_mocasist_mr'
+                  }),
+                  estadoBlacklist: scriptObj.getParameter({
+                     name: 'custscript_elm_estado_blacklist_mr'
+                  }),
                };
                return objParams;
             }

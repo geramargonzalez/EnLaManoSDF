@@ -7,66 +7,62 @@ define([
     'N/log',
     'N/cache',
     '../adapters/equifaxAdapter',
-    '../adapters/bcuAdapter', 
+    '../adapters/bcuAdapter',
+    '../adapters/mymAdapter',
     '../domain/score',
     '../config/scoringRules'
-], function (log, cache, equifaxAdapter, bcuAdapter, scoreEngine, scoringRules) {
+], function (log, cache, equifaxAdapter, bcuAdapter, mymAdapter, scoreEngine, scoringRules) {
     'use strict';
 
-    var PROVIDER_EQUIFAX = 'equifax';
-    var PROVIDER_BCU = 'bcu';
-    var CACHE_TTL_SECONDS = 1800; // 30 minutos - caché más agresivo
-    var CACHE_SCOPE = cache.Scope.PROTECTED;
-    
+    const  PROVIDER_EQUIFAX = 'equifax';
+    const PROVIDER_BCU = 'bcu';
+    const PROVIDER_MYM = 'mym';
+    const CACHE_TTL_SECONDS = 180; // 30 minutos - caché más agresivo
+    const CACHE_SCOPE = cache.Scope.PROTECTED;
+
     // Pre-compilar regex para validación rápida
-    var DOCUMENT_REGEX = /^\d{7,8}$/;
+    const DOCUMENT_REGEX = /^\d{7,8}$/;
 
     /**
      * OPTIMIZADO: Calcula score con caché agresivo y mínimo logging
      */
     function calculateScore(documento, options) {
         options = options || {};
-        
+        // Fuerzo bypass del cache: cada cálculo debe ser único
+        // (según requerimiento del usuario, no se debe reutilizar resultados previos)
+        options.forceRefresh = true;
+
         // Skip logging detallado en producción para velocidad
-        var isDebugMode = options.debug === true;
-        var requestId = isDebugMode ? generateRequestId() : null;
-        
+        const  isDebugMode = options.debug === true;
+        const requestId = isDebugMode ? generateRequestId() : null;
+
         try {
             // Validación rápida con regex pre-compilada
             if (!DOCUMENT_REGEX.test(documento.replace(/[^\d]/g, ''))) {
                 throw createServiceError('INVALID_DOCUMENT', 'Documento inválido');
             }
 
-            // Cache hit path - máxima prioridad
-            if (!options.forceRefresh) {
-                var cachedResult = getCachedScore(documento, options.provider);
-                if (cachedResult) {
-                    // Return inmediato sin logging en producción
-                    if (isDebugMode) {
-                        cachedResult.metadata.fromCache = true;
-                        cachedResult.metadata.requestId = requestId;
-                    }
-                    return cachedResult;
-                }
-            }
+
+            // Bypass cache: siempre forzamos refresh para que cada cálculo sea único
+            // (Se mantiene options.forceRefresh para compatibilidad, pero lo forzamos arriba)
 
             // Path crítico: obtener reglas (cached)
-            var rules = scoringRules.getScoringRules();
+            const rules = scoringRules.getScoringRules();
             
             // Path crítico: obtener datos del proveedor
-            var normalizedData = fetchProviderData(documento, options);
-            
+            const normalizedData = fetchProviderData(documento, options);
+
             // Path crítico: calcular score (O(n) puro)
-            var scoreResult = scoreEngine.computeScore(normalizedData, rules);
-            
+            const scoreResult = scoreEngine.computeScore(normalizedData, rules);
+
             // Metadata mínima para producción
             if (isDebugMode) {
                 scoreResult.metadata.requestId = requestId;
                 scoreResult.metadata.fromCache = false;
             }
             
-            // Cache async - no bloquea respuesta
-            cacheScore(documento, options.provider, scoreResult);
+            // No cache: no almacenamos resultados para garantizar unicidad por solicitud
+            // cacheScore(documento, options.provider, scoreResult);
             
             // Log mínimo solo si es debug o error
             if (isDebugMode || scoreResult.metadata.isRejected) {
@@ -111,6 +107,9 @@ define([
                 case PROVIDER_BCU:
                     return bcuAdapter.fetch(documento, options);
                     
+                case PROVIDER_MYM:
+                    return mymAdapter.fetch(documento, options);
+                    
                 default:
                     // Intentar Equifax como fallback
                     log.debug({
@@ -120,8 +119,9 @@ define([
                     return equifaxAdapter.fetch(documento, options);
             }
         } catch (providerError) {
-            // Si falla el proveedor principal, intentar fallback
-            if (provider !== PROVIDER_EQUIFAX && !options.noFallback) {
+            // Para MYM, no hacer fallback automático (puede funcionar independientemente)
+            // Solo hacer fallback para BCU ya que es un stub
+            if (provider === PROVIDER_BCU && !options.noFallback) {
                 log.debug({
                     title: 'BCU Score Provider Fallback',
                     details: {
@@ -139,6 +139,7 @@ define([
                 }
             }
             
+            // Para MYM y otros providers, lanzar error original sin fallback
             throw providerError;
         }
     }
@@ -373,7 +374,8 @@ define([
             createServiceError: createServiceError,
             createErrorScoreResult: createErrorScoreResult,
             PROVIDER_EQUIFAX: PROVIDER_EQUIFAX,
-            PROVIDER_BCU: PROVIDER_BCU
+            PROVIDER_BCU: PROVIDER_BCU,
+            PROVIDER_MYM: PROVIDER_MYM
         }
     };
 });

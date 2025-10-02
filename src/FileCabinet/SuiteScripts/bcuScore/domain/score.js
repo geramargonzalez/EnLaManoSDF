@@ -1,9 +1,9 @@
 /**
- * @NApiVersion 2.1
+ * @ ApiVersion 2.1
  * @description Lógica pura de scoring BCU sin efectos secundarios
  */
 
-define([], function () {
+define(['N/search'], function (search) {
     'use strict';
 
     // Pre-compilar lookup tables para performance O(1)
@@ -100,27 +100,77 @@ define([], function () {
         }
 
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
-        const coeffs = scoringRules.coefficients || {};
 
-        // Mapeo de coeficientes exactamente con los nombres del original
-        const banco_binned = coeffs.banco_binned || coeffs['custrecord_sdb_banco_binned'] || 0;
-        const ent_t6_binned = coeffs.ent_t6_binned || coeffs['custrecord_sdb_ent_t6_binned'] || 0;
-        const intercept = coeffs.intercept || coeffs['custrecord_sdb_intercept'] || 0;
-        let t6_cred_dir_comp_binned = coeffs.t6_cred_dir_comp_binned || coeffs['custrecord_sdb_t6_cred_dir_comp_binned'] || 0;
-        let vig_noauto_t6_coop_binned = coeffs.vig_noauto_t6_coop_binned || coeffs['custrecord_sdb_vig_noauto_t6_coop_binned'] || 0;
-        let t0_bbva_binned = coeffs.t0_bbva_binned || coeffs['custrecord_sdb_woe_cont_t0_bbva_binned'] || 0;
-        let cont_t0_fucac_binned = coeffs.cont_t0_fucac_binned || coeffs['custrecord_sdb_woe_cont_t0_fucac_binned'] || 0;
-        let t0_scotia_binned = coeffs.t0_scotia_binned || coeffs['custrecord_sdb_woe_cont_t0_scotia_binned'] || 0;
-        let t0_asi_binned = coeffs.t0_asi_binned || coeffs['custrecord_sdb_woe_t0_asi_binned'] || 0;
-        let brou_grupo_binned = coeffs.brou_grupo_binned || coeffs['custrecord_sdb_woe_t0_brou_grupo_binned'] || 0;
-        let emp_valor_binned = coeffs.emp_valor_binned || coeffs['custrecord_sdb_woe_t0_emp_valor_binned'] || 0;
-        let t0_fnb_binned = coeffs.t0_fnb_binned || coeffs['custrecord_sdb_woe_t0_fnb_binned'] || 0;
-        let t0_santa_binned = coeffs.t0_santa_binned || coeffs['custrecord_sdb_woe_t0_santa_binned'] || 0;
-        let t6_binned = coeffs.t6_binned || coeffs['custrecord_sdb_woe_t6_binned'] || 0;
-        let cred_dir_binned = coeffs.cred_dir_binned || coeffs['custrecord_sdb_woe_t6_cred_dir_binned'] || 0;
-        let t6_creditel_binned = coeffs.t6_creditel_binned || coeffs['custrecord_sdb_woe_t6_creditel_binned'] || 0;
-        let t6_oca_binned = coeffs.t6_oca_binned || coeffs['custrecord_sdb_woe_t6_oca_binned'] || 0;
-        let t6_pronto_binned = coeffs.t6_pronto_binned || coeffs['custrecord_sdb_woe_t6_pronto_binned'] || 0;
+        // Preferir valores inyectados en scoringRules.binned (evita lookupFields y mejora rendimiento)
+        const binnedFromRules = scoringRules && scoringRules.binned ? scoringRules.binned : null;
+
+        // Si no recibimos binned desde las reglas, hacemos un único lookupFields
+        let lookup = null;
+        if (!binnedFromRules) {
+            try {
+                lookup = search.lookupFields({
+                    type: 'customrecord_sdb_score',
+                    id: 1,
+                    columns: [
+                        'custrecord_sdb_banco_binned',
+                        'custrecord_sdb_ent_t6_binned',
+                        'custrecord_sdb_intercept',
+                        'custrecord_sdb_t6_cred_dir_comp_binned',
+                        'custrecord_sdb_vig_noauto_t6_coop_binned',
+                        'custrecord_sdb_woe_cont_t0_bbva_binned',
+                        'custrecord_sdb_woe_cont_t0_fucac_binned',
+                        'custrecord_sdb_woe_cont_t0_scotia_binned',
+                        'custrecord_sdb_woe_t0_asi_binned',
+                        'custrecord_sdb_woe_t0_brou_grupo_binned',
+                        'custrecord_sdb_woe_t0_emp_valor_binned',
+                        'custrecord_sdb_woe_t0_fnb_binned',
+                        'custrecord_sdb_woe_t0_santa_binned',
+                        'custrecord_sdb_woe_t6_binned',
+                        'custrecord_sdb_woe_t6_cred_dir_binned',
+                        'custrecord_sdb_woe_t6_creditel_binned',
+                        'custrecord_sdb_woe_t6_oca_binned',
+                        'custrecord_sdb_woe_t6_pronto_binned'
+                    ]
+                });
+            } catch (e) {
+                lookup = null;
+            }
+        }
+
+        function lookupNumber(fieldName) {
+            if (!lookup || !(fieldName in lookup)) return 0;
+            const raw = lookup[fieldName];
+            if (Array.isArray(raw) && raw.length) {
+                return toNumberSafe(raw[0].value);
+            }
+            return toNumberSafe(raw);
+        }
+
+        function getBinnedValue(binnedKey, lookupFieldName) {
+            if (binnedFromRules && typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
+            return lookupNumber(lookupFieldName);
+        }
+
+        // Valores por defecto (WOE) tomados del screenshot proporcionado
+        const banco_binned = getBinnedValue('banco_binned', 'custrecord_sdb_banco_binned') || 0.0038032;
+        const ent_t6_binned = getBinnedValue('ent_t6_binned', 'custrecord_sdb_ent_t6_binned') || 0.0026394;
+        const intercept = getBinnedValue('intercept', 'custrecord_sdb_intercept') || 0.2114816;
+        const t6_cred_dir_comp_binned = getBinnedValue('t6_cred_dir_comp_binned', 'custrecord_sdb_t6_cred_dir_comp_binned') || 0.0028341;
+        const vig_noauto_t6_coop_binned = getBinnedValue('vig_noauto_t6_coop_binned', 'custrecord_sdb_vig_noauto_t6_coop_binned') || 0.0033394;
+        const t0_bbva_binned = getBinnedValue('t0_bbva_binned', 'custrecord_sdb_woe_cont_t0_bbva_binned') || 0.0045863;
+        const cont_t0_fucac_binned = getBinnedValue('cont_t0_fucac_binned', 'custrecord_sdb_woe_cont_t0_fucac_binned') || 0.0038189;
+        const t0_scotia_binned = getBinnedValue('t0_scotia_binned', 'custrecord_sdb_woe_cont_t0_scotia_binned') || 0.0034926;
+        const t0_asi_binned = getBinnedValue('t0_asi_binned', 'custrecord_sdb_woe_t0_asi_binned') || 0.0037215;
+        const brou_grupo_binned = getBinnedValue('brou_grupo_binned', 'custrecord_sdb_woe_t0_brou_grupo_binned') || 0.0037486;
+        const emp_valor_binned = getBinnedValue('emp_valor_binned', 'custrecord_sdb_woe_t0_emp_valor_binned') || 0.0059208;
+        const t0_fnb_binned = getBinnedValue('t0_fnb_binned', 'custrecord_sdb_woe_t0_fnb_binned') || 0.0014982;
+        const t0_santa_binned = getBinnedValue('t0_santa_binned', 'custrecord_sdb_woe_t0_santa_binned') || 0.0006744;
+        const t6_binned = getBinnedValue('t6_binned', 'custrecord_sdb_woe_t6_binned') || 0.0005706;
+        const cred_dir_binned = getBinnedValue('cred_dir_binned', 'custrecord_sdb_woe_t6_cred_dir_binned') || 0.0002515;
+        const t6_creditel_binned = getBinnedValue('t6_creditel_binned', 'custrecord_sdb_woe_t6_creditel_binned') || 0.0003315;
+        const t6_oca_binned = getBinnedValue('t6_oca_binned', 'custrecord_sdb_woe_t6_oca_binned') || 0.0042904;
+        const t6_pronto_binned = getBinnedValue('t6_pronto_binned', 'custrecord_sdb_woe_t6_pronto_binned') || 0.0016738;
+
 
         // Inicializar resultados parciales (mismos nombres que en el original)
         let cred_dir_binned_res = 0;
@@ -285,8 +335,9 @@ define([], function () {
         else if (contador === 4 || contador === 5) ent_t6_binned_res = 34.84;
         else if (contador > 5) ent_t6_binned_res = 80;
 
-        // Para t0 (t2) - recorrer y asignar binned_res similares
-        const object0Min = { CalificacionMinima0: 0 };
+    // Para t0 (t2) - recorrer y asignar binned_res similares
+    // permitimos reasignar el objeto ganador durante el recorrido
+    let object0Min = { CalificacionMinima0: 0 };
         for (let kk = 0; kk < t2List.length; kk++) {
             if ((t2List[kk].CalificacionMinima0 || 0) >= (object0Min.CalificacionMinima0 || 0)) {
                 object0Min = t2List[kk];
@@ -386,6 +437,9 @@ define([], function () {
         let scoreNumeric = (Math.exp(total) / (1 + Math.exp(total))) * 1000;
         let scoreRounded = Math.round(scoreNumeric);
 
+        // Umbral configurable para considerar "buen score" (por defecto 499)
+        const goodThreshold = (scoringRules && typeof scoringRules.goodThreshold === 'number') ? scoringRules.goodThreshold : 499;
+
         // Construir objeto similar al original para compatibilidad
         let objetos = {
             score: scoreRounded,
@@ -396,7 +450,11 @@ define([], function () {
             endeudamiento: endeudamiento,
             nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || normalizedData.provider || '',
             error_reglas: false,
-            logTxt: ''
+            logTxt: '',
+            metadata: {
+                goodThreshold: goodThreshold,
+                isGood: scoreRounded >= goodThreshold
+            }
         };
 
         return objetos;
@@ -856,7 +914,9 @@ define([], function () {
             metadata: {
                 calculatedAt: new Date(),
                 isRejected: true,
-                rejectionReason: reason
+                rejectionReason: reason,
+                goodThreshold: 499,
+                isGood: false
             },
             flags: {},
             validation: { hasValidData: false }

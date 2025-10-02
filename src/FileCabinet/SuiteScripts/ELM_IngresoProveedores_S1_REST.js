@@ -3,8 +3,8 @@
  *@NScriptType Restlet
  */ 
  
-define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 'N/record'],
-   function (search, scoreLib, runtime, auxLib, record) { 
+define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 'N/record', './ELM_SCORE_BCU_LIB.js', 'N/log'],
+   function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) { 
 
       function post(requestBody) {
          const logTitle = 'post';
@@ -54,12 +54,12 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                if (!blackList) {
                   
                   let mocasist = auxLib.checkMocasist(docNumber);
-                  
-                  if (!mocasist) { 
-                   
+
+                  if (!mocasist) {
                      if (!infoRepetido?.id) {
 
-                           const score = scoreLib.scoreFinal(docNumber);
+                           // const score = scoreLib.scoreFinal(docNumber);
+                           const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: false });
                            //log.debug('score', JSON.stringify(score));
                            // Extract BCU data for t2 and t6 periods
                            const bcuData = auxLib.extractBcuData(score);
@@ -78,7 +78,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            //log.debug('score before checks', JSON.stringify(score));
                            if (score?.error_reglas) {
                               let approvalStatus = objScriptParam.estadoRechazado;
-                              if (score.error_reglas == 500) {
+                              if (score.error_reglas == 500 || score.error_reglas == 400) {
                                  approvalStatus = objScriptParam.estadoErrorBCU;
                               }
 
@@ -391,9 +391,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                               });
 
                               log.audit('Created customer', newCustomerId);
-                              auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
                      } else {
-                        auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoMocasist);
+                        auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoMocasist, objScriptParam.rechazoMocasist);
                      }
                   }
                } else {
@@ -424,10 +423,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                         }
                      });
 
-                     log.audit('Created customer', newCustomerId);
-                     auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
                   } else {
-                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoRechazado, objScriptParam?.rechazoBlacklist);
+                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoBlacklist, objScriptParam?.rechazoBlacklist);
                   }
                }
 
@@ -612,10 +609,20 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
             }),
             NohayInfoBCU: scriptObj.getParameter({
                name: 'custscript_elm_no_hay_info_bcu_pm'
-            }),
+            }), 
             estadoErrorBCU: scriptObj.getParameter({
-               name: 'custscript_elm_estado_bcu'
-            })
+               name: 'custscript_elm_estado_error_bcu'
+            }),
+            estadoMocasist: scriptObj.getParameter({
+               name: 'custscript_elm_est_mocasist'
+            }),
+            estadoBlacklist: scriptObj.getParameter({
+               name: 'custscript_elm_est_blacklist'
+            })/* ,
+            reConsultaErrorBCU: scriptObj.getParameter({
+               name: 'custscript_elm_reconsulta_error_bcu'
+            }) */
+
          };
          return objParams;
       }

@@ -76,7 +76,6 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             // Check if response contains errors
             if (responseBody.hasOwnProperty('errores')) {
                 // Handle error case
-                log.error('Error en documento', responseBody.errores);
                 return {
                     title: "Error de validación",
                     error_reglas: 400,
@@ -93,7 +92,6 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             if (data?.errors) {    
                 if (data?.errors[0]?.status == 404) {
                     logTxt += '<P> !!!! ERROR: ' + data.errors[0].detail + "<P/>";
-                log.error('Error en la llamada a datosBcu', data.errors[0].detail);
                 return {
                     title: data.errors[0].title,
                     error_reglas: 404,
@@ -500,13 +498,11 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
 
             objetos.error_reglas = false;
             objetos.logTxt = logTxt;
-
-            log.debug('objetos', objetos);
             return objetos
         } catch (e) {
             log.error("ERROR:  ", e)
             return {
-                title: "Error en el BCU",
+                title: "Error BCU",
                 error_reglas: 500,
                 detail: e.message,
                 score: 0

@@ -103,7 +103,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   log.audit('Error', `El documento ${docNumber} pertenece a la Lista Negra.`);
                   return auxLib.updateEntity({
                      entity: newRecord,
-                     approvalStatus: objScriptParam.estadoRechazado,
+                     approvalStatus: objScriptParam.estadoBlacklist,
                      rejectReason: objScriptParam.rechazoBlacklist
                   });
                }
@@ -123,7 +123,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   
                   return auxLib.updateEntity({
                      entity: newRecord,
-                     approvalStatus: objScriptParam.estadoRechazado,
+                     approvalStatus: objScriptParam.estadoMocasist,
                      rejectReason: objScriptParam.rechazoMocasist
                   });
                }
@@ -202,7 +202,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                      log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
                      let approvalStatus = objScriptParam.estadoRechazado;
 
-                     if (score.error_reglas == 500) {
+                     if (score.error_reglas == 500 || score.error_reglas == 400) {
                         approvalStatus = objScriptParam.estErrorBCU;
                      }
 
@@ -277,21 +277,21 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             estErrorBCU: scriptObj.getParameter({ name: 'custscript_elm_est_err_bcu_man' }),
             estNohayInfoBCU: scriptObj.getParameter({ name: 'custscript_elm_est_no_hay_nfo_man' }),
             estadoRepRechazado: scriptObj.getParameter({ name: 'custscript_elm_rep_rechazado_man' }),
-            estadoRepAprobado: scriptObj.getParameter({ name: 'custscript_elm_rep_aprobado_manual' }) 
+            estadoRepAprobado: scriptObj.getParameter({ name: 'custscript_elm_rep_aprobado_manual' }),
+            estadoMocasist: scriptObj.getParameter({ name: 'custscript_elm_estado_mocasist_man' }),
+            estadoBlacklist: scriptObj.getParameter({ name: 'custscript_elm_estado_blacklist_man' })
          };
       };
 
       
       const afterSubmit = (scriptContext) => {
          try {
+            
             const { newRecord } = scriptContext;
             const objScriptParam = getScriptParameters();
-
             const docNumber = newRecord.getValue(FIELDS.docNumber);
             const estadoGestion = newRecord.getValue(FIELDS.aprobado);
             const leadId = newRecord.id;
-         
-
          
             // Buscar snapshot existente por combinación (doc, estado)
             let existingRecords = [];

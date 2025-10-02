@@ -8,6 +8,7 @@ define([], function () {
 
     const PROVIDER_EQUIFAX = 'equifax';
     const PROVIDER_BCU = 'bcu';
+    const PROVIDER_MYM = 'mym';
 
     const BAD_RATINGS = ['2B', '2', '3', '4', '5'];
 
@@ -85,6 +86,215 @@ define([], function () {
             flags: { isDeceased: false, hasRejectableRating: false },
             metadata: {}
         });
+    }
+
+    /**
+     * Normaliza respuesta MYM (RiskAPI enlamanocrm)
+     * Estructura esperada: { datosBcu: {...}, datosBcuT6: {...}, raw: {...} }
+     * @param {Object} mymResponse - Respuesta de mymAdapter.fetch()
+     * @param {string} documento - Documento consultado
+     * @returns {NormalizedBCUData}
+     */
+    function normalizeMymResponse(mymResponse, documento) {
+        const datosBcu = mymResponse.datosBcu || {};
+        const datosBcuT6 = mymResponse.datosBcuT6 || {};
+        
+        // Extraer data de T0 (datosBcu)
+        const dataT0 = datosBcu.data || {};
+        const nombre = dataT0.Nombre || '';
+        
+        // Extraer data de T6 (datosBcuT6)
+        const dataT6 = datosBcuT6.data || {};
+        
+        // Normalizar entidades y rubros de T0
+        const entidadesT0 = dataT0.EntidadesRubrosValores || [];
+        const rubrosT0 = dataT0.RubrosValoresGenerales || [];
+        
+        // Normalizar entidades y rubros de T6
+        const entidadesT6 = dataT6.EntidadesRubrosValores || [];
+        const rubrosT6 = dataT6.RubrosValoresGenerales || [];
+        
+        // Convertir formato MYM a formato normalizado
+        const t0Data = {
+            totals: normalizeMymRubrosList(rubrosT0),
+            entities: normalizeMymEntitiesList(entidadesT0),
+            aggregates: extractMymAggregates(rubrosT0)
+        };
+        
+        const t6Data = {
+            totals: normalizeMymRubrosList(rubrosT6),
+            entities: normalizeMymEntitiesList(entidadesT6),
+            aggregates: extractMymAggregates(rubrosT6)
+        };
+        
+        // Detectar peor calificación y si hay rechazables
+        const allEntities = t0Data.entities.concat(t6Data.entities);
+        const worstRating = findWorstRating(allEntities);
+        const hasRejectableRating = BAD_RATINGS.includes(worstRating);
+        
+        return buildNormalizedData({
+            provider: PROVIDER_MYM,
+            documento: documento,
+            periodData: { t0: t0Data, t6: t6Data },
+            flags: {
+                isDeceased: false,
+                hasRejectableRating: hasRejectableRating
+            },
+            metadata: {
+                nombre: sanitizeString(nombre),
+                worstRating: worstRating,
+                aggregates: t0Data.aggregates
+            }
+        });
+    }
+
+    /**
+     * Normaliza lista de rubros de formato MYM a formato estándar
+     * MYM usa: { MnPesos, MePesos } en lugar de { vigente, vencido, castigado }
+     */
+    function normalizeMymRubrosList(rubros) {
+        if (!Array.isArray(rubros)) return [];
+        
+        return rubros.map(function(rubro) {
+            const mnPesos = toNumber(rubro.MnPesos || 0);
+            const mePesos = toNumber(rubro.MePesos || 0);
+            
+            return {
+                rubro: String(rubro.Rubro || ''),
+                vigente: mnPesos, // MYM no separa vigente/vencido/castigado en totales
+                vencido: 0,
+                castigado: 0,
+                total: mnPesos + mePesos
+            };
+        });
+    }
+
+    /**
+     * Normaliza lista de entidades de formato MYM
+     * MYM usa: { NombreEntidad, Calificacion, Rubros: [...] }
+     */
+    function normalizeMymEntitiesList(entities) {
+        if (!Array.isArray(entities)) return [];
+        
+        return entities.map(function(entity) {
+            const entidadVal = String(entity.NombreEntidad || '');
+            const ratingVal = String(entity.Calificacion || '').toUpperCase();
+            
+            // Calcular totales sumando rubros
+            const rubros = entity.Rubros || [];
+            let totalVigente = 0;
+            let totalVencido = 0;
+            let totalCastigado = 0;
+            
+            for (let i = 0; i < rubros.length; i++) {
+                const rubro = rubros[i];
+                const rubroNombre = String(rubro.Rubro || '').toUpperCase();
+                const mnPesos = toNumber(rubro.MnPesos || 0);
+                const mePesos = toNumber(rubro.MePesos || 0);
+                const total = mnPesos + mePesos;
+                
+                if (rubroNombre === 'VIGENTE') {
+                    totalVigente += total;
+                } else if (rubroNombre === 'VENCIDO') {
+                    totalVencido += total;
+                } else if (rubroNombre === 'CASTIGADO') {
+                    totalCastigado += total;
+                }
+            }
+            
+            return {
+                // Campos normalizados
+                entidad: entidadVal,
+                rating: ratingVal,
+                // Campos legacy para compatibilidad con SDB-Enlamano-score.js
+                NombreEntidad: entidadVal,
+                Calificacion: ratingVal,
+                vigente: totalVigente,
+                vencido: totalVencido,
+                castigado: totalCastigado,
+                total: totalVigente + totalVencido + totalCastigado,
+                rubros: normalizeMymEntityRubros(rubros)
+            };
+        });
+    }
+
+    /**
+     * Normaliza rubros de una entidad específica (formato MYM)
+     */
+    function normalizeMymEntityRubros(rubros) {
+        if (!Array.isArray(rubros)) return [];
+        
+        return rubros.map(function(rubro) {
+            const mnPesos = toNumber(rubro.MnPesos || 0);
+            const mePesos = toNumber(rubro.MePesos || 0);
+            const total = mnPesos + mePesos;
+            
+            return {
+                rubro: String(rubro.Rubro || ''),
+                vigente: total, // MYM no separa vigente/vencido en nivel de rubro
+                vencido: 0,
+                castigado: 0,
+                Rubro: String(rubro.Rubro || ''), // Campo legacy
+                MnPesos: mnPesos,
+                MePesos: mePesos
+            };
+        });
+    }
+
+    /**
+     * Extrae agregados de rubros MYM (suma de VIGENTE, VENCIDO, CASTIGADO)
+     */
+    function extractMymAggregates(rubros) {
+        if (!Array.isArray(rubros)) {
+            return {
+                vigente: { mn: 0, me: 0, total: 0 },
+                vencido: { mn: 0, me: 0, total: 0 },
+                castigado: { mn: 0, me: 0, total: 0 },
+                sumVigenteU1m: 0,
+                sumVencidoU1m: 0,
+                sumCastigadoU1m: 0,
+                cantEntidadesVigente: 0,
+                cantEntidadesVencido: 0,
+                cantEntidadesCastigado: 0
+            };
+        }
+        
+        let vigenteTotal = { mn: 0, me: 0, total: 0 };
+        let vencidoTotal = { mn: 0, me: 0, total: 0 };
+        let castigadoTotal = { mn: 0, me: 0, total: 0 };
+        
+        for (let i = 0; i < rubros.length; i++) {
+            const rubro = rubros[i];
+            const rubroNombre = String(rubro.Rubro || '').toUpperCase();
+            const mn = toNumber(rubro.MnPesos || 0);
+            const me = toNumber(rubro.MePesos || 0);
+            
+            if (rubroNombre === 'VIGENTE') {
+                vigenteTotal.mn += mn;
+                vigenteTotal.me += me;
+                vigenteTotal.total += (mn + me);
+            } else if (rubroNombre === 'VENCIDO') {
+                vencidoTotal.mn += mn;
+                vencidoTotal.me += me;
+                vencidoTotal.total += (mn + me);
+            } else if (rubroNombre === 'CASTIGADO') {
+                castigadoTotal.mn += mn;
+                castigadoTotal.me += me;
+                castigadoTotal.total += (mn + me);
+            }
+        }
+        
+        return {
+            vigente: vigenteTotal,
+            vencido: vencidoTotal,
+            castigado: castigadoTotal,
+            sumVigenteU1m: vigenteTotal.total,
+            sumVencidoU1m: vencidoTotal.total,
+            sumCastigadoU1m: castigadoTotal.total,
+            cantEntidadesVigente: vigenteTotal.total > 0 ? 1 : 0,
+            cantEntidadesVencido: vencidoTotal.total > 0 ? 1 : 0,
+            cantEntidadesCastigado: castigadoTotal.total > 0 ? 1 : 0
+        };
     }
 
     /**
@@ -210,9 +420,18 @@ define([], function () {
         if (!Array.isArray(entities)) return [];
 
         return entities.map(function(entity) {
+            // Keep both original/normalized and legacy field names to ensure
+            // compatibility with the original SDB-Enlamano-score.js expectations
+            const entidadVal = String(entity.entidad || entity.nombreEntidad || '');
+            const ratingVal = String(entity.calificacion || entity.rating || '').toUpperCase();
+
             return {
-                entidad: String(entity.entidad || entity.nombreEntidad || ''),
-                rating: String(entity.calificacion || entity.rating || '').toUpperCase(),
+                // normalized names
+                entidad: entidadVal,
+                rating: ratingVal,
+                // legacy / original script aliases (exact names expected elsewhere)
+                NombreEntidad: entidadVal,
+                Calificacion: ratingVal,
                 vigente: toNumber(entity.vigente),
                 vencido: toNumber(entity.vencido), 
                 castigado: toNumber(entity.castigado),
@@ -280,12 +499,14 @@ define([], function () {
         createEmptyPeriod: createEmptyPeriod,
         parseMoneyString: parseMoneyString,
         findWorstRating: findWorstRating,
+        normalizeMymResponse: normalizeMymResponse,
         
         // Para testing
         _internal: {
             BAD_RATINGS: BAD_RATINGS,
             PROVIDER_EQUIFAX: PROVIDER_EQUIFAX,
             PROVIDER_BCU: PROVIDER_BCU,
+            PROVIDER_MYM: PROVIDER_MYM,
             toNumber: toNumber,
             sanitizeString: sanitizeString
         }

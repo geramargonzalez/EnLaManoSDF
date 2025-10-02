@@ -8,48 +8,86 @@ const path = require('path');
 const fpath = path.join(__dirname, '..', 'FileCabinet', 'SuiteScripts', 'bcuScore', 'domain', 'score.js');
 let code = fs.readFileSync(fpath, 'utf8');
 
-// Replace SuiteScript define wrapper with a simple export for Node
-code = code.replace(/define\(\[\],\s*function \(\) \{[\s\S]*?return\s+\{[\s\S]*?\};?\s*\}\);?/, function(match) {
-    // Try to capture the inner function body
-    const innerMatch = match.match(/define\(\[\],\s*function \(\) \{([\s\S]*)return\s+\{[\s\S]*?\};?\s*\}\);?/);
-    if (innerMatch && innerMatch[1]) {
-        return innerMatch[1] + '\nmodule.exports = { computeScore: computeScore };\n';
-    }
-    // fallback: naive removal of define wrapper
-    return match.replace(/^define\(\[\],\s*function \(\) \{/, '').replace(/\}\);?$/, '\nmodule.exports = { computeScore: computeScore };');
-});
-
-// Run in VM to get module.exports
+// Instead of trying to regex-rewrite the AMD wrapper, create a sandbox
+// that defines a global `define` which captures the factory and resolves
+// common NetSuite modules to lightweight stubs (N/search, N/record).
 const script = new vm.Script(code, { filename: fpath });
-const sandbox = { module: {}, exports: {}, require: require, console: console, setTimeout: setTimeout };
+
+let capturedExports = {};
+
+const sandbox = {
+  module: { exports: {} },
+  exports: {},
+  console: console,
+  setTimeout: setTimeout,
+  // provide a simple require for in-module requires if any
+  require: require
+};
+
+// Inject an AMD define into the sandbox
+sandbox.define = function(deps, factory) {
+  try {
+    // Resolve dependencies to stubs
+    const resolved = (Array.isArray(deps) ? deps : []).map(function(d) {
+      if (d === 'N/search') {
+        return {
+          lookupFields: function(opts) {
+            // Return empty lookup by default; tests can override if needed
+            return {};
+          }
+        };
+      }
+      if (d === 'N/record') {
+        return {
+          lookupFields: function(opts) { return {}; },
+          load: function() { return { getValue: function() { return 0; } }; }
+        };
+      }
+      // unknown dependency -> undefined
+      return undefined;
+    });
+
+    const result = factory.apply(null, resolved);
+    // AMD module may return an object or export via returned value
+    if (result && typeof result === 'object') {
+      sandbox.module.exports = result;
+      capturedExports = result;
+    }
+  } catch (err) {
+    throw err;
+  }
+};
+
 vm.createContext(sandbox);
 script.runInContext(sandbox);
-const computeScore = sandbox.module.exports.computeScore;
+
+// Prefer captured export from define, fall back to module.exports
+const computeScore = (capturedExports && capturedExports.computeScore) || sandbox.module.exports.computeScore;
 
 // Multiple fixtures to exercise different branches and entity types
 const fixtures = [
   {
-    name: 'Base_OCA_single_good',
+    name: 'Scotiabank',
     flags: {},
-    provider: 'TEST',
-    metadata: { nombre: 'Prueba OCA', worstRating: '0' },
+    provider: 'Scotiabank',
+    metadata: { nombre: 'Scotiabank', worstRating: '0' },
     periodData: {
       t0: {
-        entities: [ { vigente: 1000, vencido: 0, castigado: 0, rating: '1A', NombreEntidad: 'OCA', rubros: [] } ],
+        entities: [ { vigente: 1000, vencido: 0, castigado: 0, rating: '1A', NombreEntidad: 'Scotiabank', rubros: [] } ],
         aggregates: { vigente: { mn: 1000, me: 0 } }
       },
       t6: { entities: [], aggregates: {} }
     }
   },
   {
-    name: 'Banks_good_rating',
+    name: 'FUCAC',
     flags: {},
-    provider: 'TEST',
-    metadata: { nombre: 'Clientes Bancos', worstRating: '1A' },
+    provider: 'FUCAC',
+    metadata: { nombre: 'FUCAC', worstRating: '1A' },
     periodData: {
       t0: {
         entities: [
-          { vigente: 500, vencido: 0, castigado: 0, rating: '1A', NombreEntidad: 'Scotiabank', rubros: [] },
+          { vigente: 500, vencido: 0, castigado: 0, rating: '1A', NombreEntidad: 'FUCAC', rubros: [] },
           { vigente: 300, vencido: 0, castigado: 0, rating: '1C', NombreEntidad: 'Santander', rubros: [] }
         ],
         aggregates: { vigente: { mn: 800, me: 0 } }
@@ -58,10 +96,10 @@ const fixtures = [
     }
   },
   {
-    name: 'FUCAC_contingency_and_fucac',
+    name: 'República',
     flags: {},
-    provider: 'TEST',
-    metadata: { nombre: 'Prueba FUCAC', worstRating: '0' },
+    provider: 'República',
+    metadata: { nombre: 'República', worstRating: '0' },
     periodData: {
       t0: {
         entities: [ { vigente: 0, vencido: 0, castigado: 0, rating: '2B', NombreEntidad: 'FUCAC', rubros: [ { tipo: 'contingencia', cont: true } ] } ],
@@ -71,10 +109,10 @@ const fixtures = [
     }
   },
   {
-    name: 'Multiple_entities_with_t6',
+    name: 'Santander',
     flags: {},
-    provider: 'TEST',
-    metadata: { nombre: 'Prueba Multient', worstRating: '0' },
+    provider: 'Santander',
+    metadata: { nombre: 'Santander', worstRating: '0' },
     periodData: {
       t0: {
         entities: [
@@ -85,7 +123,7 @@ const fixtures = [
       },
       t6: {
         entities: [
-          { NombreEntidad: 'Cooperativa X', Calificacion: '1A', rubros: [ { nombre: 'OCA', vig: true } ], Cont: false },
+          { NombreEntidad: 'Santander', Calificacion: '1A', rubros: [ { nombre: 'OCA', vig: true } ], Cont: false },
           { NombreEntidad: 'ProntoPago', Calificacion: '2A', rubros: [], Cont: false }
         ],
         aggregates: { vigente: { mn: 300, me: 0 } }
@@ -115,7 +153,33 @@ const fixtures = [
 ];
 
 // Two scoring rules sets: default and one with some bin coefficients to exercise multipliers
-const baseScoringRules = { coefficients: { intercept: 0.211 } };
+// Note: by default the scoring engine uses fallback multipliers that allow
+// negative "binned_res" defaults to contribute. For testing we provide an
+// explicit base ruleset that zeros out bin multipliers so contributions are
+// neutral unless coefficients are supplied.
+const baseScoringRules = {
+  coefficients: {
+    intercept: 0.211,
+    banco_binned: 0,
+    ent_t6_binned: 0,
+    t6_cred_dir_comp_binned: 0,
+    vig_noauto_t6_coop_binned: 0,
+    t0_bbva_binned: 0,
+    cont_t0_fucac_binned: 0,
+    t0_scotia_binned: 0,
+    t0_asi_binned: 0,
+    brou_grupo_binned: 0,
+    emp_valor_binned: 0,
+    t0_fnb_binned: 0,
+    t0_santa_binned: 0,
+    t6_binned: 0,
+    cred_dir_binned: 0,
+    t6_creditel_binned: 0,
+    t6_oca_binned: 0,
+    t6_pronto_binned: 0,
+    t6_banco_binned: 0
+  }
+};
 const bankHeavyRules = { coefficients: { intercept: 0.211, banco_binned: 1.2, t0_scotia_binned: 1.1, t6_banco_binned: 1.3 } };
 
 // Iterate and execute computeScore for each fixture

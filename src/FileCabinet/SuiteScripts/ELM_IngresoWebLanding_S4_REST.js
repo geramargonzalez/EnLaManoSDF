@@ -33,8 +33,6 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
                if (workStartDate) yearsOfWork = auxLib.calculateYearsSinceDate(workStartDate);
                let activity = auxLib.getActivityType(activityType);
                let score = scoreLib.scoreFinal(docNumber);
-
-
                const bcuData = auxLib.extractBcuData(score);
                const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
                const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
@@ -46,8 +44,28 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
                const t2Quals = bcuData?.t2Qualifications?.map(q => q.calificacion);
                // Get all qualification values from T6  
                const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion);
+               
+               if (score?.error_reglas) {
+                     let approvalStatus = objScriptParam.estadoRechazado;
+                     if (score.error_reglas == 500 || score.error_reglas == 400) {
+                        approvalStatus = 15;
+                     }
+                     log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
+                     response.success = false;
+                     response.result = 'BCU';
+   
+                     auxLib.submitFieldsEntity(preLeadId, approvalStatus, objScriptParam.rechazoBCU, null, null, null, null, null, {
+                        score: 0,
+                        calificacionMinima: score?.calificacionMinima,
+                        detail: score?.detail,
+                        nombre: score?.nombre
+                     });
+
+                     auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
+                     return response;
+                  }
  
-                if (score && score.score > 500) {
+                if (score && score.score > 499) {
                   if (score.error_reglas == null) {
                      score.error_reglas = false; 
                   } 

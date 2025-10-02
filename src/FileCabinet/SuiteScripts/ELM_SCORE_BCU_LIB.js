@@ -22,10 +22,10 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                 score: 0
             };
         }
-
+ 
         try {
             // Mapear options a nuevo formato optimizado
-            var newOptions = {
+            const newOptions = {
                 provider: (options && options.provider) || 'equifax',
                 forceRefresh: options && options.forceRefresh,
                 debug: options && options.debug,
@@ -33,7 +33,12 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
             };
 
             // Llamada optimizada al servicio
-            var result = scoreService.calculateScore(dni, newOptions);
+            const result = scoreService.calculateScore(dni, newOptions);
+
+            log.debug({
+                title: 'ELM Score Fast Result',
+                details: dni.substr(-4) + ': ' + JSON.stringify(result)
+            });
             
             // Mapear respuesta a formato legacy para backward compatibility
             if (result.metadata && result.metadata.isRejected) {
@@ -51,7 +56,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
 
             // Respuesta exitosa optimizada
             return {
-                score: Math.round(result.finalScore * 100), // Legacy format: 0-100
+                score: Math.round(result.finalScore * 1000), // Legacy format: 0-1000 (corregido de 0-100)
                 calificacionMinima: extractWorstRating(result),
                 contador: extractEntityCount(result),
                 mensaje: 'Score calculado exitosamente',

@@ -216,7 +216,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                                log.audit('Created customer', newCustomerId);
                                 auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
                      } else {
-                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoRechazado, objScriptParam?.rechazoMocasist);
+                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoMocasist, objScriptParam?.rechazoMocasist);
                      }
                   }
 
@@ -251,7 +251,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
 
                                 auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
                   } else {
-                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoRechazado, objScriptParam?.rechazoBlacklist);
+                     auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoBlacklist, objScriptParam?.rechazoBlacklist);
                   }
                   
                }
@@ -343,8 +343,15 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
             }),
             webLandingService: scriptObj.getParameter({
                name: 'custscript_elm_channel_web_landing'
+            }),
+              estadoMocasist: scriptObj.getParameter({
+               name: 'custscript_elm_est_mocasist_s3'
+            }),
+            estadoBlacklist: scriptObj.getParameter({
+               name: 'custscript_elm_est_blacklist_s3'
             })
-         };
+        };
+      
          return objParams;
       }
 
