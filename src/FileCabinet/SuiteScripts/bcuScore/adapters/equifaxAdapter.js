@@ -7,15 +7,15 @@ define(['N/https', 'N/log', 'N/runtime', 'N/encode', '../domain/normalize'],
 function (https, log, runtime, encode, normalize) {
     'use strict';
 
-    var TIMEOUT_MS = 15000; // REDUCIDO: 15s para respuesta rápida
-    var TOKEN_CACHE_DURATION = 3300; // 55 minutos
+    const TIMEOUT_MS = 15000; // REDUCIDO: 15s para respuesta rápida
+    const TOKEN_CACHE_DURATION = 3300; // 55 minutos
     
     // Cache de token EN MEMORIA para máxima velocidad (sin NetSuite cache I/O)
-    var _tokenCache = null;
-    var _tokenExpiry = null;
+    let _tokenCache = null;
+    let _tokenExpiry = null;
     
     // Pre-compilar URLs y headers para evitar string concatenations
-    var _config = null;
+    let _config = null;
 
     /**
      * OPTIMIZADO: Fetch con caché agresivo y timeouts cortos
@@ -30,11 +30,11 @@ function (https, log, runtime, encode, normalize) {
             }
 
             // Token con caché en memoria (sin I/O cache)
-            var accessToken = getValidToken();
+            const accessToken = getValidToken();
             
             // Request optimizado con timeout corto
-            var response = executeEquifaxRequest(documento, accessToken, options);
-            
+            const response = executeEquifaxRequest(documento, accessToken, options);
+
             // Normalización rápida
             return normalize.normalizeEquifaxResponse(response);
 
@@ -55,7 +55,7 @@ function (https, log, runtime, encode, normalize) {
      * OPTIMIZADO: Token con caché en memoria (sin NetSuite cache I/O)
      */
     function getValidToken() {
-        var now = Date.now();
+        const now = Date.now();
         
         // Cache hit inmediato - sin validaciones adicionales
         if (_tokenCache && _tokenExpiry && now < _tokenExpiry) {
@@ -63,7 +63,7 @@ function (https, log, runtime, encode, normalize) {
         }
 
         // Request token con timeout agresivo
-        var tokenResponse = https.request({
+        const tokenResponse = https.request({
             url: _config.tokenUrl,
             method: https.Method.POST,
             headers: {
@@ -79,9 +79,9 @@ function (https, log, runtime, encode, normalize) {
             throw createEquifaxError('TOKEN_ERROR', 'Token request failed: ' + tokenResponse.code);
         }
 
-        var tokenData = JSON.parse(tokenResponse.body);
-        var expiresIn = parseInt(tokenData.expires_in) || 3600;
-        
+        const tokenData = JSON.parse(tokenResponse.body);
+        const expiresIn = parseInt(tokenData.expires_in) || 3600;
+
         // Cache en memoria con buffer de seguridad
         _tokenCache = tokenData.access_token;
         _tokenExpiry = now + ((expiresIn - 300) * 1000); // 5min buffer
@@ -94,12 +94,12 @@ function (https, log, runtime, encode, normalize) {
      */
     function executeEquifaxRequest(documento, accessToken, options) {
         // Payload mínimo para velocidad
-        var payload = {
+        const payload = {
             cedula: documento,
             periodo: options.includePeriods !== false ? ['t0', 't6'] : ['t0']
         };
 
-        var response = https.request({
+        const response = https.request({
             url: _config.apiUrl,
             method: https.Method.POST,
             headers: _config.requestHeaders(accessToken),
@@ -118,23 +118,23 @@ function (https, log, runtime, encode, normalize) {
      * OPTIMIZADO: Configuración lazy-loaded una sola vez
      */
     function getEquifaxConfig() {
-        var script = runtime.getCurrentScript();
-        var clientId = script.getParameter({ name: 'custscript_equifax_client_id' });
-        var clientSecret = script.getParameter({ name: 'custscript_equifax_client_secret' });
-        
+        const script = runtime.getCurrentScript();
+        const clientId = script.getParameter({ name: 'custscript_equifax_client_id' });
+        const clientSecret = script.getParameter({ name: 'custscript_equifax_client_secret' });
+
         if (!clientId || !clientSecret) {
             throw createEquifaxError('CONFIG_ERROR', 'Credenciales Equifax no configuradas');
         }
 
         // Pre-compilar Basic Auth para evitar encoding repetido
-        var basicAuth = encode.convert({
+        const basicAuth = encode.convert({
             string: clientId + ':' + clientSecret,
             inputEncoding: encode.Encoding.UTF_8,
             outputEncoding: encode.Encoding.BASE_64
         });
 
         // Pre-compilar headers function para evitar object creation repetido
-        var requestHeadersTemplate = {
+        const requestHeadersTemplate = {
             'Content-Type': 'application/vnd.com.equifax.clientconfig.v1+json',
             'Accept': 'application/json',
             'User-Agent': 'NetSuite-ELM/1.0'
@@ -157,7 +157,7 @@ function (https, log, runtime, encode, normalize) {
     /**
      * OPTIMIZADO: Error mapping con lookup table
      */
-    var HTTP_ERROR_MAP = {
+    const HTTP_ERROR_MAP = {
         400: ['EQUIFAX_BAD_REQUEST', 'Solicitud inválida'],
         401: ['EQUIFAX_UNAUTHORIZED', 'Token inválido'],
         403: ['EQUIFAX_FORBIDDEN', 'Sin permisos'],
@@ -168,7 +168,7 @@ function (https, log, runtime, encode, normalize) {
     };
 
     function mapEquifaxHttpError(httpStatus, responseBody) {
-        var mapping = HTTP_ERROR_MAP[httpStatus];
+        const mapping = HTTP_ERROR_MAP[httpStatus];
         if (mapping) {
             return createEquifaxError(mapping[0], mapping[1], { httpStatus: httpStatus });
         }
@@ -179,7 +179,7 @@ function (https, log, runtime, encode, normalize) {
      * OPTIMIZADO: Error creation mínima
      */
     function createEquifaxError(code, message, details) {
-        var error = new Error(message);
+        const error = new Error(message);
         error.name = 'EquifaxAdapterError';
         error.code = code;
         error.provider = 'equifax';

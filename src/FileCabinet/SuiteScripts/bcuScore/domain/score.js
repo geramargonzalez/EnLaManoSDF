@@ -7,11 +7,39 @@ define([], function () {
     'use strict';
 
     // Pre-compilar lookup tables para performance O(1)
-    var RATING_ORDER = {
+    const RATING_ORDER = {
         '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10
     };
-    
-    var BAD_RATINGS_SET = { '2B': true, '3': true, '4': true, '5': true };
+    const BAD_RATINGS_SET = { '2B': true, '3': true, '4': true, '5': true };
+
+    // Helper: convertir valores a número de forma segura (evita NaN)
+    function toNumberSafe(v) {
+        if (v === null || v === undefined) return 0;
+        const n = Number(v);
+        return (isFinite(n) ? n : 0);
+    }
+
+    // Helpers para analizar rubros (conservativos y seguros)
+    function containsContingency(rubros) {
+        if (!Array.isArray(rubros)) return false;
+        for (let i = 0; i < rubros.length; i++) {
+            const r = rubros[i] || {};
+            const tipo = (r.tipo || '').toString().toLowerCase();
+            if (tipo.indexOf('cont') === 0 || tipo.indexOf('conting') > -1 || (r.cont && r.cont === true)) return true;
+        }
+        return false;
+    }
+
+    function containsVigenciaRubro(rubros) {
+        if (!Array.isArray(rubros)) return false;
+        for (let i = 0; i < rubros.length; i++) {
+            const r = rubros[i] || {};
+            if (r.vig || r.vigente || r.vigencia) return true;
+            const clave = (r.nombre || r.tipo || '').toString().toLowerCase();
+            if (clave.indexOf('vig') === 0) return true;
+        }
+        return false;
+    }
 
     /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
@@ -22,11 +50,11 @@ define([], function () {
             return createRejectedScore('INVALID_INPUT', 'Datos inválidos');
         }
 
-        var rejectionRules = scoringRules.rejectionRules;
-        var flags = normalizedData.flags || {};
+        const rejectionRules = scoringRules.rejectionRules;
+        const flags = normalizedData.flags || {};
 
         // Early exit: fallecido (más común)
-        if (rejectionRules.isDeceased && flags.isDeceased) {
+        if (rejectionRules && rejectionRules.isDeceased && flags.isDeceased) {
             return createRejectedScore('DECEASED', 'Persona fallecida');
         }
 
@@ -35,28 +63,28 @@ define([], function () {
             return createRejectedScore('BAD_RATING', 'Calificación de rechazo');
         }
 
-        var t0Data = normalizedData.periodData.t0;
+        const t0Data = normalizedData.periodData && normalizedData.periodData.t0;
         if (!t0Data || !t0Data.entities || !Array.isArray(t0Data.entities)) {
             return createRejectedScore('NO_DATA', 'Sin datos para scoring');
         }
 
-        var entities = t0Data.entities;
-        var entityCount = entities.length;
-        
+        const entities = t0Data.entities;
+        const entityCount = entities.length;
+
         // Calcular totales en una sola pasada O(n)
-        var totals = { vigente: 0, vencido: 0, castigado: 0 };
-        var worstRatingValue = 0;
-        var worstRating = '0';
-        
-        for (var i = 0; i < entityCount; i++) {
-            var entity = entities[i];
+        const totals = { vigente: 0, vencido: 0, castigado: 0 };
+        let worstRatingValue = 0;
+        let worstRating = '0';
+
+        for (let i = 0; i < entityCount; i++) {
+            let entity = entities[i];
             totals.vigente += entity.vigente || 0;
             totals.vencido += entity.vencido || 0;
             totals.castigado += entity.castigado || 0;
             
             // Worst rating en mismo loop
-            var rating = String(entity.rating || '').toUpperCase();
-            var ratingValue = RATING_ORDER[rating] || 0;
+            const rating = String(entity.rating || '').toUpperCase();
+            const ratingValue = RATING_ORDER[rating] || 0;
             if (ratingValue > worstRatingValue) {
                 worstRatingValue = ratingValue;
                 worstRating = rating;
@@ -64,47 +92,314 @@ define([], function () {
         }
 
         // Early exit: límites de deuda
-        if (rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
+        if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
             return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva');
         }
-        if (rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
+        if (rejectionRules && rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
             return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva');
         }
 
-        var coeffs = scoringRules.coefficients;
-        
-        // Calcular contribuciones con operaciones mínimas
-        var vigenteImpact = calculateDebtImpactFast(totals.vigente, coeffs.vigente);
-        var vencidoImpact = calculateDebtImpactFast(totals.vencido, coeffs.vencido);
-        var castigadoImpact = calculateDebtImpactFast(totals.castigado, coeffs.castigado);
-        var entityImpact = calculateEntityImpactFast(entityCount, coeffs.entityCount);
-        var ratingImpact = coeffs.ratingPenalties[worstRating] || 0;
+        // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
+        const coeffs = scoringRules.coefficients || {};
 
-        // Score final con operaciones mínimas
-        var rawScore = scoringRules.baseScore + vigenteImpact + vencidoImpact + 
-                      castigadoImpact + entityImpact + ratingImpact;
-        var finalScore = Math.max(0, Math.min(1, rawScore));
+        // Mapeo de coeficientes exactamente con los nombres del original
+        const banco_binned = coeffs.banco_binned || coeffs['custrecord_sdb_banco_binned'] || 0;
+        const ent_t6_binned = coeffs.ent_t6_binned || coeffs['custrecord_sdb_ent_t6_binned'] || 0;
+        const intercept = coeffs.intercept || coeffs['custrecord_sdb_intercept'] || 0;
+        let t6_cred_dir_comp_binned = coeffs.t6_cred_dir_comp_binned || coeffs['custrecord_sdb_t6_cred_dir_comp_binned'] || 0;
+        let vig_noauto_t6_coop_binned = coeffs.vig_noauto_t6_coop_binned || coeffs['custrecord_sdb_vig_noauto_t6_coop_binned'] || 0;
+        let t0_bbva_binned = coeffs.t0_bbva_binned || coeffs['custrecord_sdb_woe_cont_t0_bbva_binned'] || 0;
+        let cont_t0_fucac_binned = coeffs.cont_t0_fucac_binned || coeffs['custrecord_sdb_woe_cont_t0_fucac_binned'] || 0;
+        let t0_scotia_binned = coeffs.t0_scotia_binned || coeffs['custrecord_sdb_woe_cont_t0_scotia_binned'] || 0;
+        let t0_asi_binned = coeffs.t0_asi_binned || coeffs['custrecord_sdb_woe_t0_asi_binned'] || 0;
+        let brou_grupo_binned = coeffs.brou_grupo_binned || coeffs['custrecord_sdb_woe_t0_brou_grupo_binned'] || 0;
+        let emp_valor_binned = coeffs.emp_valor_binned || coeffs['custrecord_sdb_woe_t0_emp_valor_binned'] || 0;
+        let t0_fnb_binned = coeffs.t0_fnb_binned || coeffs['custrecord_sdb_woe_t0_fnb_binned'] || 0;
+        let t0_santa_binned = coeffs.t0_santa_binned || coeffs['custrecord_sdb_woe_t0_santa_binned'] || 0;
+        let t6_binned = coeffs.t6_binned || coeffs['custrecord_sdb_woe_t6_binned'] || 0;
+        let cred_dir_binned = coeffs.cred_dir_binned || coeffs['custrecord_sdb_woe_t6_cred_dir_binned'] || 0;
+        let t6_creditel_binned = coeffs.t6_creditel_binned || coeffs['custrecord_sdb_woe_t6_creditel_binned'] || 0;
+        let t6_oca_binned = coeffs.t6_oca_binned || coeffs['custrecord_sdb_woe_t6_oca_binned'] || 0;
+        let t6_pronto_binned = coeffs.t6_pronto_binned || coeffs['custrecord_sdb_woe_t6_pronto_binned'] || 0;
 
-        return {
-            finalScore: finalScore,
-            rawScore: rawScore,
-            baseScore: scoringRules.baseScore,
-            contributions: {
-                vigente: { impact: vigenteImpact, rawValue: totals.vigente },
-                vencido: { impact: vencidoImpact, rawValue: totals.vencido },
-                castigado: { impact: castigadoImpact, rawValue: totals.castigado },
-                entityCount: { impact: entityImpact, rawValue: entityCount },
-                worstRating: { impact: ratingImpact, rawValue: worstRating }
-            },
-            metadata: {
-                provider: normalizedData.provider,
-                documento: normalizedData.documento,
-                calculatedAt: new Date(),
-                isRejected: false
-            },
-            flags: flags,
-            validation: { hasValidData: true }
+        // Inicializar resultados parciales (mismos nombres que en el original)
+        let cred_dir_binned_res = 0;
+        let ent_t6_binned_res = 0;
+        let t6_binned_res = 0;
+        let t6_creditel_binned_res = 0;
+        let t6_oca_binned_res = 0;
+        let t0_fnb_binned_res = 0;
+        let t0_scotia_binned_res = 0;
+        let t0_asi_binned_res = 0;
+        let t0_bbva_binned_res = 0;
+        let t6_cred_dir_comp_binned_res = 0;
+        let t6_banco_binned_res = 0;
+        let vig_noauto_t6_coop_binned_res = 0;
+        let t0_santa_binned_res = 0;
+        let emp_valor_binned_res = 0;
+        let cont_t0_fucac_binned_res = 0;
+        let brou_grupo_binned_res = 0;
+        let t6_pronto_binned_res = 0;
+
+        // Preparar datos t0/t6 desde normalizedData (normalizer asegura formato uniforme)
+        let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
+        let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
+
+        // Extraer Mn/Me desde aggregates si están disponibles (parseEquifaxAggregates crea esta estructura)
+        let t2_mnPesos = (t0.aggregates && t0.aggregates.vigente && toNumberSafe(t0.aggregates.vigente.mn)) || 0;
+        let t2_mePesos = (t0.aggregates && t0.aggregates.vigente && toNumberSafe(t0.aggregates.vigente.me)) || 0;
+        let t6_mnPesos = (t6.aggregates && t6.aggregates.vigente && toNumberSafe(t6.aggregates.vigente.mn)) || 0;
+        let t6_mePesos = (t6.aggregates && t6.aggregates.vigente && toNumberSafe(t6.aggregates.vigente.me)) || 0;
+
+        // Calcular endeudamiento seguro
+        let endeudamiento = null;
+        if ((t6_mnPesos + t6_mePesos) > 0) {
+            endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
+        } else {
+            endeudamiento = -314; // mismo valor por defecto en el original
+        }
+
+        // Construir estructuras t2/t6 similares a las del original para las comprobaciones por NombreEntidad y Calificacion
+        let objectCalification = { '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10 };
+
+        let t2List = [];
+        for (let i = 0; i < (t0.entities || []).length; i++) {
+            let e = t0.entities[i];
+            t2List.push({
+                NombreEntidad: e.entidad || e.nombreEntidad || '',
+                Calificacion: (e.rating || e.calificacion || '').toString(),
+                CalificacionMinima0: objectCalification[(e.rating || e.calificacion || '')] || 0,
+                Cont: containsContingency(e.rubros || []),
+                vig: containsVigenciaRubro(e.rubros || [])
+            });
+        }
+
+        let t6List = [];
+        for (let p = 0; p < (t6.entities || []).length; p++) {
+            let e2 = t6.entities[p];
+            t6List.push({
+                NombreEntidad: e2.entidad || e2.nombreEntidad || '',
+                Calificacion: (e2.rating || e2.calificacion || '').toString(),
+                CalificacionMinima: objectCalification[(e2.rating || e2.calificacion || '')] || 0,
+                Cont: containsContingency(e2.rubros || []),
+                vig: containsVigenciaRubro(e2.rubros || [])
+            });
+        }
+
+        // ent_t6_binned_res según cantidad de entidades en t6 (usar la misma semántica que el original; note: original usa coma en 72, 80 -> efectivamente 80)
+        let t6len = t6List.length;
+        if (t6len === 0 || t6len === 1) ent_t6_binned_res = -63.64;
+        else if (t6len === 2 || t6len === 3) ent_t6_binned_res = 8;
+        else if (t6len === 4 || t6len === 5) ent_t6_binned_res = 34.84;
+        else if (t6len > 5) ent_t6_binned_res = 80; // replicando el comportamiento del original
+
+        // recorrer t6 para asignaciones por entidad
+        let contador = 0;
+        let min = 0;
+        let objectMin = {};
+        for (let k = 0; k < t6List.length; k++) {
+            let current = t6List[k];
+            if ((current.CalificacionMinima || 0) >= min) {
+                min = current.CalificacionMinima || 0;
+                objectMin = current;
+            }
+        }
+
+        // t6 por calificacion
+        if ((objectMin.CalificacionMinima || 0) >= 5) {
+            t6_binned_res = -9.95;
+        }
+
+        for (let key in t6List) {
+            let current = t6List[key];
+            contador = contador + 1;
+
+            if (t6_binned_res !== -9.95) {
+                if (!current.Calificacion || current.Calificacion === '') {
+                    t6_binned_res = -68.53;
+                } else if (current.Calificacion === '2B' && t6_binned_res !== 14.88) {
+                    t6_binned_res = 14.88;
+                } else if (['1C', '1A', '2A', '0'].indexOf(current.Calificacion) > -1) {
+                    t6_binned_res = 31.94;
+                }
+            }
+
+            // creditel (SOCUR)
+            if ((current.NombreEntidad || '').indexOf('SOCUR') > -1) {
+                t6_creditel_binned_res = 40.62;
+            } else if (t6_creditel_binned_res !== 40.62) {
+                t6_creditel_binned_res = -17.15;
+            }
+
+            // OCA
+            if ((current.NombreEntidad || '').indexOf('OCA') > -1 && (current.Calificacion === '1C' || current.Calificacion === '1A')) {
+                t6_oca_binned_res = 50.39;
+            } else if (t6_oca_binned_res !== 50.39) {
+                t6_oca_binned_res = -15.16;
+            }
+
+            // CREDITOS DIRECTOS / cred_dir_binned_res (replicar la lógica tal cual del original, incluyendo su quirks)
+            if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && (current.Calificacion === '1C' || current.Calificacion === '2A')) {
+                cred_dir_binned_res = 30.77;
+            } else if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && cred_dir_binned_res !== 30.77 && (current.Calificacion !== '2A' || current.Calificacion !== '1C')) {
+                cred_dir_binned_res = -90.18;
+            }
+            if (cred_dir_binned_res !== 30.77 || cred_dir_binned_res !== -90.18) {
+                cred_dir_binned_res = -4.12;
+            }
+
+            // t6_cred_dir_comp_binned_res
+            if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) {
+                t6_cred_dir_comp_binned_res = 37.78;
+            } else if (t6_cred_dir_comp_binned_res !== 37.78) {
+                t6_cred_dir_comp_binned_res = -4.35;
+            }
+
+            // bancos
+            if (((current.NombreEntidad || '').indexOf('Vizcaya') > -1 || (current.NombreEntidad || '').indexOf('Bandes') > -1 || (current.NombreEntidad || '').indexOf('Banco Ita') > -1 || (current.NombreEntidad || '').indexOf('Santander') > -1 || (current.NombreEntidad || '').indexOf('Scotiabank') > -1 || (current.NombreEntidad || '').indexOf('HSBC') > -1) && (current.Calificacion === '1A' || current.Calificacion === '1C' || current.Calificacion === '2A')) {
+                t6_banco_binned_res = 51.06;
+            } else if (t6_banco_binned_res !== 51.06) {
+                t6_banco_binned_res = -37.55;
+            }
+
+            // cooperativas no auto
+            if (!current.vig && current.Calificacion) {
+                if (((current.NombreEntidad || '').indexOf('ANDA') > -1) || ((current.NombreEntidad || '').indexOf('FUCEREP') > -1) || ((current.NombreEntidad || '').indexOf('ACAC') > -1)) {
+                    vig_noauto_t6_coop_binned_res = 48.55;
+                } else if (!current.vig && vig_noauto_t6_coop_binned_res !== 48.55) {
+                    vig_noauto_t6_coop_binned_res = -23.52;
+                }
+            }
+
+            // BAUTZEN pronto
+            if ((current.NombreEntidad || '').indexOf('BAUTZEN') > -1 && current.Calificacion) {
+                t6_pronto_binned_res = 36.73;
+            } else if (t6_pronto_binned_res !== 36.73) {
+                t6_pronto_binned_res = -7.86;
+            }
+        }
+
+        // Reaplicar ent_t6_binned_res según contador (el original recalcula)
+        if (contador === 0 || contador === 1) ent_t6_binned_res = -63.64;
+        else if (contador === 2 || contador === 3) ent_t6_binned_res = 8;
+        else if (contador === 4 || contador === 5) ent_t6_binned_res = 34.84;
+        else if (contador > 5) ent_t6_binned_res = 80;
+
+        // Para t0 (t2) - recorrer y asignar binned_res similares
+        const object0Min = { CalificacionMinima0: 0 };
+        for (let kk = 0; kk < t2List.length; kk++) {
+            if ((t2List[kk].CalificacionMinima0 || 0) >= (object0Min.CalificacionMinima0 || 0)) {
+                object0Min = t2List[kk];
+            }
+        }
+
+        for (let key2 in t2List) {
+            let currentt2 = t2List[key2];
+
+            if ((currentt2.NombreEntidad || '').indexOf('Integrales') > -1 && currentt2.Calificacion) {
+                t0_asi_binned_res = 67.86;
+            } else if (t0_asi_binned_res !== 67.86) {
+                t0_asi_binned_res = -4.94;
+            }
+
+            if (currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) {
+                t0_bbva_binned_res = 79.39;
+            } else if (t0_bbva_binned_res !== 79.39) {
+                t0_bbva_binned_res = -3.65;
+            }
+
+            // t0_fnb_binned_res según object0.CalificacionMinima0
+            if ((object0Min.CalificacionMinima0 === 2 || object0Min.CalificacionMinima0 === 1)) {
+                if (((currentt2.NombreEntidad || '').indexOf('Integrales') > -1) || ((currentt2.NombreEntidad || '').indexOf('BAUTZEN') > -1) || ((currentt2.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) || ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1) || ((currentt2.NombreEntidad || '').indexOf('Microfinanzas') > -1) || ((currentt2.NombreEntidad || '').indexOf('OCA') > -1) || ((currentt2.NombreEntidad || '').indexOf('PASS CARD') > -1) || ((currentt2.NombreEntidad || '').indexOf('Promotora') > -1) || ((currentt2.NombreEntidad || '').indexOf('Republica Microfinazas') > -1) || ((currentt2.NombreEntidad || '').indexOf('RETOP') > -1) || ((currentt2.NombreEntidad || '').indexOf('CIA') > -1) || ((currentt2.NombreEntidad || '').indexOf('SOCUR') > -1) || ((currentt2.NombreEntidad || '').indexOf('VERENDY') > -1)) {
+                    t0_fnb_binned_res = 14.06;
+                }
+            } else if (object0Min.CalificacionMinima0 === 3 && t0_fnb_binned_res !== 14.06) {
+                if (((currentt2.NombreEntidad || '').indexOf('Integrales') > -1) || ((currentt2.NombreEntidad || '').indexOf('BAUTZEN') > -1) || ((currentt2.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) || ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1) || ((currentt2.NombreEntidad || '').indexOf('Microfinanzas') > -1) || ((currentt2.NombreEntidad || '').indexOf('OCA') > -1) || ((currentt2.NombreEntidad || '').indexOf('PASS CARD') > -1) || ((currentt2.NombreEntidad || '').indexOf('Promotora') > -1) || ((currentt2.NombreEntidad || '').indexOf('Republica Microfinazas') > -1) || ((currentt2.NombreEntidad || '').indexOf('RETOP') > -1) || ((currentt2.NombreEntidad || '').indexOf('CIA') > -1) || ((currentt2.NombreEntidad || '').indexOf('SOCUR') > -1) || ((currentt2.NombreEntidad || '').indexOf('VERENDY') > -1)) {
+                    t0_fnb_binned_res = -6.06;
+                }
+            } else if (t0_fnb_binned_res !== 14.06 || t0_fnb_binned_res !== -6.06) {
+                t0_fnb_binned_res = -42.71;
+            }
+        }
+
+        // Más bloques del original (t0_scotia, emp_valor, fucac, brou, santa, scotia, etc.)
+        for (let key3 in t2List) {
+            let currentt2 = t2List[key3];
+
+            if ((currentt2.NombreEntidad || '').indexOf('Scotiabank') > -1) {
+                t0_scotia_binned_res = 74.04;
+            } else if (t0_scotia_binned_res !== 74.04) {
+                t0_scotia_binned_res = -4.16;
+            }
+
+            if ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1 && currentt2.Calificacion) {
+                emp_valor_binned_res = 124.21;
+            } else if (emp_valor_binned_res !== 124.21) {
+                emp_valor_binned_res = -4.46;
+            }
+
+            if ((currentt2.NombreEntidad || '').indexOf('FUCAC') > -1 && currentt2.Cont) {
+                cont_t0_fucac_binned_res = 74.16;
+            } else if (cont_t0_fucac_binned_res !== 74.16) {
+                cont_t0_fucac_binned_res = -7.01;
+            }
+
+            if ((currentt2.NombreEntidad || '').indexOf('República') > -1 && currentt2.Calificacion) {
+                brou_grupo_binned_res = 33.61;
+            } else if (brou_grupo_binned_res !== 33.61) {
+                brou_grupo_binned_res = -15.44;
+            }
+
+            if ((currentt2.NombreEntidad || '').indexOf('Santander') > -1) {
+                t0_santa_binned_res = 38.33;
+            } else if (t0_santa_binned_res !== 38.33) {
+                t0_santa_binned_res = -18.27;
+            }
+        }
+
+        // Calculo final: multiplicar por bins y sumar (limpio y canónico)
+        ent_t6_binned_res = ent_t6_binned_res * (ent_t6_binned || 1);
+        t6_binned_res = t6_binned_res * (t6_binned || 1);
+        t6_creditel_binned_res = t6_creditel_binned_res * (t6_creditel_binned || 1);
+        t6_oca_binned_res = t6_oca_binned_res * (t6_oca_binned || 1);
+        t0_fnb_binned_res = t0_fnb_binned_res * (t0_fnb_binned || 1);
+        t0_asi_binned_res = t0_asi_binned_res * (t0_asi_binned || 1);
+        t0_bbva_binned_res = t0_bbva_binned_res * (t0_bbva_binned || 1);
+        t6_cred_dir_comp_binned_res = t6_cred_dir_comp_binned_res * (t6_cred_dir_comp_binned || 1);
+        t6_banco_binned_res = t6_banco_binned_res * (banco_binned || 1);
+        vig_noauto_t6_coop_binned_res = vig_noauto_t6_coop_binned_res * (vig_noauto_t6_coop_binned || 1);
+        t0_santa_binned_res = t0_santa_binned_res * (t0_santa_binned || 1);
+        emp_valor_binned_res = emp_valor_binned_res * (emp_valor_binned || 1);
+        cont_t0_fucac_binned_res = cont_t0_fucac_binned_res * (cont_t0_fucac_binned || 1);
+        brou_grupo_binned_res = brou_grupo_binned_res * (brou_grupo_binned || 1);
+        t6_pronto_binned_res = t6_pronto_binned_res * (t6_pronto_binned || 1);
+        t0_scotia_binned_res = t0_scotia_binned_res * (t0_scotia_binned || 1);
+        cred_dir_binned_res = cred_dir_binned_res * (cred_dir_binned || 1);
+
+        // Intercept / test contribution (mantener compatibilidad con el original)
+        let test = 1 * (intercept || 0.211);
+
+        // Sumar todas las contribuciones para obtener el logit total
+        let total = test + ent_t6_binned_res + t6_binned_res + t6_creditel_binned_res + t6_oca_binned_res + t0_fnb_binned_res + t0_asi_binned_res + t0_bbva_binned_res + t6_cred_dir_comp_binned_res + t6_banco_binned_res + vig_noauto_t6_coop_binned_res + t0_santa_binned_res + emp_valor_binned_res + cont_t0_fucac_binned_res + brou_grupo_binned_res + t6_pronto_binned_res + t0_scotia_binned_res + cred_dir_binned_res;
+
+        // Aplicar función logística y escalar a 0-1000 (igual que el original)
+        let scoreNumeric = (Math.exp(total) / (1 + Math.exp(total))) * 1000;
+        let scoreRounded = Math.round(scoreNumeric);
+
+        // Construir objeto similar al original para compatibilidad
+        let objetos = {
+            score: scoreRounded,
+            finalScore: Math.max(0, Math.min(1, scoreRounded / 1000)),
+            calificacionMinima: (normalizedData.metadata && normalizedData.metadata.worstRating) || '0',
+            contador: contador,
+            mensaje: 'No tenemos prestamo disponible en este momento',
+            endeudamiento: endeudamiento,
+            nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || normalizedData.provider || '',
+            error_reglas: false,
+            logTxt: ''
         };
+
+        return objetos;
     }
 
     /**
@@ -126,7 +421,7 @@ define([], function () {
 
         // Calificación mala
         if (rejectionRules.badRatings && data.flags.hasRejectableRating) {
-            var worstRating = extractWorstRating(data);
+            let worstRating = extractWorstRating(data);
             if (rejectionRules.badRatings.includes(worstRating)) {
                 return { 
                     isRejected: true, 
@@ -138,7 +433,7 @@ define([], function () {
 
         // Deuda vencida excesiva
         if (rejectionRules.maxVencido) {
-            var totalVencido = extractTotalByType(data, 'vencido');
+            let totalVencido = extractTotalByType(data, 'vencido');
             if (totalVencido > rejectionRules.maxVencido) {
                 return { 
                     isRejected: true, 
@@ -150,7 +445,7 @@ define([], function () {
 
         // Deuda castigada excesiva
         if (rejectionRules.maxCastigado) {
-            var totalCastigado = extractTotalByType(data, 'castigado');
+            let totalCastigado = extractTotalByType(data, 'castigado');
             if (totalCastigado > rejectionRules.maxCastigado) {
                 return { 
                     isRejected: true, 
@@ -162,7 +457,7 @@ define([], function () {
 
         // Deuda total excesiva
         if (rejectionRules.maxTotalDebt) {
-            var totalDebt = extractTotalByType(data, 'vigente') + 
+            let totalDebt = extractTotalByType(data, 'vigente') + 
                            extractTotalByType(data, 'vencido') + 
                            extractTotalByType(data, 'castigado');
             if (totalDebt > rejectionRules.maxTotalDebt) {
@@ -190,9 +485,9 @@ define([], function () {
             };
         }
 
-        var threshold = coefficients.threshold || 0;
-        var weight = coefficients.weight || 0;
-        var maxImpact = coefficients.maxImpact || -1;
+        let threshold = coefficients.threshold || 0;
+        let weight = coefficients.weight || 0;
+        let maxImpact = coefficients.maxImpact || -1;
 
         // Solo aplicar si supera el threshold
         if (totalAmount <= threshold) {
@@ -205,11 +500,11 @@ define([], function () {
         }
 
         // Calcular impacto proporcional
-        var excessAmount = totalAmount - threshold;
-        var rawImpact = (excessAmount / 100000) * weight; // Normalizar por 100K
-        
+        let excessAmount = totalAmount - threshold;
+        let rawImpact = (excessAmount / 100000) * weight; // Normalizar por 100K
+
         // Aplicar límite máximo
-        var finalImpact = Math.max(maxImpact, rawImpact);
+        let finalImpact = Math.max(maxImpact, rawImpact);
 
         return {
             rawValue: totalAmount,
@@ -235,9 +530,9 @@ define([], function () {
             };
         }
 
-        var threshold = coefficients.threshold || 0;
-        var weight = coefficients.weight || 0;
-        var maxImpact = coefficients.maxImpact || -1;
+        const threshold = coefficients.threshold || 0;
+        const weight = coefficients.weight || 0;
+        const maxImpact = coefficients.maxImpact || -1;
 
         if (entityCount <= threshold) {
             return { 
@@ -248,9 +543,9 @@ define([], function () {
             };
         }
 
-        var excessEntities = entityCount - threshold;
-        var rawImpact = excessEntities * weight;
-        var finalImpact = Math.max(maxImpact, rawImpact);
+        const excessEntities = entityCount - threshold;
+        const rawImpact = excessEntities * weight;
+        const finalImpact = Math.max(maxImpact, rawImpact);
 
         return {
             rawValue: entityCount,
@@ -276,7 +571,7 @@ define([], function () {
             };
         }
 
-        var penalty = ratingPenalties[worstRating] || 0;
+        const penalty = ratingPenalties[worstRating] || 0;
 
         return {
             rawValue: worstRating,
@@ -298,8 +593,8 @@ define([], function () {
             };
         }
 
-        var t0Data = data.periodData.t0;
-        var t6Data = data.periodData.t6;
+        const t0Data = data.periodData.t0;
+        const t6Data = data.periodData.t6;
 
         if (!t0Data || !t6Data || !t0Data.entities || !t6Data.entities) {
             return { 
@@ -310,8 +605,8 @@ define([], function () {
         }
 
         // Calcular totales para ambos períodos
-        var t0Total = calculatePeriodTotal(t0Data);
-        var t6Total = calculatePeriodTotal(t6Data);
+        const t0Total = calculatePeriodTotal(t0Data);
+        const t6Total = calculatePeriodTotal(t6Data);
 
         if (t6Total === 0) {
             return { 
@@ -322,8 +617,8 @@ define([], function () {
         }
 
         // Calcular cambio porcentual
-        var percentChange = (t0Total - t6Total) / t6Total;
-        var threshold = trendingConfig.thresholdPercentage || 0.1;
+        const percentChange = (t0Total - t6Total) / t6Total;
+        const threshold = trendingConfig.thresholdPercentage || 0.1;
 
         // Solo aplicar trending si el cambio es significativo
         if (Math.abs(percentChange) < threshold) {
@@ -338,8 +633,8 @@ define([], function () {
         }
 
         // Determinar si es mejora o empeoramiento
-        var impact = 0;
-        var trendType = '';
+        let impact = 0;
+        let trendType = '';
 
         if (percentChange < 0) { // Reducción de deuda = mejora
             impact = trendingConfig.improvementBonus || 0;
@@ -376,7 +671,7 @@ define([], function () {
      * Extrae total por tipo de deuda de los datos normalizados
      */
     function extractTotalByType(data, type) {
-        var t0Data = data.periodData.t0;
+        const t0Data = data.periodData.t0;
         if (!t0Data || !t0Data.entities || !Array.isArray(t0Data.entities)) {
             return 0;
         }
@@ -390,7 +685,7 @@ define([], function () {
      * Extrae cantidad total de entidades
      */
     function extractEntityCount(data) {
-        var t0Data = data.periodData.t0;
+        const t0Data = data.periodData.t0;
         if (!t0Data || !t0Data.entities || !Array.isArray(t0Data.entities)) {
             return 0;
         }
@@ -407,21 +702,21 @@ define([], function () {
         }
 
         // Fallback: buscar en entidades t0
-        var t0Data = data.periodData.t0;
+        const t0Data = data.periodData.t0;
         if (!t0Data || !t0Data.entities || !Array.isArray(t0Data.entities)) {
             return '0';
         }
 
-        var ratingOrder = {
+        const ratingOrder = {
             '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10
         };
 
-        var worstRating = '0';
-        var worstNumeric = 0;
+        let worstRating = '0';
+        let worstNumeric = 0;
 
-        for (var i = 0; i < t0Data.entities.length; i++) {
-            var rating = String(t0Data.entities[i].rating || '').toUpperCase();
-            var numeric = ratingOrder[rating] || 0;
+        for (let i = 0; i < t0Data.entities.length; i++) {
+            let rating = String(t0Data.entities[i].rating || '').toUpperCase();
+            let numeric = ratingOrder[rating] || 0;
             if (numeric > worstNumeric) {
                 worstNumeric = numeric;
                 worstRating = rating;
@@ -436,8 +731,8 @@ define([], function () {
      */
     function applyLogisticFunction(score) {
         // Función logística: 1 / (1 + e^(-k*(x-0.5)))
-        var k = 8; // Factor de suavizado
-        var centered = score - 0.5;
+        const k = 8; // Factor de suavizado
+        let centered = score - 0.5;
         return 1 / (1 + Math.exp(-k * centered));
     }
 
@@ -449,12 +744,12 @@ define([], function () {
             return false;
         }
 
-        var t0Data = data.periodData.t0;
+        const t0Data = data.periodData.t0;
         
         // Necesita al menos entidades O totales
-        var hasEntities = t0Data.entities && Array.isArray(t0Data.entities) && t0Data.entities.length > 0;
-        var hasTotals = t0Data.totals && Array.isArray(t0Data.totals) && t0Data.totals.length > 0;
-        
+        const hasEntities = t0Data.entities && Array.isArray(t0Data.entities) && t0Data.entities.length > 0;
+        const hasTotals = t0Data.totals && Array.isArray(t0Data.totals) && t0Data.totals.length > 0;
+
         return hasEntities || hasTotals;
     }
 
@@ -462,8 +757,8 @@ define([], function () {
      * Evalúa la calidad de los datos para scoring
      */
     function assessDataQuality(data) {
-        var score = 0;
-        var maxScore = 5;
+        let score = 0;
+        const maxScore = 5;
 
         // +1 por tener datos básicos
         if (hasValidScoringData(data)) score++;
@@ -473,7 +768,7 @@ define([], function () {
             data.periodData.t6.entities.length > 0) score++;
 
         // +1 por tener calificaciones
-        var hasRatings = data.periodData.t0.entities && 
+        const hasRatings = data.periodData.t0.entities && 
             data.periodData.t0.entities.some(function(e) { return e.rating; });
         if (hasRatings) score++;
 
@@ -495,24 +790,24 @@ define([], function () {
      * Calcula nivel de confianza del score
      */
     function calculateConfidenceLevel(data, contributions) {
-        var factors = [];
+        const factors = [];
 
         // Factor 1: Calidad de datos
-        var dataQuality = assessDataQuality(data);
+        const dataQuality = assessDataQuality(data);
         factors.push(dataQuality.percentage / 100);
 
         // Factor 2: Número de contribuciones aplicadas
-        var appliedContributions = Object.keys(contributions).filter(function(key) {
+        const appliedContributions = Object.keys(contributions).filter(function(key) {
             return contributions[key].applied;
         }).length;
         factors.push(Math.min(appliedContributions / 4, 1)); // Max 4 contribuciones principales
 
         // Factor 3: Diversidad de entidades
-        var entityCount = extractEntityCount(data);
+        const entityCount = extractEntityCount(data);
         factors.push(Math.min(entityCount / 5, 1)); // Max 5 entidades para confidence máximo
 
         // Promedio de factores
-        var avgConfidence = factors.reduce(function(sum, f) { return sum + f; }, 0) / factors.length;
+        const avgConfidence = factors.reduce(function(sum, f) { return sum + f; }, 0) / factors.length;
 
         return {
             level: avgConfidence >= 0.8 ? 'HIGH' : avgConfidence >= 0.5 ? 'MEDIUM' : 'LOW',
@@ -532,8 +827,8 @@ define([], function () {
         if (!coefficients || totalAmount <= coefficients.threshold) {
             return 0;
         }
-        var excess = totalAmount - coefficients.threshold;
-        var rawImpact = (excess / 100000) * coefficients.weight;
+        const excess = totalAmount - coefficients.threshold;
+        const rawImpact = (excess / 100000) * coefficients.weight;
         return Math.max(coefficients.maxImpact, rawImpact);
     }
 
@@ -544,8 +839,8 @@ define([], function () {
         if (!coefficients || entityCount <= coefficients.threshold) {
             return 0;
         }
-        var excess = entityCount - coefficients.threshold;
-        var rawImpact = excess * coefficients.weight;
+        const excess = entityCount - coefficients.threshold;
+        const rawImpact = excess * coefficients.weight;
         return Math.max(coefficients.maxImpact, rawImpact);
     }
 
@@ -566,7 +861,7 @@ define([], function () {
             flags: {},
             validation: { hasValidData: false }
         };
-    }
+    } 
 
     // Public API
     return {

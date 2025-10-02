@@ -6,10 +6,10 @@
 define([], function () {
     'use strict';
 
-    var PROVIDER_EQUIFAX = 'equifax';
-    var PROVIDER_BCU = 'bcu';
+    const PROVIDER_EQUIFAX = 'equifax';
+    const PROVIDER_BCU = 'bcu';
 
-    var BAD_RATINGS = ['2B', '2', '3', '4', '5'];
+    const BAD_RATINGS = ['2B', '2', '3', '4', '5'];
 
     /**
      * Normaliza respuesta de Equifax IC GCP REPORTE a formato uniforme
@@ -17,12 +17,12 @@ define([], function () {
      * @returns {NormalizedBCUData}
      */
     function normalizeEquifaxResponse(raw) {
-        var interconnect = (raw && raw.interconnectResponse) || {};
-        var variables = interconnect.variablesDeSalida || {};
-        var infoConsulta = interconnect.infoConsulta || {};
+        const interconnect = (raw && raw.interconnectResponse) || {};
+        const variables = interconnect.variablesDeSalida || {};
+        const infoConsulta = interconnect.infoConsulta || {};
 
         // Verificar si la persona está fallecida
-        var isDeceased = String(infoConsulta.fallecido || '').toUpperCase() === 'S';
+        const isDeceased = String(infoConsulta.fallecido || '').toUpperCase() === 'S';
         if (isDeceased) {
             return buildNormalizedData({
                 provider: PROVIDER_EQUIFAX,
@@ -37,22 +37,22 @@ define([], function () {
         }
 
         // Normalizar datos de períodos con parsing de strings "Mn: x Me: y"
-        var t0Data = {
+        const t0Data = {
             totals: normalizeRubroList(variables.rubrosValoresGenerales_t0),
             entities: normalizeEntityList(variables.entidadesRubrosValores_t0),
             // Parsear strings de totales agregados si están disponibles
             aggregates: parseEquifaxAggregates(variables)
         };
 
-        var t6Data = {
+        const t6Data = {
             totals: normalizeRubroList(variables.rubrosValoresGenerales_t6),
             entities: normalizeEntityList(variables.entidadesRubrosValores_t6),
             aggregates: parseEquifaxAggregates(variables, '_t6') // Si tiene sufijos t6
         };
 
         // Extraer calificación mínima y verificar rechazos por mal BCU
-        var worstRating = findWorstRating(t0Data.entities.concat(t6Data.entities));
-        var hasRejectableRating = BAD_RATINGS.includes(worstRating);
+        const worstRating = findWorstRating(t0Data.entities.concat(t6Data.entities));
+        const hasRejectableRating = BAD_RATINGS.includes(worstRating);
 
         return buildNormalizedData({
             provider: PROVIDER_EQUIFAX,
@@ -112,13 +112,10 @@ define([], function () {
         if (!str || typeof str !== 'string') {
             return { mn: 0, me: 0, total: 0 };
         }
-
-        var mnMatch = str.match(/Mn:\s*([\d.,]+)/i);
-        var meMatch = str.match(/Me:\s*([\d.,]+)/i);
-        
-        var mn = mnMatch ? toNumber(mnMatch[1]) : 0;
-        var me = meMatch ? toNumber(meMatch[1]) : 0;
-        
+        const mnMatch = str.match(/Mn:\s*([\d.,]+)/i);
+        const meMatch = str.match(/Me:\s*([\d.,]+)/i);
+        const mn = mnMatch ? toNumber(mnMatch[1]) : 0;
+        const me = meMatch ? toNumber(meMatch[1]) : 0;
         return {
             mn: mn,
             me: me,
@@ -130,16 +127,16 @@ define([], function () {
      * Encuentra la peor calificación en lista de entidades
      */
     function findWorstRating(entities) {
-        var ratingOrder = {
+        const ratingOrder = {
             '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10
         };
-        
-        var worstNumeric = 0;
-        var worstLabel = '0';
-        
-        for (var i = 0; i < entities.length; i++) {
-            var rating = String(entities[i].rating || '').toUpperCase();
-            var numeric = ratingOrder[rating] || 0;
+
+        let worstNumeric = 0;
+        let worstLabel = '0';
+
+        for (let i = 0; i < entities.length; i++) {
+            const rating = String(entities[i].rating || '').toUpperCase();
+            const numeric = ratingOrder[rating] || 0;
             if (numeric > worstNumeric) {
                 worstNumeric = numeric;
                 worstLabel = rating;
@@ -166,7 +163,7 @@ define([], function () {
             metadata: config.metadata || {},
             normalizedAt: new Date()
         };
-    }
+    } 
 
     /**
      * Crea período vacío para casos sin datos
@@ -268,8 +265,8 @@ define([], function () {
         if (typeof value === 'number') return value;
         if (typeof value === 'string') {
             // Remover comas y espacios, convertir
-            var cleaned = value.replace(/[,\s]/g, '');
-            var parsed = parseFloat(cleaned);
+            const cleaned = value.replace(/[,\s]/g, '');
+            const parsed = parseFloat(cleaned);
             return isNaN(parsed) ? 0 : parsed;
         }
         return 0;
