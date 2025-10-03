@@ -50,26 +50,28 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                     calificacionMinima: extractWorstRating(result),
                     provider: result.metadata.provider || 'equifax',
                     flags: result.flags || {},
-                    metadata: result.metadata
+                    metadata: result.metadata,
+                    error_reglas: true,
+                    logTxt: result?.logTxt
                 };
             }
 
             // Respuesta exitosa optimizada
             return {
-                score: Math.round(result.finalScore * 1000), // Legacy format: 0-1000 (corregido de 0-100)
-                calificacionMinima: extractWorstRating(result),
-                contador: extractEntityCount(result),
+                // score: Math.round(result.finalScore * 1000), // Legacy format: 0-1000 (corregido de 0-100)
+                score: result.score,
+                calificacionMinima: extractWorstRating(result) || result.calificacionMinima,
+                contador: extractEntityCount(result) || result.contador,
                 mensaje: 'Score calculado exitosamente',
                 endeudamiento: extractTotalDebt(result),
-                provider: result.metadata.provider || 'equifax',
                 flags: result.flags || {},
                 breakdown: result.contributions || {},
                 metadata: result.metadata || {},
                 error_reglas: false,
-                // Campos adicionales para nueva funcionalidad
                 finalScore: result.finalScore,
                 rawScore: result.rawScore,
-                validation: result.validation
+                validation: result.validation,
+                logTxt: result?.logTxt
             };
 
         } catch (error) {
@@ -103,7 +105,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
         if (result.metadata && result.metadata.worstRating) {
             return result.metadata.worstRating;
         }
-        return '0';
+        return null;
     }
 
     /**
@@ -113,7 +115,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
         if (result.contributions && result.contributions.entityCount) {
             return result.contributions.entityCount.rawValue || 0;
         }
-        return 0;
+        return null;
     }
 
     /**

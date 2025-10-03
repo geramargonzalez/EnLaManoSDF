@@ -65,14 +65,15 @@ define([
             // cacheScore(documento, options.provider, scoreResult);
             
             // Log mínimo solo si es debug o error
-            if (isDebugMode || scoreResult.metadata.isRejected) {
+            if (isDebugMode || scoreResult.metadata?.isRejected) {
                 log.audit({
                     title: 'BCU Score',
                     details: {
                         doc: documento.substr(-4), // Solo últimos 4 dígitos
                         score: scoreResult.finalScore,
-                        rejected: scoreResult.metadata.isRejected,
+                        rejected: scoreResult.metadata?.isRejected,
                         provider: normalizedData.provider
+
                     }
                 });
             }

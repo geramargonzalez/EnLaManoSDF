@@ -195,11 +195,46 @@ define(['N/search'], function (search) {
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
 
-        // Extraer Mn/Me desde aggregates si están disponibles (parseEquifaxAggregates crea esta estructura)
-        let t2_mnPesos = (t0.aggregates && t0.aggregates.vigente && toNumberSafe(t0.aggregates.vigente.mn)) || 0;
-        let t2_mePesos = (t0.aggregates && t0.aggregates.vigente && toNumberSafe(t0.aggregates.vigente.me)) || 0;
-        let t6_mnPesos = (t6.aggregates && t6.aggregates.vigente && toNumberSafe(t6.aggregates.vigente.mn)) || 0;
-        let t6_mePesos = (t6.aggregates && t6.aggregates.vigente && toNumberSafe(t6.aggregates.vigente.me)) || 0;
+        // Extraer Mn/Me desde múltiples fuentes posibles (compatibilidad con diferentes formatos de normalizer)
+        let t2_mnPesos = -1;
+        let t2_mePesos = -1;
+        let t6_mnPesos = -1;
+        let t6_mePesos = -1;
+
+        // Intentar desde aggregates.vigente (formato normalizado)
+        if (t0.aggregates && t0.aggregates.vigente) {
+            t2_mnPesos = toNumberSafe(t0.aggregates.vigente.mn) || toNumberSafe(t0.aggregates.vigente.MnPesos) || -1;
+            t2_mePesos = toNumberSafe(t0.aggregates.vigente.me) || toNumberSafe(t0.aggregates.vigente.MePesos) || -1;
+        }
+        
+        // Intentar desde rubrosValoresGenerales (formato original BCU)
+        if (t2_mnPesos === -1 && t0.aggregates && t0.aggregates.rubrosValoresGenerales && Array.isArray(t0.aggregates.rubrosValoresGenerales)) {
+            for (let i = 0; i < t0.aggregates.rubrosValoresGenerales.length; i++) {
+                let rubro = t0.aggregates.rubrosValoresGenerales[i];
+                if ((rubro.rubro || rubro.Rubro || '').toString().toUpperCase().indexOf('VIGENTE') === 0) {
+                    t2_mnPesos = toNumberSafe(rubro.mnPesos || rubro.MnPesos);
+                    t2_mePesos = toNumberSafe(rubro.mePesos || rubro.MePesos);
+                    break;
+                }
+            }
+        }
+
+        // Lo mismo para t6
+        if (t6.aggregates && t6.aggregates.vigente) {
+            t6_mnPesos = toNumberSafe(t6.aggregates.vigente.mn) || toNumberSafe(t6.aggregates.vigente.MnPesos) || -1;
+            t6_mePesos = toNumberSafe(t6.aggregates.vigente.me) || toNumberSafe(t6.aggregates.vigente.MePesos) || -1;
+        }
+        
+        if (t6_mnPesos === -1 && t6.aggregates && t6.aggregates.rubrosValoresGenerales && Array.isArray(t6.aggregates.rubrosValoresGenerales)) {
+            for (let i = 0; i < t6.aggregates.rubrosValoresGenerales.length; i++) {
+                let rubro = t6.aggregates.rubrosValoresGenerales[i];
+                if ((rubro.rubro || rubro.Rubro || '').toString().toUpperCase().indexOf('VIGENTE') === 0) {
+                    t6_mnPesos = toNumberSafe(rubro.mnPesos || rubro.MnPesos);
+                    t6_mePesos = toNumberSafe(rubro.mePesos || rubro.MePesos);
+                    break;
+                }
+            }
+        }
 
         // Calcular endeudamiento seguro
         let endeudamiento = null;
@@ -294,7 +329,7 @@ define(['N/search'], function (search) {
             } else if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && cred_dir_binned_res !== 30.77 && (current.Calificacion !== '2A' || current.Calificacion !== '1C')) {
                 cred_dir_binned_res = -90.18;
             }
-            if (cred_dir_binned_res !== 30.77 || cred_dir_binned_res !== -90.18) {
+            if (cred_dir_binned_res !== 30.77 && cred_dir_binned_res !== -90.18) {
                 cred_dir_binned_res = -4.12;
             }
 
@@ -305,8 +340,8 @@ define(['N/search'], function (search) {
                 t6_cred_dir_comp_binned_res = -4.35;
             }
 
-            // bancos
-            if (((current.NombreEntidad || '').indexOf('Vizcaya') > -1 || (current.NombreEntidad || '').indexOf('Bandes') > -1 || (current.NombreEntidad || '').indexOf('Banco Ita') > -1 || (current.NombreEntidad || '').indexOf('Santander') > -1 || (current.NombreEntidad || '').indexOf('Scotiabank') > -1 || (current.NombreEntidad || '').indexOf('HSBC') > -1) && (current.Calificacion === '1A' || current.Calificacion === '1C' || current.Calificacion === '2A')) {
+            // bancos (IMPORTANTE: replicar bug de precedencia del original)
+            if ((current.NombreEntidad || '').indexOf('Vizcaya') > -1 || (current.NombreEntidad || '').indexOf('Bandes') > -1 || (current.NombreEntidad || '').indexOf('Banco Ita') > -1 || (current.NombreEntidad || '').indexOf('Santander') > -1 || (current.NombreEntidad || '').indexOf('Scotiabank') > -1 || (current.NombreEntidad || '').indexOf('HSBC') > -1 && (current.Calificacion === '1A' || current.Calificacion === '1C' || current.Calificacion === '2A')) {
                 t6_banco_binned_res = 51.06;
             } else if (t6_banco_binned_res !== 51.06) {
                 t6_banco_binned_res = -37.55;
@@ -368,7 +403,7 @@ define(['N/search'], function (search) {
                 if (((currentt2.NombreEntidad || '').indexOf('Integrales') > -1) || ((currentt2.NombreEntidad || '').indexOf('BAUTZEN') > -1) || ((currentt2.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) || ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1) || ((currentt2.NombreEntidad || '').indexOf('Microfinanzas') > -1) || ((currentt2.NombreEntidad || '').indexOf('OCA') > -1) || ((currentt2.NombreEntidad || '').indexOf('PASS CARD') > -1) || ((currentt2.NombreEntidad || '').indexOf('Promotora') > -1) || ((currentt2.NombreEntidad || '').indexOf('Republica Microfinazas') > -1) || ((currentt2.NombreEntidad || '').indexOf('RETOP') > -1) || ((currentt2.NombreEntidad || '').indexOf('CIA') > -1) || ((currentt2.NombreEntidad || '').indexOf('SOCUR') > -1) || ((currentt2.NombreEntidad || '').indexOf('VERENDY') > -1)) {
                     t0_fnb_binned_res = -6.06;
                 }
-            } else if (t0_fnb_binned_res !== 14.06 || t0_fnb_binned_res !== -6.06) {
+            } else if (t0_fnb_binned_res !== 14.06 && t0_fnb_binned_res !== -6.06) {
                 t0_fnb_binned_res = -42.71;
             }
         }
@@ -377,7 +412,7 @@ define(['N/search'], function (search) {
         for (let key3 in t2List) {
             let currentt2 = t2List[key3];
 
-            if ((currentt2.NombreEntidad || '').indexOf('Scotiabank') > -1) {
+            if (currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Scotiabank') > -1) {
                 t0_scotia_binned_res = 74.04;
             } else if (t0_scotia_binned_res !== 74.04) {
                 t0_scotia_binned_res = -4.16;
@@ -440,21 +475,104 @@ define(['N/search'], function (search) {
         // Umbral configurable para considerar "buen score" (por defecto 499)
         const goodThreshold = (scoringRules && typeof scoringRules.goodThreshold === 'number') ? scoringRules.goodThreshold : 499;
 
-        // Construir objeto similar al original para compatibilidad
-        let objetos = {
+        // Construir logTxt extenso con toda la información de debugging (formato compatible con SDB-Enlamano-score.js)
+        let logTxt = '<P>En scoring...</P>';
+        
+        // Log de datos BCU originales (t0 y t6)
+        logTxt += '<P> => datosBcu: </P>';
+        try {
+            logTxt += JSON.stringify({
+                bcuRawData: normalizedData.rawData || null,
+                data: {
+                    nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
+                    documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
+                    sectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
+                    periodo: (t0.metadata && t0.metadata.periodo) || '',
+                    rubrosValoresGenerales: (t0.aggregates && t0.aggregates.rubrosValoresGenerales) || [],
+                    entidadesRubrosValores: (t0.entities || []).map(function(e) {
+                        return {
+                            nombreEntidad: e.entidad || e.nombreEntidad || '',
+                            calificacion: e.rating || e.calificacion || '',
+                            rubrosValores: e.rubros || []
+                        };
+                    })
+                },
+                errors: (normalizedData.errors) || null,
+                responseId: (normalizedData.responseId) || '00000000-0000-0000-0000-000000000000'
+            }) + '<P/>';
+        } catch (e) {
+            logTxt += '[Error serializing t0 data]<P/>';
+        }
+
+        logTxt += '<P> => datosBcu_T6: </P>';
+        try {
+            logTxt += JSON.stringify({
+                bcuRawData: null,
+                data: {
+                    nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
+                    documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
+                    sectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
+                    periodo: (t6.metadata && t6.metadata.periodo) || '',
+                    rubrosValoresGenerales: (t6.aggregates && t6.aggregates.rubrosValoresGenerales) || [],
+                    entidadesRubrosValores: (t6.entities || []).map(function(e) {
+                        return {
+                            nombreEntidad: e.entidad || e.nombreEntidad || '',
+                            calificacion: e.rating || e.calificacion || '',
+                            rubrosValores: e.rubros || []
+                        };
+                    })
+                },
+                errors: null,
+                responseId: '00000000-0000-0000-0000-000000000000'
+            }) + '<P/>';
+        } catch (e) {
+            logTxt += '[Error serializing t6 data]<P/>';
+        }
+
+        // Log de cálculo de endeudamiento
+        logTxt += '<P> ***************** ENDEUDAMIENTO comienzo ****************** </P>';
+        logTxt += '<P> +++++ t2_mnPesos: ' + t2_mnPesos + '<P/>';
+        logTxt += '<P> +++++ t2_mePesos: ' + t2_mePesos + '<P/>';
+        logTxt += '<P> +++++ t6_mnPesos: ' + t6_mnPesos + '<P/>';
+        logTxt += '<P> +++++ t6_mePesos: ' + t6_mePesos + '<P/>';
+        logTxt += '<P> +++++ endeudamiento: ' + endeudamiento + '<P/>';
+        logTxt += '<P> ***************** ENDEUDAMIENTO fin ****************** </P>';
+
+        // Log de entidades procesadas en t6
+        for (let i = 0; i < t6List.length; i++) {
+            logTxt += '<P> => t6: [object Object]</P>';
+        }
+
+        // Log de resultados de scoring por variable
+        logTxt += '<P/> ent_t6_binned_res: ' + ent_t6_binned_res + '<P/>';
+        logTxt += ' t6_binned_res: ' + t6_binned_res + '<P/>';
+        logTxt += ' t6_creditel_binned_res: ' + t6_creditel_binned_res + '<P/>';
+        logTxt += ' t6_oca_binned_res: ' + t6_oca_binned_res + '<P/>';
+        logTxt += ' t0_fnb_binned_res: ' + t0_fnb_binned_res + '<P/>';
+        logTxt += ' t0_asi_binned_res: ' + t0_asi_binned_res + '<P/>';
+        logTxt += ' t0_bbva_binned_res: ' + t0_bbva_binned_res + '<P/>';
+        logTxt += ' t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res + '<P/>';
+        logTxt += ' t6_banco_binned_res: ' + t6_banco_binned_res + '<P/>';
+        logTxt += ' vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res + '<P/>';
+        logTxt += ' t0_santa_binned_res: ' + t0_santa_binned_res + '<P/>';
+        logTxt += ' cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res + '<P/>';
+        logTxt += ' brou_grupo_binned_res: ' + brou_grupo_binned_res + '<P/>';
+        logTxt += ' t6_pronto_binned_res: ' + t6_pronto_binned_res + '<P/>';
+        logTxt += ' t0_scotia_binned_res: ' + t0_scotia_binned_res + '<P/>';
+        logTxt += ' cred_dir_binned_res: ' + cred_dir_binned_res + '<P/>';
+        logTxt += ' total: ' + total + '<P/>';
+        logTxt += ' score: ' + scoreRounded;
+
+        // Construir objeto similar al original para compatibilidad total
+        let objetos = { 
             score: scoreRounded,
-            finalScore: Math.max(0, Math.min(1, scoreRounded / 1000)),
             calificacionMinima: (normalizedData.metadata && normalizedData.metadata.worstRating) || '0',
             contador: contador,
             mensaje: 'No tenemos prestamo disponible en este momento',
             endeudamiento: endeudamiento,
             nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || normalizedData.provider || '',
             error_reglas: false,
-            logTxt: '',
-            metadata: {
-                goodThreshold: goodThreshold,
-                isGood: scoreRounded >= goodThreshold
-            }
+            logTxt: logTxt
         };
 
         return objetos;

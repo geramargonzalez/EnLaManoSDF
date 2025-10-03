@@ -10,11 +10,6 @@
  * 4. Cálculo de score (computeScore)
  * 5. Cache y respuesta
  * 
- * INSTRUCCIONES:
- * 1. Despliega este script en Sandbox
- * 2. Configura un documento de prueba (parámetro 'doc')
- * 3. Accede a la URL para ver el proceso completo con timings
- * 
  * URL: https://7564430-sb1.app.netsuite.com/app/site/hosting/scriptlet.nl?script=725&deploy=1&doc=12345678
  */
 

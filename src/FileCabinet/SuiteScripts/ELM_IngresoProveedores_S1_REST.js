@@ -56,10 +56,12 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                   let mocasist = auxLib.checkMocasist(docNumber);
 
                   if (!mocasist) {
+                    
                      if (!infoRepetido?.id) {
 
                            // const score = scoreLib.scoreFinal(docNumber);
-                           const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: false });
+                             const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: false });
+                           log.debug('score s1', score)
                            //log.debug('score', JSON.stringify(score));
                            // Extract BCU data for t2 and t6 periods
                            const bcuData = auxLib.extractBcuData(score);
