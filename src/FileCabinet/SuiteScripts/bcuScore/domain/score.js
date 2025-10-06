@@ -41,6 +41,20 @@ define(['N/search'], function (search) {
         return false;
     }
 
+    function lookupNumber(fieldName) {
+        if (!lookup || !(fieldName in lookup)) return 0;
+        const raw = lookup[fieldName];
+        if (Array.isArray(raw) && raw.length) {
+            return toNumberSafe(raw[0].value);
+        }
+        return toNumberSafe(raw);
+    }
+
+    function getBinnedValue(binnedKey, lookupFieldName) {
+        if (binnedFromRules && typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
+        return lookupNumber(lookupFieldName);
+    }
+
     /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
      */
@@ -102,7 +116,7 @@ define(['N/search'], function (search) {
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
 
         // Preferir valores inyectados en scoringRules.binned (evita lookupFields y mejora rendimiento)
-        const binnedFromRules = scoringRules && scoringRules.binned ? scoringRules.binned : null;
+        const binnedFromRules = scoringRules?.binned ?? null;
 
         // Si no recibimos binned desde las reglas, hacemos un único lookupFields
         let lookup = null;
@@ -137,19 +151,7 @@ define(['N/search'], function (search) {
             }
         }
 
-        function lookupNumber(fieldName) {
-            if (!lookup || !(fieldName in lookup)) return 0;
-            const raw = lookup[fieldName];
-            if (Array.isArray(raw) && raw.length) {
-                return toNumberSafe(raw[0].value);
-            }
-            return toNumberSafe(raw);
-        }
-
-        function getBinnedValue(binnedKey, lookupFieldName) {
-            if (binnedFromRules && typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
-            return lookupNumber(lookupFieldName);
-        }
+    
 
         // Valores por defecto (WOE) tomados del screenshot proporcionado
         const banco_binned = getBinnedValue('banco_binned', 'custrecord_sdb_banco_binned') || 0.0038032;
