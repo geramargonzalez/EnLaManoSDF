@@ -118,13 +118,23 @@ define([], function () {
         const t0Data = {
             totals: normalizeMymRubrosList(rubrosT0),
             entities: normalizeMymEntitiesList(entidadesT0),
-            aggregates: extractMymAggregates(rubrosT0)
+            aggregates: extractMymAggregates(rubrosT0),
+            // Preservar datos RAW para compatibilidad con SDB-Enlamano-score.js
+            metadata: {
+                periodo: dataT0.Periodo || ''
+            },
+            rubrosValoresGenerales: rubrosT0 // Acceso directo a rubros originales
         };
         
         const t6Data = {
             totals: normalizeMymRubrosList(rubrosT6),
             entities: normalizeMymEntitiesList(entidadesT6),
-            aggregates: extractMymAggregates(rubrosT6)
+            aggregates: extractMymAggregates(rubrosT6),
+            // Preservar datos RAW para compatibilidad con SDB-Enlamano-score.js
+            metadata: {
+                periodo: dataT6.Periodo || ''
+            },
+            rubrosValoresGenerales: rubrosT6 // Acceso directo a rubros originales
         };
         
         // Detectar peor calificación y si hay rechazables
@@ -143,7 +153,14 @@ define([], function () {
             metadata: {
                 nombre: sanitizeString(nombre),
                 worstRating: worstRating,
+                documento: documento,
+                sectorActividad: dataT0.SectorActividad || '',
                 aggregates: t0Data.aggregates
+            },
+            // Preservar datos RAW completos para logTxt
+            rawData: {
+                datosBcu: datosBcu,
+                datosBcuT6: datosBcuT6
             }
         });
     }
@@ -180,15 +197,15 @@ define([], function () {
             const entidadVal = String(entity.NombreEntidad || '');
             const ratingVal = String(entity.Calificacion || '').toUpperCase();
             
-            // Calcular totales sumando rubros
-            const rubros = entity.Rubros || [];
+            // Calcular totales sumando rubros (aceptar RubrosValores o Rubros)
+            const rubros = entity.RubrosValores || entity.Rubros || entity.rubrosValores || entity.rubros || [];
             let totalVigente = 0;
             let totalVencido = 0;
             let totalCastigado = 0;
             
             for (let i = 0; i < rubros.length; i++) {
                 const rubro = rubros[i];
-                const rubroNombre = String(rubro.Rubro || '').toUpperCase();
+                const rubroNombre = String(rubro.Rubro || '').toUpperCase().trim();
                 const mnPesos = toNumber(rubro.MnPesos || 0);
                 const mePesos = toNumber(rubro.MePesos || 0);
                 const total = mnPesos + mePesos;
@@ -224,17 +241,18 @@ define([], function () {
     function normalizeMymEntityRubros(rubros) {
         if (!Array.isArray(rubros)) return [];
         
-        return rubros.map(function(rubro) {
-            const mnPesos = toNumber(rubro.MnPesos || 0);
-            const mePesos = toNumber(rubro.MePesos || 0);
+        return rubros.map(function(r) {
+            const mnPesos = toNumber(r.MnPesos || 0);
+            const mePesos = toNumber(r.MePesos || 0);
             const total = mnPesos + mePesos;
+            const name = String(r.Rubro || '').trim();
             
             return {
-                rubro: String(rubro.Rubro || ''),
+                rubro: name,
                 vigente: total, // MYM no separa vigente/vencido en nivel de rubro
                 vencido: 0,
                 castigado: 0,
-                Rubro: String(rubro.Rubro || ''), // Campo legacy
+                Rubro: name, // Campo legacy
                 MnPesos: mnPesos,
                 MePesos: mePesos
             };

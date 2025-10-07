@@ -59,13 +59,11 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                     
                      if (!infoRepetido?.id) {
 
-                           // const score = scoreLib.scoreFinal(docNumber);
-                             const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: false });
-                           log.debug('score s1', score)
-                           //log.debug('score', JSON.stringify(score));
+                           //  const score = scoreLib.scoreFinal(docNumber);
+                             const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true });
+                        
                            // Extract BCU data for t2 and t6 periods
                            const bcuData = auxLib.extractBcuData(score);
-                           //log.debug('bcuData', JSON.stringify(bcuData));
                            const t2Info = auxLib.getBcuPeriodInfo(bcuData?.t2, 't2');
                            const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
                            const cantEntidadesT2 = t2Info?.entidades.length || 0;
@@ -76,8 +74,6 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            // Get all qualification values from T6  
                            const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion);
                            // Manejo de rechazo BCU con calificación visible
-
-                           //log.debug('score before checks', JSON.stringify(score));
                            if (score?.error_reglas) {
                               let approvalStatus = objScriptParam.estadoRechazado;
                               if (score.error_reglas == 500 || score.error_reglas == 400) {

@@ -56,22 +56,16 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                 };
             }
 
-            // Respuesta exitosa optimizada
+            // Respuesta exitosa en formato exactamente igual a SDB-Enlamano-score.js
             return {
-                // score: Math.round(result.finalScore * 1000), // Legacy format: 0-1000 (corregido de 0-100)
                 score: result.score,
-                calificacionMinima: extractWorstRating(result) || result.calificacionMinima,
-                contador: extractEntityCount(result) || result.contador,
-                mensaje: 'Score calculado exitosamente',
-                endeudamiento: extractTotalDebt(result),
-                flags: result.flags || {},
-                breakdown: result.contributions || {},
-                metadata: result.metadata || {},
+                calificacionMinima: result.calificacionMinima || extractWorstRating(result),
+                contador: result.contador || extractEntityCount(result),
+                mensaje: result.mensaje || 'No tenemos prestamo disponible en este momento',
+                endeudamiento: result.endeudamiento !== undefined ? result.endeudamiento : extractTotalDebt(result),
+                nombre: result.nombre || '',
                 error_reglas: false,
-                finalScore: result.finalScore,
-                rawScore: result.rawScore,
-                validation: result.validation,
-                logTxt: result?.logTxt
+                logTxt: result.logTxt || ''
             };
 
         } catch (error) {

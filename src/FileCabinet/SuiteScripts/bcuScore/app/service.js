@@ -249,7 +249,7 @@ define([
                 calculatedAt: new Date(),
                 isRejected: true,
                 rejectionReason: 'SERVICE_ERROR',
-                rejectionMessage: error.message || 'Error interno del servicio',
+                rejectionMessage: error.message || 'Error interno del servicio', 
                 requestId: requestId,
                 error: {
                     name: error.name,

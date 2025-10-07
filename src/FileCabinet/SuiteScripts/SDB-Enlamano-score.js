@@ -71,7 +71,7 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             });
 
             var responseBody = JSON.parse(objResponse?.body);
-           // log.debug('Response body', responseBody);
+           log.debug('Response body', responseBody);
 
             // Check if response contains errors
             if (responseBody.hasOwnProperty('errores')) {
@@ -211,6 +211,24 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
                     vig: containsVigencia(data.data.EntidadesRubrosValores[i].RubrosValores),
                 };
 
+                // DEBUG adicional para comparar con bcuScore: BBVA/Vizcaya en T0
+                try {
+                    var _nombreEntidadT0 = data.data.EntidadesRubrosValores[i].NombreEntidad || '';
+                    var _rubrosT0 = data.data.EntidadesRubrosValores[i].RubrosValores || [];
+                    var _hasContT0 = containsConting(_rubrosT0);
+                    if (_nombreEntidadT0.indexOf('Vizcaya') > -1 || _nombreEntidadT0.toUpperCase().indexOf('BBVA') > -1) {
+                        log.debug('SDB T0 BBVA/Vizcaya', {
+                            nombre: _nombreEntidadT0,
+                            Cont: _hasContT0,
+                            rubrosLength: _rubrosT0.length,
+                            primerosRubros: (_rubrosT0 || []).slice(0, 3)
+                        });
+                        logTxt += '<P>DEBUG SDB T0 BBVA/Vizcaya nombre: ' + _nombreEntidadT0 + '</P>';
+                        logTxt += '<P/> DEBUG Cont: ' + _hasContT0;
+                        logTxt += '<P/> DEBUG rubros len: ' + _rubrosT0.length;
+                    }
+                } catch (edbg) {}
+
 
                 if (data.data.EntidadesRubrosValores[i].Calificacion && calificacionMinima == "0") {
 
@@ -232,6 +250,19 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
                     Cont: containsConting(data2.data.EntidadesRubrosValores[p].RubrosValores),
                     vig: containsVigencia(data2.data.EntidadesRubrosValores[p].RubrosValores),
                 };
+
+                // DEBUG adicional para T6 por si afecta ent_t6_binned_res
+                try {
+                    var _nombreEntidadT6 = data2.data.EntidadesRubrosValores[p].NombreEntidad || '';
+                    if (_nombreEntidadT6.indexOf('Vizcaya') > -1 || _nombreEntidadT6.toUpperCase().indexOf('BBVA') > -1) {
+                        log.debug('SDB T6 BBVA/Vizcaya', {
+                            nombre: _nombreEntidadT6,
+                            Cont: t6[p].Cont,
+                            vig: t6[p].vig
+                        });
+                        logTxt += '<P>DEBUG SDB T6 BBVA/Vizcaya nombre: ' + _nombreEntidadT6 + '</P>';
+                    }
+                } catch (edbg2) {}
             }
 
             //calculo de scores segun catidad de entidades
@@ -378,8 +409,10 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
                     logTxt += "<P/> tes currentt2.NombreEntidad.indexOf('Vizcaya') > -1 - " + (currentt2.NombreEntidad.indexOf("Vizcaya") > -1);
 
                     t0_bbva_binned_res = 79.39;
+                    log.debug('Binned values BBVA', t0_bbva_binned_res);
                 } else if (t0_bbva_binned_res != 79.39) {
                     t0_bbva_binned_res = -3.65;
+                    log.debug('Binned values BBVA other', t0_bbva_binned_res);  
                 }
                 // end t0 bbva
                 //currentt2 por calificacion fnb
@@ -487,7 +520,7 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             /////////////////////////////////////////////////////////////////////////////////
 
 
-            var objetos = {
+            const objetos = {
                 score: score,
                 calificacionMinima: calificacionMinima,
                 contador: contador,

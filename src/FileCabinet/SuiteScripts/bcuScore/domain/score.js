@@ -3,7 +3,7 @@
  * @description Lógica pura de scoring BCU sin efectos secundarios
  */
 
-define(['N/search'], function (search) {
+define(['N/log'], function (log) {
     'use strict';
 
     // Pre-compilar lookup tables para performance O(1)
@@ -24,8 +24,11 @@ define(['N/search'], function (search) {
         if (!Array.isArray(rubros)) return false;
         for (let i = 0; i < rubros.length; i++) {
             const r = rubros[i] || {};
-            const tipo = (r.tipo || '').toString().toLowerCase();
-            if (tipo.indexOf('cont') === 0 || tipo.indexOf('conting') > -1 || (r.cont && r.cont === true)) return true;
+            // Buscar en múltiples propiedades posibles (case-insensitive)
+            const rubro = (r.rubro || r.Rubro || r.tipo || r.Tipo || '').toString().toUpperCase().trim();
+            if (rubro.indexOf('CONTING') > -1 || rubro === 'CONTINGENCIAS' || (r.cont && r.cont === true)) {
+                return true;
+            }
         }
         return false;
     }
@@ -35,24 +38,13 @@ define(['N/search'], function (search) {
         for (let i = 0; i < rubros.length; i++) {
             const r = rubros[i] || {};
             if (r.vig || r.vigente || r.vigencia) return true;
-            const clave = (r.nombre || r.tipo || '').toString().toLowerCase();
-            if (clave.indexOf('vig') === 0) return true;
+            // Buscar en múltiples propiedades posibles (case-insensitive)
+            const rubro = (r.rubro || r.Rubro || r.nombre || r.tipo || '').toString().toUpperCase().trim();
+            if (rubro.indexOf('VIGENTE') === 0 || rubro === 'VIGENTE') {
+                return true;
+            }
         }
         return false;
-    }
-
-    function lookupNumber(fieldName) {
-        if (!lookup || !(fieldName in lookup)) return 0;
-        const raw = lookup[fieldName];
-        if (Array.isArray(raw) && raw.length) {
-            return toNumberSafe(raw[0].value);
-        }
-        return toNumberSafe(raw);
-    }
-
-    function getBinnedValue(binnedKey, lookupFieldName) {
-        if (binnedFromRules && typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
-        return lookupNumber(lookupFieldName);
     }
 
     /**
@@ -63,6 +55,9 @@ define(['N/search'], function (search) {
         if (!normalizedData || !scoringRules) {
             return createRejectedScore('INVALID_INPUT', 'Datos inválidos');
         }
+
+        // Inicializar log para compatibilidad con el script original
+        let logTxt = '<P>En scoring...</P>';
 
         const rejectionRules = scoringRules.rejectionRules;
         const flags = normalizedData.flags || {};
@@ -97,7 +92,7 @@ define(['N/search'], function (search) {
             totals.castigado += entity.castigado || 0;
             
             // Worst rating en mismo loop
-            const rating = String(entity.rating || '').toUpperCase();
+            const rating = String(entity.rating || '').toUpperCase().trim();
             const ratingValue = RATING_ORDER[rating] || 0;
             if (ratingValue > worstRatingValue) {
                 worstRatingValue = ratingValue;
@@ -115,63 +110,33 @@ define(['N/search'], function (search) {
 
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
 
-        // Preferir valores inyectados en scoringRules.binned (evita lookupFields y mejora rendimiento)
-        const binnedFromRules = scoringRules?.binned ?? null;
+        // Coeficientes binned centralizados en scoringRules.binned
+        const binnedFromRules = (scoringRules && scoringRules.binned) || {};
 
-        // Si no recibimos binned desde las reglas, hacemos un único lookupFields
-        let lookup = null;
-        if (!binnedFromRules) {
-            try {
-                lookup = search.lookupFields({
-                    type: 'customrecord_sdb_score',
-                    id: 1,
-                    columns: [
-                        'custrecord_sdb_banco_binned',
-                        'custrecord_sdb_ent_t6_binned',
-                        'custrecord_sdb_intercept',
-                        'custrecord_sdb_t6_cred_dir_comp_binned',
-                        'custrecord_sdb_vig_noauto_t6_coop_binned',
-                        'custrecord_sdb_woe_cont_t0_bbva_binned',
-                        'custrecord_sdb_woe_cont_t0_fucac_binned',
-                        'custrecord_sdb_woe_cont_t0_scotia_binned',
-                        'custrecord_sdb_woe_t0_asi_binned',
-                        'custrecord_sdb_woe_t0_brou_grupo_binned',
-                        'custrecord_sdb_woe_t0_emp_valor_binned',
-                        'custrecord_sdb_woe_t0_fnb_binned',
-                        'custrecord_sdb_woe_t0_santa_binned',
-                        'custrecord_sdb_woe_t6_binned',
-                        'custrecord_sdb_woe_t6_cred_dir_binned',
-                        'custrecord_sdb_woe_t6_creditel_binned',
-                        'custrecord_sdb_woe_t6_oca_binned',
-                        'custrecord_sdb_woe_t6_pronto_binned'
-                    ]
-                });
-            } catch (e) {
-                lookup = null;
-            }
+        function getBinnedValue(binnedKey) {
+            if (typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
+            return 0;
         }
 
-    
-
-        // Valores por defecto (WOE) tomados del screenshot proporcionado
-        const banco_binned = getBinnedValue('banco_binned', 'custrecord_sdb_banco_binned') || 0.0038032;
-        const ent_t6_binned = getBinnedValue('ent_t6_binned', 'custrecord_sdb_ent_t6_binned') || 0.0026394;
-        const intercept = getBinnedValue('intercept', 'custrecord_sdb_intercept') || 0.2114816;
-        const t6_cred_dir_comp_binned = getBinnedValue('t6_cred_dir_comp_binned', 'custrecord_sdb_t6_cred_dir_comp_binned') || 0.0028341;
-        const vig_noauto_t6_coop_binned = getBinnedValue('vig_noauto_t6_coop_binned', 'custrecord_sdb_vig_noauto_t6_coop_binned') || 0.0033394;
-        const t0_bbva_binned = getBinnedValue('t0_bbva_binned', 'custrecord_sdb_woe_cont_t0_bbva_binned') || 0.0045863;
-        const cont_t0_fucac_binned = getBinnedValue('cont_t0_fucac_binned', 'custrecord_sdb_woe_cont_t0_fucac_binned') || 0.0038189;
-        const t0_scotia_binned = getBinnedValue('t0_scotia_binned', 'custrecord_sdb_woe_cont_t0_scotia_binned') || 0.0034926;
-        const t0_asi_binned = getBinnedValue('t0_asi_binned', 'custrecord_sdb_woe_t0_asi_binned') || 0.0037215;
-        const brou_grupo_binned = getBinnedValue('brou_grupo_binned', 'custrecord_sdb_woe_t0_brou_grupo_binned') || 0.0037486;
-        const emp_valor_binned = getBinnedValue('emp_valor_binned', 'custrecord_sdb_woe_t0_emp_valor_binned') || 0.0059208;
-        const t0_fnb_binned = getBinnedValue('t0_fnb_binned', 'custrecord_sdb_woe_t0_fnb_binned') || 0.0014982;
-        const t0_santa_binned = getBinnedValue('t0_santa_binned', 'custrecord_sdb_woe_t0_santa_binned') || 0.0006744;
-        const t6_binned = getBinnedValue('t6_binned', 'custrecord_sdb_woe_t6_binned') || 0.0005706;
-        const cred_dir_binned = getBinnedValue('cred_dir_binned', 'custrecord_sdb_woe_t6_cred_dir_binned') || 0.0002515;
-        const t6_creditel_binned = getBinnedValue('t6_creditel_binned', 'custrecord_sdb_woe_t6_creditel_binned') || 0.0003315;
-        const t6_oca_binned = getBinnedValue('t6_oca_binned', 'custrecord_sdb_woe_t6_oca_binned') || 0.0042904;
-        const t6_pronto_binned = getBinnedValue('t6_pronto_binned', 'custrecord_sdb_woe_t6_pronto_binned') || 0.0016738;
+        // Valores por defecto (WOE) con fallback si no vienen en reglas
+        const banco_binned = getBinnedValue('banco_binned') || 0.0038032;
+        const ent_t6_binned = getBinnedValue('ent_t6_binned') || 0.0026394;
+        const intercept = getBinnedValue('intercept') || 0.2114816;
+        const t6_cred_dir_comp_binned = getBinnedValue('t6_cred_dir_comp_binned') || 0.0028341;
+        const vig_noauto_t6_coop_binned = getBinnedValue('vig_noauto_t6_coop_binned') || 0.0033394;
+        const t0_bbva_binned = getBinnedValue('t0_bbva_binned') || 0.0045863;
+        const cont_t0_fucac_binned = getBinnedValue('cont_t0_fucac_binned') || 0.0038189;
+        const t0_scotia_binned = getBinnedValue('t0_scotia_binned') || 0.0034926;
+        const t0_asi_binned = getBinnedValue('t0_asi_binned') || 0.0037215;
+        const brou_grupo_binned = getBinnedValue('brou_grupo_binned') || 0.0037486;
+        const emp_valor_binned = getBinnedValue('emp_valor_binned') || 0.0059208;
+        const t0_fnb_binned = getBinnedValue('t0_fnb_binned') || 0.0014982;
+        const t0_santa_binned = getBinnedValue('t0_santa_binned') || 0.0006744;
+        const t6_binned = getBinnedValue('t6_binned') || 0.0005706;
+        const cred_dir_binned = getBinnedValue('cred_dir_binned') || 0.0002515;
+        const t6_creditel_binned = getBinnedValue('t6_creditel_binned') || 0.0003315;
+        const t6_oca_binned = getBinnedValue('t6_oca_binned') || 0.0042904;
+        const t6_pronto_binned = getBinnedValue('t6_pronto_binned') || 0.0016738;
 
 
         // Inicializar resultados parciales (mismos nombres que en el original)
@@ -197,68 +162,124 @@ define(['N/search'], function (search) {
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
 
-        // Extraer Mn/Me desde múltiples fuentes posibles (compatibilidad con diferentes formatos de normalizer)
+        // Extraer Mn/Me usando la misma lógica que SDB-Enlamano-score.js (múltiples try-catch)
         let t2_mnPesos = -1;
         let t2_mePesos = -1;
         let t6_mnPesos = -1;
         let t6_mePesos = -1;
 
-        // Intentar desde aggregates.vigente (formato normalizado)
-        if (t0.aggregates && t0.aggregates.vigente) {
-            t2_mnPesos = toNumberSafe(t0.aggregates.vigente.mn) || toNumberSafe(t0.aggregates.vigente.MnPesos) || -1;
-            t2_mePesos = toNumberSafe(t0.aggregates.vigente.me) || toNumberSafe(t0.aggregates.vigente.MePesos) || -1;
-        }
-        
-        // Intentar desde rubrosValoresGenerales (formato original BCU)
-        if (t2_mnPesos === -1 && t0.aggregates && t0.aggregates.rubrosValoresGenerales && Array.isArray(t0.aggregates.rubrosValoresGenerales)) {
-            for (let i = 0; i < t0.aggregates.rubrosValoresGenerales.length; i++) {
-                let rubro = t0.aggregates.rubrosValoresGenerales[i];
-                if ((rubro.rubro || rubro.Rubro || '').toString().toUpperCase().indexOf('VIGENTE') === 0) {
-                    t2_mnPesos = toNumberSafe(rubro.mnPesos || rubro.MnPesos);
-                    t2_mePesos = toNumberSafe(rubro.mePesos || rubro.MePesos);
-                    break;
-                }
+        // Intentar desde rubrosValoresGenerales directamente (igual que producción)
+        try {
+            if (t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) {
+                t2_mnPesos = t0.rubrosValoresGenerales[0].MnPesos;
             }
+        } catch (E) {
+            // Fallback: intentar desde aggregates si no está en rubrosValoresGenerales
+            try {
+                if (t0.aggregates && t0.aggregates.vigente) {
+                    t2_mnPesos = t0.aggregates.vigente.mn;
+                }
+            } catch (E1) {}
         }
 
-        // Lo mismo para t6
-        if (t6.aggregates && t6.aggregates.vigente) {
-            t6_mnPesos = toNumberSafe(t6.aggregates.vigente.mn) || toNumberSafe(t6.aggregates.vigente.MnPesos) || -1;
-            t6_mePesos = toNumberSafe(t6.aggregates.vigente.me) || toNumberSafe(t6.aggregates.vigente.MePesos) || -1;
-        }
-        
-        if (t6_mnPesos === -1 && t6.aggregates && t6.aggregates.rubrosValoresGenerales && Array.isArray(t6.aggregates.rubrosValoresGenerales)) {
-            for (let i = 0; i < t6.aggregates.rubrosValoresGenerales.length; i++) {
-                let rubro = t6.aggregates.rubrosValoresGenerales[i];
-                if ((rubro.rubro || rubro.Rubro || '').toString().toUpperCase().indexOf('VIGENTE') === 0) {
-                    t6_mnPesos = toNumberSafe(rubro.mnPesos || rubro.MnPesos);
-                    t6_mePesos = toNumberSafe(rubro.mePesos || rubro.MePesos);
-                    break;
-                }
+        try {
+            if (t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) {
+                t2_mePesos = t0.rubrosValoresGenerales[0].MePesos;
             }
+        } catch (E) {
+            try {
+                if (t0.aggregates && t0.aggregates.vigente) {
+                    t2_mePesos = t0.aggregates.vigente.me;
+                }
+            } catch (E1) {}
         }
 
-        // Calcular endeudamiento seguro
-        let endeudamiento = null;
-        if ((t6_mnPesos + t6_mePesos) > 0) {
+        try {
+            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
+                t6_mnPesos = t6.rubrosValoresGenerales[0].MnPesos;
+            }
+        } catch (E) {
+            try {
+                if (t6.aggregates && t6.aggregates.vigente) {
+                    t6_mnPesos = t6.aggregates.vigente.mn;
+                }
+            } catch (E1) {}
+        }
+
+        try {
+            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
+                t6_mePesos = t6.rubrosValoresGenerales[0].MePesos;
+            }
+        } catch (E) {
+            try {
+                if (t6.aggregates && t6.aggregates.vigente) {
+                    t6_mePesos = t6.aggregates.vigente.me;
+                }
+            } catch (E1) {}
+        }
+
+        // Calcular endeudamiento igual que producción
+        let endeudamiento = -314;
+        try {
             endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
-        } else {
-            endeudamiento = -314; // mismo valor por defecto en el original
+        } catch (E) {
+            // Mantener -314 en caso de error
         }
 
         // Construir estructuras t2/t6 similares a las del original para las comprobaciones por NombreEntidad y Calificacion
         let objectCalification = { '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10 };
+        let malasCalificaciones = ['2B', '3', '4', '5']; // Malas calificaciones que causan rechazo inmediato
+        let calificacionMinima = '0'; // Inicializar calificacionMinima
 
         let t2List = [];
+        
         for (let i = 0; i < (t0.entities || []).length; i++) {
             let e = t0.entities[i];
+            let calif = (e.rating || e.calificacion || '').toString();
+            
+            // IMPORTANTE: Verificar malas calificaciones ANTES de continuar (igual que producción)
+            if (malasCalificaciones.indexOf(calif) > -1) {
+                return createRejectedScore('BAD_RATING', 'Calificación de rechazo: ' + calif);
+            }
+            
+            let nombreEntidad = e.entidad || e.nombreEntidad || '';
+            let hasCont = containsContingency(e.rubros || []);
+            
+            // DEBUG: Log TODAS las entidades para encontrar el problema
+            log.debug('Entity ' + i, {
+                nombre: nombreEntidad,
+                hasCont: hasCont,
+                rubrosCount: (e.rubros || []).length,
+                primerosRubros: (e.rubros || []).slice(0, 3).map(function(r) { 
+                    return { Rubro: r.Rubro, rubro: r.rubro }; 
+                })
+            });
+            
+            // DEBUG: Log específico para entidades con "Vizcaya" o "BBVA" en el nombre
+            if (nombreEntidad.indexOf('Vizcaya') > -1 || nombreEntidad.toUpperCase().indexOf('BBVA') > -1) {
+                log.debug('BBVA/Vizcaya Entity Found', {
+                    nombre: nombreEntidad,
+                    hasCont: hasCont,
+                    rubrosLength: (e.rubros || []).length,
+                    todosLosRubros: JSON.stringify(e.rubros || [])
+                });
+            }
+            
             t2List.push({
-                NombreEntidad: e.entidad || e.nombreEntidad || '',
-                Calificacion: (e.rating || e.calificacion || '').toString(),
-                CalificacionMinima0: objectCalification[(e.rating || e.calificacion || '')] || 0,
-                Cont: containsContingency(e.rubros || []),
+                NombreEntidad: nombreEntidad,
+                Calificacion: calif,
+                CalificacionMinima0: objectCalification[calif] || 0,
+                Cont: hasCont,
                 vig: containsVigenciaRubro(e.rubros || [])
             });
+            
+            // Actualizar calificacionMinima igual que producción
+            if (calif && calificacionMinima === '0') {
+                calificacionMinima = calif;
+            }
+            
+            if (calificacionMinima === '1A' && calif === '1C') calificacionMinima = '1C';
+            if (calificacionMinima === '1C' && calif === '2A') calificacionMinima = '2A';
         }
 
         let t6List = [];
@@ -297,6 +318,15 @@ define(['N/search'], function (search) {
             t6_binned_res = -9.95;
         }
 
+        // Defaults negativos antes del recorrido para evitar resets dentro del loop
+        t6_creditel_binned_res = -17.15;
+        t6_oca_binned_res = -15.16;
+        t6_cred_dir_comp_binned_res = -4.35;
+        t6_banco_binned_res = -37.55;
+        vig_noauto_t6_coop_binned_res = -23.52;
+        t6_pronto_binned_res = -7.86;
+        cred_dir_binned_res = -4.12;
+
         for (let key in t6List) {
             let current = t6List[key];
             contador = contador + 1;
@@ -314,15 +344,11 @@ define(['N/search'], function (search) {
             // creditel (SOCUR)
             if ((current.NombreEntidad || '').indexOf('SOCUR') > -1) {
                 t6_creditel_binned_res = 40.62;
-            } else if (t6_creditel_binned_res !== 40.62) {
-                t6_creditel_binned_res = -17.15;
             }
 
             // OCA
             if ((current.NombreEntidad || '').indexOf('OCA') > -1 && (current.Calificacion === '1C' || current.Calificacion === '1A')) {
                 t6_oca_binned_res = 50.39;
-            } else if (t6_oca_binned_res !== 50.39) {
-                t6_oca_binned_res = -15.16;
             }
 
             // CREDITOS DIRECTOS / cred_dir_binned_res (replicar la lógica tal cual del original, incluyendo su quirks)
@@ -331,38 +357,28 @@ define(['N/search'], function (search) {
             } else if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && cred_dir_binned_res !== 30.77 && (current.Calificacion !== '2A' || current.Calificacion !== '1C')) {
                 cred_dir_binned_res = -90.18;
             }
-            if (cred_dir_binned_res !== 30.77 && cred_dir_binned_res !== -90.18) {
-                cred_dir_binned_res = -4.12;
-            }
+            
 
             // t6_cred_dir_comp_binned_res
             if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) {
                 t6_cred_dir_comp_binned_res = 37.78;
-            } else if (t6_cred_dir_comp_binned_res !== 37.78) {
-                t6_cred_dir_comp_binned_res = -4.35;
             }
 
             // bancos (IMPORTANTE: replicar bug de precedencia del original)
             if ((current.NombreEntidad || '').indexOf('Vizcaya') > -1 || (current.NombreEntidad || '').indexOf('Bandes') > -1 || (current.NombreEntidad || '').indexOf('Banco Ita') > -1 || (current.NombreEntidad || '').indexOf('Santander') > -1 || (current.NombreEntidad || '').indexOf('Scotiabank') > -1 || (current.NombreEntidad || '').indexOf('HSBC') > -1 && (current.Calificacion === '1A' || current.Calificacion === '1C' || current.Calificacion === '2A')) {
                 t6_banco_binned_res = 51.06;
-            } else if (t6_banco_binned_res !== 51.06) {
-                t6_banco_binned_res = -37.55;
             }
 
             // cooperativas no auto
             if (!current.vig && current.Calificacion) {
                 if (((current.NombreEntidad || '').indexOf('ANDA') > -1) || ((current.NombreEntidad || '').indexOf('FUCEREP') > -1) || ((current.NombreEntidad || '').indexOf('ACAC') > -1)) {
                     vig_noauto_t6_coop_binned_res = 48.55;
-                } else if (!current.vig && vig_noauto_t6_coop_binned_res !== 48.55) {
-                    vig_noauto_t6_coop_binned_res = -23.52;
                 }
             }
 
             // BAUTZEN pronto
             if ((current.NombreEntidad || '').indexOf('BAUTZEN') > -1 && current.Calificacion) {
                 t6_pronto_binned_res = 36.73;
-            } else if (t6_pronto_binned_res !== 36.73) {
-                t6_pronto_binned_res = -7.86;
             }
         }
 
@@ -381,19 +397,37 @@ define(['N/search'], function (search) {
             }
         }
 
+        // Defaults negativos para variables de t0 antes del recorrido
+        t0_asi_binned_res = -4.94;
+        t0_bbva_binned_res = -3.65;
+        t0_scotia_binned_res = -4.16;
+        emp_valor_binned_res = -4.46;
+        cont_t0_fucac_binned_res = -7.01;
+        brou_grupo_binned_res = -15.44;
+        t0_santa_binned_res = -18.27;
+
         for (let key2 in t2List) {
             let currentt2 = t2List[key2];
 
             if ((currentt2.NombreEntidad || '').indexOf('Integrales') > -1 && currentt2.Calificacion) {
                 t0_asi_binned_res = 67.86;
-            } else if (t0_asi_binned_res !== 67.86) {
-                t0_asi_binned_res = -4.94;
             }
 
-            if (currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) {
+            // DEBUG: Log detallado para BBVA/Vizcaya
+            if ((currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) {
+                log.debug('BBVA Check in loop', {
+                    nombre: currentt2.NombreEntidad,
+                    Cont: currentt2.Cont,
+                    condition: currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1
+                });
+            }
+            if (currentt2.Cont && (((currentt2.NombreEntidad || '')).indexOf('Vizcaya') > -1 || ((currentt2.NombreEntidad || '')).toUpperCase().indexOf('BBVA') > -1)) {
+                logTxt += '<P> => currentt2.NombreEntidad.Cont: ' + currentt2.Cont + '</P>';
+                logTxt += "<P/> tes currentt2.NombreEntidad index BBVA/Vizcaya: " + (((currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) || ((currentt2.NombreEntidad || '').toUpperCase().indexOf('BBVA') > -1));
                 t0_bbva_binned_res = 79.39;
-            } else if (t0_bbva_binned_res !== 79.39) {
-                t0_bbva_binned_res = -3.65;
+                log.debug('Binned values Vizcaya CON CONTINGENCIA', t0_bbva_binned_res);
+            } else {
+                log.debug('Binned values Vizcaya other', t0_bbva_binned_res);
             }
 
             // t0_fnb_binned_res según object0.CalificacionMinima0
@@ -416,32 +450,22 @@ define(['N/search'], function (search) {
 
             if (currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Scotiabank') > -1) {
                 t0_scotia_binned_res = 74.04;
-            } else if (t0_scotia_binned_res !== 74.04) {
-                t0_scotia_binned_res = -4.16;
             }
 
             if ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1 && currentt2.Calificacion) {
                 emp_valor_binned_res = 124.21;
-            } else if (emp_valor_binned_res !== 124.21) {
-                emp_valor_binned_res = -4.46;
             }
 
             if ((currentt2.NombreEntidad || '').indexOf('FUCAC') > -1 && currentt2.Cont) {
                 cont_t0_fucac_binned_res = 74.16;
-            } else if (cont_t0_fucac_binned_res !== 74.16) {
-                cont_t0_fucac_binned_res = -7.01;
             }
 
             if ((currentt2.NombreEntidad || '').indexOf('República') > -1 && currentt2.Calificacion) {
                 brou_grupo_binned_res = 33.61;
-            } else if (brou_grupo_binned_res !== 33.61) {
-                brou_grupo_binned_res = -15.44;
             }
 
             if ((currentt2.NombreEntidad || '').indexOf('Santander') > -1) {
                 t0_santa_binned_res = 38.33;
-            } else if (t0_santa_binned_res !== 38.33) {
-                t0_santa_binned_res = -18.27;
             }
         }
 
@@ -453,6 +477,7 @@ define(['N/search'], function (search) {
         t0_fnb_binned_res = t0_fnb_binned_res * (t0_fnb_binned || 1);
         t0_asi_binned_res = t0_asi_binned_res * (t0_asi_binned || 1);
         t0_bbva_binned_res = t0_bbva_binned_res * (t0_bbva_binned || 1);
+        log.debug('Binned values BBVA', t0_bbva_binned_res);
         t6_cred_dir_comp_binned_res = t6_cred_dir_comp_binned_res * (t6_cred_dir_comp_binned || 1);
         t6_banco_binned_res = t6_banco_binned_res * (banco_binned || 1);
         vig_noauto_t6_coop_binned_res = vig_noauto_t6_coop_binned_res * (vig_noauto_t6_coop_binned || 1);
@@ -477,61 +502,76 @@ define(['N/search'], function (search) {
         // Umbral configurable para considerar "buen score" (por defecto 499)
         const goodThreshold = (scoringRules && typeof scoringRules.goodThreshold === 'number') ? scoringRules.goodThreshold : 499;
 
-        // Construir logTxt extenso con toda la información de debugging (formato compatible con SDB-Enlamano-score.js)
-        let logTxt = '<P>En scoring...</P>';
+        // Construir logTxt extenso con toda la información de debugging (formato exacto de SDB-Enlamano-score.js)
         
-        // Log de datos BCU originales (t0 y t6)
+        
+        // Log de datos BCU originales (t0) - debe coincidir con el formato de producción
         logTxt += '<P> => datosBcu: </P>';
         try {
-            logTxt += JSON.stringify({
-                bcuRawData: normalizedData.rawData || null,
-                data: {
-                    nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
-                    documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
-                    sectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
-                    periodo: (t0.metadata && t0.metadata.periodo) || '',
-                    rubrosValoresGenerales: (t0.aggregates && t0.aggregates.rubrosValoresGenerales) || [],
-                    entidadesRubrosValores: (t0.entities || []).map(function(e) {
-                        return {
-                            nombreEntidad: e.entidad || e.nombreEntidad || '',
-                            calificacion: e.rating || e.calificacion || '',
-                            rubrosValores: e.rubros || []
-                        };
-                    })
-                },
-                errors: (normalizedData.errors) || null,
-                responseId: (normalizedData.responseId) || '00000000-0000-0000-0000-000000000000'
-            }) + '<P/>';
+            // Si tenemos datos RAW, usarlos directamente (igual que producción)
+            if (normalizedData.rawData && normalizedData.rawData.datosBcu) {
+                logTxt += JSON.stringify(normalizedData.rawData.datosBcu) + '<P/>';
+            } else {
+                // Fallback: construir estructura similar
+                let bcuData = {
+                    bcuRawData: null,
+                    data: {
+                        Nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
+                        Documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
+                        SectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
+                        Periodo: (t0.metadata && t0.metadata.periodo) || '',
+                        RubrosValoresGenerales: t0.rubrosValoresGenerales || [],
+                        EntidadesRubrosValores: (t0.entities || []).map(function(e) {
+                            return {
+                                NombreEntidad: e.entidad || e.nombreEntidad || '',
+                                Calificacion: e.rating || e.calificacion || '',
+                                RubrosValores: e.rubros || []
+                            };
+                        })
+                    },
+                    errors: (normalizedData.errors) || null,
+                    responseId: (normalizedData.responseId) || '00000000-0000-0000-0000-000000000000'
+                };
+                logTxt += JSON.stringify(bcuData) + '<P/>';
+            }
         } catch (e) {
             logTxt += '[Error serializing t0 data]<P/>';
         }
 
+        // Log de datos BCU t6 - debe coincidir con el formato de producción
         logTxt += '<P> => datosBcu_T6: </P>';
         try {
-            logTxt += JSON.stringify({
-                bcuRawData: null,
-                data: {
-                    nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
-                    documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
-                    sectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
-                    periodo: (t6.metadata && t6.metadata.periodo) || '',
-                    rubrosValoresGenerales: (t6.aggregates && t6.aggregates.rubrosValoresGenerales) || [],
-                    entidadesRubrosValores: (t6.entities || []).map(function(e) {
-                        return {
-                            nombreEntidad: e.entidad || e.nombreEntidad || '',
-                            calificacion: e.rating || e.calificacion || '',
-                            rubrosValores: e.rubros || []
-                        };
-                    })
-                },
-                errors: null,
-                responseId: '00000000-0000-0000-0000-000000000000'
-            }) + '<P/>';
+            // Si tenemos datos RAW, usarlos directamente (igual que producción)
+            if (normalizedData.rawData && normalizedData.rawData.datosBcuT6) {
+                logTxt += JSON.stringify(normalizedData.rawData.datosBcuT6) + '<P/>';
+            } else {
+                // Fallback: construir estructura similar
+                let bcuDataT6 = {
+                    bcuRawData: null,
+                    data: {
+                        Nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
+                        Documento: (normalizedData.metadata && normalizedData.metadata.documento) || null,
+                        SectorActividad: (normalizedData.metadata && normalizedData.metadata.sectorActividad) || '',
+                        Periodo: (t6.metadata && t6.metadata.periodo) || '',
+                        RubrosValoresGenerales: t6.rubrosValoresGenerales || [],
+                        EntidadesRubrosValores: (t6.entities || []).map(function(e) {
+                            return {
+                                NombreEntidad: e.entidad || e.nombreEntidad || '',
+                                Calificacion: e.rating || e.calificacion || '',
+                                RubrosValores: e.rubros || []
+                            };
+                        })
+                    },
+                    errors: null,
+                    responseId: '00000000-0000-0000-0000-000000000000'
+                };
+                logTxt += JSON.stringify(bcuDataT6) + '<P/>';
+            }
         } catch (e) {
             logTxt += '[Error serializing t6 data]<P/>';
         }
 
-        // Log de cálculo de endeudamiento
+        // Log de cálculo de endeudamiento (formato exacto de producción)
         logTxt += '<P> ***************** ENDEUDAMIENTO comienzo ****************** </P>';
         logTxt += '<P> +++++ t2_mnPesos: ' + t2_mnPesos + '<P/>';
         logTxt += '<P> +++++ t2_mePesos: ' + t2_mePesos + '<P/>';
@@ -540,44 +580,64 @@ define(['N/search'], function (search) {
         logTxt += '<P> +++++ endeudamiento: ' + endeudamiento + '<P/>';
         logTxt += '<P> ***************** ENDEUDAMIENTO fin ****************** </P>';
 
-        // Log de entidades procesadas en t6
+        // Log de entidades procesadas en t6 (producción usa el objeto current directamente)
         for (let i = 0; i < t6List.length; i++) {
-            logTxt += '<P> => t6: [object Object]</P>';
+            logTxt += '<P> => t6: ' + t6List[i] + '</P>';
         }
 
-        // Log de resultados de scoring por variable
-        logTxt += '<P/> ent_t6_binned_res: ' + ent_t6_binned_res + '<P/>';
-        logTxt += ' t6_binned_res: ' + t6_binned_res + '<P/>';
-        logTxt += ' t6_creditel_binned_res: ' + t6_creditel_binned_res + '<P/>';
-        logTxt += ' t6_oca_binned_res: ' + t6_oca_binned_res + '<P/>';
-        logTxt += ' t0_fnb_binned_res: ' + t0_fnb_binned_res + '<P/>';
-        logTxt += ' t0_asi_binned_res: ' + t0_asi_binned_res + '<P/>';
-        logTxt += ' t0_bbva_binned_res: ' + t0_bbva_binned_res + '<P/>';
-        logTxt += ' t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res + '<P/>';
-        logTxt += ' t6_banco_binned_res: ' + t6_banco_binned_res + '<P/>';
-        logTxt += ' vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res + '<P/>';
-        logTxt += ' t0_santa_binned_res: ' + t0_santa_binned_res + '<P/>';
-        logTxt += ' cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res + '<P/>';
-        logTxt += ' brou_grupo_binned_res: ' + brou_grupo_binned_res + '<P/>';
-        logTxt += ' t6_pronto_binned_res: ' + t6_pronto_binned_res + '<P/>';
-        logTxt += ' t0_scotia_binned_res: ' + t0_scotia_binned_res + '<P/>';
-        logTxt += ' cred_dir_binned_res: ' + cred_dir_binned_res + '<P/>';
-        logTxt += ' total: ' + total + '<P/>';
-        logTxt += ' score: ' + scoreRounded;
+        // Log de resultados de scoring por variable (formato exacto sin espacio después de <P/>)
+        logTxt += '<P/> ent_t6_binned_res: ' + ent_t6_binned_res;
+        logTxt += '<P/> t6_binned_res: ' + t6_binned_res;
+        logTxt += '<P/> t6_creditel_binned_res: ' + t6_creditel_binned_res;
+        logTxt += '<P/> t6_oca_binned_res: ' + t6_oca_binned_res;
+        logTxt += '<P/> t0_fnb_binned_res: ' + t0_fnb_binned_res;
+        logTxt += '<P/> t0_asi_binned_res: ' + t0_asi_binned_res;
+        logTxt += '<P/> t0_bbva_binned_res: ' + t0_bbva_binned_res;
+        logTxt += '<P/> t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res;
+        logTxt += '<P/> t6_banco_binned_res: ' + t6_banco_binned_res;
+        logTxt += '<P/> vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res;
+        logTxt += '<P/> t0_santa_binned_res: ' + t0_santa_binned_res;
+        logTxt += '<P/> cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res;
+        logTxt += '<P/> brou_grupo_binned_res: ' + brou_grupo_binned_res;
+        logTxt += '<P/> t6_pronto_binned_res: ' + t6_pronto_binned_res;
+        logTxt += '<P/> t0_scotia_binned_res: ' + t0_scotia_binned_res;
+        logTxt += '<P/> cred_dir_binned_res: ' + cred_dir_binned_res;
+        logTxt += '<P/> total: ' + total;
+        logTxt += '<P/> score: ' + scoreRounded
 
-        // Construir objeto similar al original para compatibilidad total
-        let objetos = { 
+        log.debug('Binned values', t0_bbva_binned);
+        log.debug('t0_bbva_binned_res after bin', t0_bbva_binned_res);
+
+        // Resultado unificado: contrato moderno + compatibilidad legacy
+        let result = { 
+            // Contrato moderno
+            finalScore: scoreRounded,
+            rawScore: scoreNumeric,
+            baseScore: (typeof scoringRules.baseScore === 'number' ? scoringRules.baseScore : 0),
+            contributions: {},
+            metadata: {
+                calculatedAt: new Date(),
+                isRejected: false,
+                rejectionReason: null,
+                goodThreshold: goodThreshold,
+                isGood: scoreRounded >= goodThreshold,
+                provider: normalizedData.provider
+            },
+            flags: normalizedData.flags || {},
+            validation: { hasValidData: true },
+
+            // Compatibilidad con el script original
             score: scoreRounded,
-            calificacionMinima: (normalizedData.metadata && normalizedData.metadata.worstRating) || '0',
+            calificacionMinima: calificacionMinima,
             contador: contador,
             mensaje: 'No tenemos prestamo disponible en este momento',
             endeudamiento: endeudamiento,
-            nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || normalizedData.provider || '',
+            nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
             error_reglas: false,
             logTxt: logTxt
         };
 
-        return objetos;
+        return result;
     }
 
     /**
@@ -893,7 +953,7 @@ define(['N/search'], function (search) {
         let worstNumeric = 0;
 
         for (let i = 0; i < t0Data.entities.length; i++) {
-            let rating = String(t0Data.entities[i].rating || '').toUpperCase();
+            let rating = String(t0Data.entities[i].rating || '').toUpperCase().trim();
             let numeric = ratingOrder[rating] || 0;
             if (numeric > worstNumeric) {
                 worstNumeric = numeric;
@@ -954,7 +1014,7 @@ define(['N/search'], function (search) {
         if (extractEntityCount(data) > 1) score++;
 
         // +1 por consistencia de datos
-        if (data.metadata && data.metadata.nome && !data.flags.isDeceased) score++;
+        if (data.metadata && data.metadata.nombre && !data.flags.isDeceased) score++;
 
         return {
             score: score,
@@ -1076,3 +1136,6 @@ define(['N/search'], function (search) {
  * @property {Object} flags - Banderas de los datos
  * @property {Object} validation - Validación y calidad de datos
  */
+
+
+
