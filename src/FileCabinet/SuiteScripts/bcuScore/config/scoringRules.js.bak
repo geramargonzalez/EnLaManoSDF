@@ -67,45 +67,37 @@ define(['N/search', 'N/log'], function (search, log) {
 
     let _cachedRules = null;
     let _lastCacheTime = null;
-    let CACHE_DURATION_MS = 1800000;   
-    let STRICT_MODE = false;    
+    let CACHE_DURATION_MS = 1800000; // 30 minutos - caché más largo
     const scoreNetsuiteID = 1; // ID fijo del record customrecord_sdb_score
 
     /**
      * OPTIMIZADO: Obtiene reglas con caché agresivo y fallback inmediato
      */
     function getScoringRules() {
-        if (_cachedRules) return _cachedRules;
+        // Caché hit inmediato - sin validación temporal en producción
+        if (_cachedRules) {
+            return _cachedRules;
+        }
 
-        var customRules = null;
-        var loadError = null;
-        try { customRules = loadRulesFromNetSuite(); } catch (e) { loadError = e; }
-
-        if (customRules && validateRules(customRules)) {
-            var __vbc = (typeof verifyBinnedCompleteness==='function'? verifyBinnedCompleteness : function(){ return []; });
-            var __lbd = (typeof logBinnedDiff==='function'? logBinnedDiff : function(){});
-            var __sd = (typeof safeDebug==='function'? safeDebug : function(){});
-            var __cre = (typeof createRulesError==='function'? createRulesError : function(c,m){ return new Error(m||c); });
-            var missing = __vbc(customRules.binned);
-            if (missing.length) {
-                var msg = 'Missing binned keys: ' + missing.join(', ');
-                if (STRICT_MODE) throw __cre('SCORING_RULES_INCOMPLETE', msg);
-                __sd('Scoring Rules Incomplete', msg);
+        try {
+            // Intentar carga rápida desde NetSuite (timeout corto)
+            var customRules = loadRulesFromNetSuite();
+            if (customRules && validateRules(customRules)) {
+                _cachedRules = customRules;
+                _lastCacheTime = Date.now();
+                return customRules;
             }
-            __lbd(customRules.binned, DEFAULT_RULES.binned);
-            _cachedRules = customRules;
-            _lastCacheTime = Date.now();
-            return customRules;
+        } catch (error) {
+            // Log error pero continúa inmediatamente con defaults
+            if (log && log.debug) {
+                log.debug({
+                    title: 'BCU Fast Rules Fallback',
+                    details: 'Using defaults due to: ' + (error.message || error.toString())
+                });
+            }
         }
 
-        if (STRICT_MODE) {
-            var reason = loadError ? (loadError.message || loadError.toString()) : 'Invalid or missing rules';
-            var __cre2 = (typeof createRulesError==='function'? createRulesError : function(c,m){ var e=new Error(m||c); e.code=c; return e; });
-            throw __cre2('SCORING_RULES_STRICT_LOAD_FAILED', reason);
-        }
-
-        var __sd2 = (typeof safeDebug==='function'? safeDebug : function(){});
-        __sd2('BCU Fast Rules Fallback', 'Using defaults due to: ' + (loadError ? (loadError.message || loadError.toString()) : 'invalid rules'));
+        // Fallback instantáneo a reglas optimizadas
         _cachedRules = DEFAULT_RULES;
         _lastCacheTime = Date.now();
         return DEFAULT_RULES;
@@ -203,41 +195,6 @@ define(['N/search', 'N/log'], function (search, log) {
             });
             return null;
         }
-
-    function verifyBinnedCompleteness(binned) {
-        var required = Object.keys(DEFAULT_RULES.binned || {});
-        var missing = [];
-        for (var i = 0; i < required.length; i++) {
-            var k = required[i];
-            if (!binned || typeof binned[k] !== 'number' || isNaN(binned[k])) {
-                missing.push(k);
-            }
-        }
-        return missing;
-    }
-
-    function logBinnedDiff(actual, defaults) {
-        try {
-            var diff = {};
-            var keys = Object.keys(defaults || {});
-            for (var i = 0; i < keys.length; i++) {
-                var k = keys[i];
-                var a = (actual && typeof actual[k] === 'number') ? actual[k] : null;
-                var d = defaults[k];
-                if (a === null || a !== d) diff[k] = { actual: a, default: d };
-            }
-            if (log && log.debug) log.debug({ title: 'Scoring Rules Binned Diff', details: JSON.stringify(diff) });
-        } catch (e) {}
-    }
-
-    function safeDebug(title, details) { try { if (log && log.debug) log.debug({ title: title, details: details }); } catch (e) {} }
-
-    function createRulesError(code, message) {
-        var err = new Error(message || 'Scoring rules error');
-        err.name = 'ScoringRulesError';
-        err.code = code;
-        return err;
-    }
     }
 
     /**
@@ -341,33 +298,19 @@ define(['N/search', 'N/log'], function (search, log) {
         return true;
     }
 
-
-    function setStrictMode(enabled) {
-        STRICT_MODE = enabled === true;
-        _cachedRules = null;
-        _lastCacheTime = null;
-        safeDebug('Scoring Rules Strict Mode', STRICT_MODE ? 'ENABLED' : 'DISABLED');
-    }
-        // Public API
+    // Public API
     return {
         getScoringRules: getScoringRules,
         getDefaultRules: getDefaultRules,
         invalidateCache: invalidateCache,
         validateRules: validateRules,
-        setStrictMode: setStrictMode,
         
         // Para testing
         _internal: {
             DEFAULT_RULES: DEFAULT_RULES,
             loadRulesFromNetSuite: loadRulesFromNetSuite,
             parseRatingPenalties: parseRatingPenalties,
-            parseRejectionRules: parseRejectionRules,
-            verifyBinnedCompleteness: (typeof verifyBinnedCompleteness === 'function' ? verifyBinnedCompleteness : function(){ return []; }),
-            logBinnedDiff: (typeof logBinnedDiff === 'function' ? logBinnedDiff : function(){})
+            parseRejectionRules: parseRejectionRules
         }
-    };});
-
-
-
-
-
+    };
+});

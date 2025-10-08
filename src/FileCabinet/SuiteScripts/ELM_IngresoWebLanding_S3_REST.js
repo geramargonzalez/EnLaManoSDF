@@ -17,7 +17,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
             docNumber: docNumber,
             success: false,
             result: null
-         };
+         }; 
          try {
             auxLib.deactivateLeadsByDocumentNumber(docNumber);
             const infoRepetido = auxLib.getInfoRepetido(docNumber, null, false);

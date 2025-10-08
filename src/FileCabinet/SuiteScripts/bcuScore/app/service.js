@@ -1,4 +1,10 @@
 /**
+});
+    };
+        try {
+            var __t0 = Date.now();
+});
+/**
  * @NApiVersion 2.1
  * @description Servicio de orquestación para scoring BCU
  */
@@ -47,19 +53,18 @@ define([
             // (Se mantiene options.forceRefresh para compatibilidad, pero lo forzamos arriba)
 
             // Path crítico: obtener reglas (cached)
-            const rules = scoringRules.getScoringRules();
+            scoringRules.setStrictMode(options && options.strictRules === true);\r\n            const rules = \r\n            
             
             // Path crítico: obtener datos del proveedor
-            const normalizedData = fetchProviderData(documento, options);
+            var __tFetch0 = Date.now();\r\n            \r\n            var __tFetch1 = Date.now();
 
             // Path crítico: calcular score (O(n) puro)
-            const scoreResult = scoreEngine.computeScore(normalizedData, rules);
+            var __tScore0 = Date.now();\r\n            \r\n            var __tScore1 = Date.now();
 
             // Metadata mínima para producción
             if (isDebugMode) {
                 scoreResult.metadata.requestId = requestId;
-                scoreResult.metadata.fromCache = false;
-            }
+                \r\n            // Adjuntar timings de la ejecuci�n\r\n            scoreResult.metadata.timings = {\r\n                rulesMS: (__tRules1 - __tRules0),\r\n                fetchMS: (__tFetch1 - __tFetch0),\r\n                scoreMS: (__tScore1 - __tScore0),\r\n                totalMS: (__tScore1 - __t0)\r\n            };
             
             // No cache: no almacenamos resultados para garantizar unicidad por solicitud
             // cacheScore(documento, options.provider, scoreResult);
@@ -72,10 +77,7 @@ define([
                         doc: documento.substr(-4), // Solo últimos 4 dígitos
                         score: scoreResult.finalScore,
                         rejected: scoreResult.metadata?.isRejected,
-                        provider: normalizedData.provider
-
-                    }
-                });
+                        ,\r\n                        timings: (scoreResult.metadata && scoreResult.metadata.timings)\r\n                    }\r\n                });
             }
 
             return scoreResult;
@@ -380,3 +382,8 @@ define([
         }
     };
 });
+
+
+
+
+

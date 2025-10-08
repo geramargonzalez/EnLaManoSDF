@@ -101,7 +101,7 @@ define(['N/log'], function (log) {
         }
 
         // Early exit: límites de deuda
-         if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
+        if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
             return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva');
         }
         if (rejectionRules && rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
@@ -413,10 +413,8 @@ define(['N/log'], function (log) {
 
         for (let key2 in t2List) {
             let currentt2 = t2List[key2];
-            const name0U = __up(currentt2.NombreEntidad);
-            const calif0 = calif0 || '';
 
-            if (name0U.indexOf('INTEGRALES') > -1 && calif0) {
+            if ((currentt2.NombreEntidad || '').indexOf('Integrales') > -1 && currentt2.Calificacion) {
                 t0_asi_binned_res = 67.86;
             }
 
@@ -439,11 +437,11 @@ define(['N/log'], function (log) {
 
             // t0_fnb_binned_res según object0.CalificacionMinima0
             if ((object0Min.CalificacionMinima0 === 2 || object0Min.CalificacionMinima0 === 1)) {
-                if ((name0U.indexOf('INTEGRALES') > -1) || (name0U.indexOf('BAUTZEN') > -1) || (name0U.indexOf('CREDITOS DIRECTOS') > -1) || (name0U.indexOf('EMPRENDIMIENTOS') > -1) || (name0U.indexOf('MICROFINANZAS') > -1) || (name0U.indexOf('OCA') > -1) || (name0U.indexOf('PASS CARD') > -1) || (name0U.indexOf('PROMOTORA') > -1) || (name0U.indexOf('REPUBLICA MICROFINAZAS') > -1) || (name0U.indexOf('RETOP') > -1) || (name0U.indexOf('CIA') > -1) || (name0U.indexOf('SOCUR') > -1) || (name0U.indexOf('VERENDY') > -1)) {
+                if (((currentt2.NombreEntidad || '').indexOf('Integrales') > -1) || ((currentt2.NombreEntidad || '').indexOf('BAUTZEN') > -1) || ((currentt2.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) || ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1) || ((currentt2.NombreEntidad || '').indexOf('Microfinanzas') > -1) || ((currentt2.NombreEntidad || '').indexOf('OCA') > -1) || ((currentt2.NombreEntidad || '').indexOf('PASS CARD') > -1) || ((currentt2.NombreEntidad || '').indexOf('Promotora') > -1) || ((currentt2.NombreEntidad || '').indexOf('Republica Microfinazas') > -1) || ((currentt2.NombreEntidad || '').indexOf('RETOP') > -1) || ((currentt2.NombreEntidad || '').indexOf('CIA') > -1) || ((currentt2.NombreEntidad || '').indexOf('SOCUR') > -1) || ((currentt2.NombreEntidad || '').indexOf('VERENDY') > -1)) {
                     t0_fnb_binned_res = 14.06;
                 }
             } else if (object0Min.CalificacionMinima0 === 3 && t0_fnb_binned_res !== 14.06) {
-                if ((name0U.indexOf('INTEGRALES') > -1) || (name0U.indexOf('BAUTZEN') > -1) || (name0U.indexOf('CREDITOS DIRECTOS') > -1) || (name0U.indexOf('EMPRENDIMIENTOS') > -1) || (name0U.indexOf('MICROFINANZAS') > -1) || (name0U.indexOf('OCA') > -1) || (name0U.indexOf('PASS CARD') > -1) || (name0U.indexOf('PROMOTORA') > -1) || (name0U.indexOf('REPUBLICA MICROFINAZAS') > -1) || (name0U.indexOf('RETOP') > -1) || (name0U.indexOf('CIA') > -1) || (name0U.indexOf('SOCUR') > -1) || (name0U.indexOf('VERENDY') > -1)) {
+                if (((currentt2.NombreEntidad || '').indexOf('Integrales') > -1) || ((currentt2.NombreEntidad || '').indexOf('BAUTZEN') > -1) || ((currentt2.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) || ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1) || ((currentt2.NombreEntidad || '').indexOf('Microfinanzas') > -1) || ((currentt2.NombreEntidad || '').indexOf('OCA') > -1) || ((currentt2.NombreEntidad || '').indexOf('PASS CARD') > -1) || ((currentt2.NombreEntidad || '').indexOf('Promotora') > -1) || ((currentt2.NombreEntidad || '').indexOf('Republica Microfinazas') > -1) || ((currentt2.NombreEntidad || '').indexOf('RETOP') > -1) || ((currentt2.NombreEntidad || '').indexOf('CIA') > -1) || ((currentt2.NombreEntidad || '').indexOf('SOCUR') > -1) || ((currentt2.NombreEntidad || '').indexOf('VERENDY') > -1)) {
                     t0_fnb_binned_res = -6.06;
                 }
             } else if (t0_fnb_binned_res !== 14.06 && t0_fnb_binned_res !== -6.06) {
@@ -454,26 +452,24 @@ define(['N/log'], function (log) {
         // Más bloques del original (t0_scotia, emp_valor, fucac, brou, santa, scotia, etc.)
         for (let key3 in t2List) {
             let currentt2 = t2List[key3];
-            const name0U = __up(currentt2.NombreEntidad);
-            const calif0 = calif0 || '';
 
-            if (currentt2.Cont && name0U.indexOf('SCOTIABANK') > -1) {
+            if (currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Scotiabank') > -1) {
                 t0_scotia_binned_res = 74.04;
             }
 
-            if (name0U.indexOf('EMPRENDIMIENTOS') > -1 && calif0) {
+            if ((currentt2.NombreEntidad || '').indexOf('Emprendimientos') > -1 && currentt2.Calificacion) {
                 emp_valor_binned_res = 124.21;
             }
 
-            if (name0U.indexOf('FUCAC') > -1 && currentt2.Cont) {
+            if ((currentt2.NombreEntidad || '').indexOf('FUCAC') > -1 && currentt2.Cont) {
                 cont_t0_fucac_binned_res = 74.16;
             }
 
-            if (name0U.indexOf('REPUBLICA') > -1 && calif0) {
+            if ((currentt2.NombreEntidad || '').indexOf('República') > -1 && currentt2.Calificacion) {
                 brou_grupo_binned_res = 33.61;
             }
 
-            if (name0U.indexOf('SANTANDER') > -1) {
+            if ((currentt2.NombreEntidad || '').indexOf('Santander') > -1) {
                 t0_santa_binned_res = 38.33;
             }
         }
@@ -486,6 +482,7 @@ define(['N/log'], function (log) {
         t0_fnb_binned_res = t0_fnb_binned_res * (t0_fnb_binned || 1);
         t0_asi_binned_res = t0_asi_binned_res * (t0_asi_binned || 1);
         t0_bbva_binned_res = t0_bbva_binned_res * (t0_bbva_binned || 1);
+        log.debug('Binned values BBVA', t0_bbva_binned_res);
         t6_cred_dir_comp_binned_res = t6_cred_dir_comp_binned_res * (t6_cred_dir_comp_binned || 1);
         t6_banco_binned_res = t6_banco_binned_res * (banco_binned || 1);
         vig_noauto_t6_coop_binned_res = vig_noauto_t6_coop_binned_res * (vig_noauto_t6_coop_binned || 1);
@@ -504,8 +501,7 @@ define(['N/log'], function (log) {
         let total = test + ent_t6_binned_res + t6_binned_res + t6_creditel_binned_res + t6_oca_binned_res + t0_fnb_binned_res + t0_asi_binned_res + t0_bbva_binned_res + t6_cred_dir_comp_binned_res + t6_banco_binned_res + vig_noauto_t6_coop_binned_res + t0_santa_binned_res + emp_valor_binned_res + cont_t0_fucac_binned_res + brou_grupo_binned_res + t6_pronto_binned_res + t0_scotia_binned_res + cred_dir_binned_res;
 
         // Aplicar función logística y escalar a 0-1000 (igual que el original)
-        const __e = Math.exp(total);
-        let scoreNumeric = (__e / (1 + __e)) * 1000;
+        let scoreNumeric = (Math.exp(total) / (1 + Math.exp(total))) * 1000;
         let scoreRounded = Math.round(scoreNumeric);
 
         // Umbral configurable para considerar "buen score" (por defecto 499)
@@ -594,27 +590,27 @@ define(['N/log'], function (log) {
             logTxt += '<P> => t6: ' + t6List[i] + '</P>';
         }
 
-        // Log de resultados de scoring por variable (formato exacto sin espacio despu�s de <P/>)
-        var __sum=[];
-        __sum.push('<P/> ent_t6_binned_res: ' + ent_t6_binned_res);
-        __sum.push('<P/> t6_binned_res: ' + t6_binned_res);
-        __sum.push('<P/> t6_creditel_binned_res: ' + t6_creditel_binned_res);
-        __sum.push('<P/> t6_oca_binned_res: ' + t6_oca_binned_res);
-        __sum.push('<P/> t0_fnb_binned_res: ' + t0_fnb_binned_res);
-        __sum.push('<P/> t0_asi_binned_res: ' + t0_asi_binned_res);
-        __sum.push('<P/> t0_bbva_binned_res: ' + t0_bbva_binned_res);
-        __sum.push('<P/> t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res);
-        __sum.push('<P/> t6_banco_binned_res: ' + t6_banco_binned_res);
-        __sum.push('<P/> vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res);
-        __sum.push('<P/> t0_santa_binned_res: ' + t0_santa_binned_res);
-        __sum.push('<P/> cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res);
-        __sum.push('<P/> brou_grupo_binned_res: ' + brou_grupo_binned_res);
-        __sum.push('<P/> t6_pronto_binned_res: ' + t6_pronto_binned_res);
-        __sum.push('<P/> t0_scotia_binned_res: ' + t0_scotia_binned_res);
-        __sum.push('<P/> cred_dir_binned_res: ' + cred_dir_binned_res);
-        __sum.push('<P/> total: ' + total);
-        __sum.push('<P/> score: ' + scoreRounded);
-        logTxt += __sum.join('');
+        // Log de resultados de scoring por variable (formato exacto sin espacio después de <P/>)
+        logTxt += '<P/> ent_t6_binned_res: ' + ent_t6_binned_res;
+        logTxt += '<P/> t6_binned_res: ' + t6_binned_res;
+        logTxt += '<P/> t6_creditel_binned_res: ' + t6_creditel_binned_res;
+        logTxt += '<P/> t6_oca_binned_res: ' + t6_oca_binned_res;
+        logTxt += '<P/> t0_fnb_binned_res: ' + t0_fnb_binned_res;
+        logTxt += '<P/> t0_asi_binned_res: ' + t0_asi_binned_res;
+        logTxt += '<P/> t0_bbva_binned_res: ' + t0_bbva_binned_res;
+        logTxt += '<P/> t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res;
+        logTxt += '<P/> t6_banco_binned_res: ' + t6_banco_binned_res;
+        logTxt += '<P/> vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res;
+        logTxt += '<P/> t0_santa_binned_res: ' + t0_santa_binned_res;
+        logTxt += '<P/> cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res;
+        logTxt += '<P/> brou_grupo_binned_res: ' + brou_grupo_binned_res;
+        logTxt += '<P/> t6_pronto_binned_res: ' + t6_pronto_binned_res;
+        logTxt += '<P/> t0_scotia_binned_res: ' + t0_scotia_binned_res;
+        logTxt += '<P/> cred_dir_binned_res: ' + cred_dir_binned_res;
+        logTxt += '<P/> total: ' + total;
+        logTxt += '<P/> score: ' + scoreRounded
+
+        log.debug('Binned values', t0_bbva_binned);
         log.debug('t0_bbva_binned_res after bin', t0_bbva_binned_res);
 
         // Resultado unificado: contrato moderno + compatibilidad legacy
@@ -1145,11 +1141,6 @@ define(['N/log'], function (log) {
  * @property {Object} flags - Banderas de los datos
  * @property {Object} validation - Validación y calidad de datos
  */
-
-
-
-
-
 
 
 

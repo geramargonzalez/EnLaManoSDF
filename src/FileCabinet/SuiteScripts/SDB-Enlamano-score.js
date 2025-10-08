@@ -1,4 +1,4 @@
-define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/https'], function (log, record, search, runtime, render, email, https) {
+ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/https'], function (log, record, search, runtime, render, email, https) {
 
     
     function scoreFinal(dni) {
@@ -71,8 +71,7 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
             });
 
             var responseBody = JSON.parse(objResponse?.body);
-           log.debug('Response body', responseBody);
-
+    
             // Check if response contains errors
             if (responseBody.hasOwnProperty('errores')) {
                 // Handle error case
@@ -86,8 +85,6 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
 
            
             var data = JSON.parse(objResponse.body)
-            // T6
-           //log.debug('objResponse', data);
 
             if (data?.errors) {    
                 if (data?.errors[0]?.status == 404) {
@@ -355,8 +352,6 @@ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/
                 }
                 // end t6_cred_dir_comp.binned
                 // t6_banco_binned_res
-
-
                 if (current.NombreEntidad.indexOf("Vizcaya") > -1 || current.NombreEntidad.indexOf("Bandes") > -1 || current.NombreEntidad.indexOf("Banco Ita") > -1 || current.NombreEntidad.indexOf("Santander") > -1 || current.NombreEntidad.indexOf("Scotiabank") > -1 || current.NombreEntidad.indexOf("HSBC") > -1 && (current.Calificacion == "1A" || current.Calificacion == "1C" || current.Calificacion == "2A")) {
                     t6_banco_binned_res = 51.06
                 } else if (t6_banco_binned_res != 51.06) {

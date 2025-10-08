@@ -59,8 +59,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                     
                      if (!infoRepetido?.id) {
 
-                           //  const score = scoreLib.scoreFinal(docNumber);
-                             const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true });
+                        // const score = scoreLib.scoreFinal(docNumber);
+                           const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true, strictRules: true });
                         
                            // Extract BCU data for t2 and t6 periods
                            const bcuData = auxLib.extractBcuData(score);

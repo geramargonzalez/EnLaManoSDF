@@ -27,6 +27,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
             // Mapear options a nuevo formato optimizado
             const newOptions = {
                 provider: (options && options.provider) || 'equifax',
+                strictRules: options && options.strictRules,
                 forceRefresh: options && options.forceRefresh,
                 debug: options && options.debug,
                 timeout: 15000 // Timeout agresivo
