@@ -175,7 +175,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                            cantEntidadesT6,
                            peroCalifT2,
                            peroCalifT6
-                        });
+                        }); 
 
                         // Snapshot de aprobados se actualiza en afterSubmit cuando ya existe el ID del lead
                      } else {

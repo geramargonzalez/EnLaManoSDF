@@ -12,6 +12,13 @@ define(['N/log'], function (log) {
     };
     const BAD_RATINGS_SET = { '2B': true, '3': true, '4': true, '5': true };
 
+    function safeUpper(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        return value.toString().toUpperCase();
+    }
+
     // Helper: convertir valores a número de forma segura (evita NaN)
     function toNumberSafe(v) {
         if (v === null || v === undefined) return 0;
@@ -413,8 +420,13 @@ define(['N/log'], function (log) {
 
         for (let key2 in t2List) {
             let currentt2 = t2List[key2];
-            const name0U = __up(currentt2.NombreEntidad);
-            const calif0 = calif0 || '';
+            const name0U = safeUpper(currentt2.NombreEntidad);
+            const calif0 = safeUpper(
+                currentt2.CalificacionMinima0 ||
+                currentt2.Calificacion ||
+                currentt2.CalificacionMinima ||
+                currentt2.calificacion
+            );
 
             if (name0U.indexOf('INTEGRALES') > -1 && calif0) {
                 t0_asi_binned_res = 67.86;
@@ -454,8 +466,13 @@ define(['N/log'], function (log) {
         // Más bloques del original (t0_scotia, emp_valor, fucac, brou, santa, scotia, etc.)
         for (let key3 in t2List) {
             let currentt2 = t2List[key3];
-            const name0U = __up(currentt2.NombreEntidad);
-            const calif0 = calif0 || '';
+            const name0U = safeUpper(currentt2.NombreEntidad);
+            const calif0 = safeUpper(
+                currentt2.CalificacionMinima0 ||
+                currentt2.Calificacion ||
+                currentt2.CalificacionMinima ||
+                currentt2.calificacion
+            );
 
             if (currentt2.Cont && name0U.indexOf('SCOTIABANK') > -1) {
                 t0_scotia_binned_res = 74.04;
@@ -1145,9 +1162,6 @@ define(['N/log'], function (log) {
  * @property {Object} flags - Banderas de los datos
  * @property {Object} validation - Validación y calidad de datos
  */
-
-
-
 
 
 

@@ -1290,67 +1290,74 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       function deactivateLeadsByDocumentNumber(documentNumber) {
          const stLogTitle = 'deactivateLeadsByDocumentNumber';
          try {
-         const leadID = [];
-         const leadSearchObj = search.create({
-            type: "lead",
-            filters:
-            [
-               ["stage","anyof","LEAD"], 
-               "AND", 
-               ["status","anyof","7","6"], 
-               "AND", 
-               ["datecreated","before","lastmonthtodate"],  
-               "AND",
-               ["custentity_sdb_nrdocumento", "is", documentNumber],
-               "AND",
-               ["custentity_elm_lead_repetido_original", "anyof", "@NONE@"],
-            ],
-            columns:
-            [
-               search.createColumn({name: "custentity_sdb_nrdocumento", label: "Nro de Documento"})
-            ]
-         });
-            const searchResultCount = leadSearchObj.runPaged().count;
-            log.debug("leadSearchObj result count",searchResultCount);
+            if (!documentNumber) return;
 
-            leadSearchObj.run().each(function(result) {
-               log.debug(stLogTitle, `Deactivating lead with ID: ${result.id}`);
-               leadID.push(result.id);
-               const id = record.submitFields({
-                        type: record.Type.LEAD,
-                        id: result.id,
-                        values: {
-                           isinactive: true
-                        },
-                        options: {
-                           enableSourcing: false,
-                           ignoreMandatoryFields: true
-                        }
-                     });
-               log.audit(stLogTitle, `Lead with ID ${id} deactivated successfully`);
-               return true; // Continue iterating
+            // 1) Buscar leads “padre” activos y desactivarlos
+            const parentIds = [];
+            const parentSearch = search.create({
+               type: 'lead',
+               filters: [
+                  ['stage', 'anyof', 'LEAD'],
+                  'AND',
+                  ['status', 'anyof', '7', '6'],
+                  'AND',
+                  ['datecreated', 'before', 'lastmonthtodate'],
+                  'AND',
+                  ['custentity_sdb_nrdocumento', 'is', documentNumber],
+                  'AND',
+                  ['custentity_elm_lead_repetido_original', 'anyof', '@NONE@'],
+                  'AND',
+                  ['isinactive', 'is', 'F']
+               ],
+               columns: [ search.createColumn({ name: 'internalid' }) ]
             });
-            if (leadID.length > 0) {
-               for (const elementID of leadID) {
-                  const leads = findLeadsByDocumentNumber(documentNumber, elementID);
-                  leads.forEach(lead => {
-                     const id = record.submitFields({
-                        type: record.Type.LEAD,
-                        id: lead.id,
-                        values: {
-                           isinactive: true
-                        },
-                        options: {
-                           enableSourcing: false,
-                           ignoreMandatoryFields: true
-                        }
-                     });
-                     log.audit(stLogTitle, `Lead with ID ${id} deactivated successfully`);
+
+            let parentsUpdated = 0;
+            parentSearch.run().each(function (res) {
+               const id = res.getValue({ name: 'internalid' }) || res.id;
+               parentIds.push(id);
+               record.submitFields({
+                  type: record.Type.LEAD,
+                  id: id,
+                  values: { isinactive: true },
+                  options: { enableSourcing: false, ignoreMandatoryFields: true }
+               });
+               parentsUpdated++;
+               return true;
+            });
+
+            // 2) Desactivar “hijos” en lotes usando anyof
+            let childrenUpdated = 0;
+            if (parentIds.length) {
+               const childSearch = search.create({
+                  type: 'lead',
+                  filters: [
+                     ['stage', 'anyof', 'LEAD'],
+                     'AND',
+                     ['custentity_sdb_nrdocumento', 'is', documentNumber],
+                     'AND',
+                     ['isinactive', 'is', 'F'],
+                     'AND',
+                     ['custentity_elm_lead_repetido_original', 'anyof', parentIds]
+                  ],
+                  columns: [ search.createColumn({ name: 'internalid' }) ]
+               });
+
+               childSearch.run().each(function (res) {
+                  const cid = res.getValue({ name: 'internalid' }) || res.id;
+                  record.submitFields({
+                     type: record.Type.LEAD,
+                     id: cid,
+                     values: { isinactive: true },
+                     options: { enableSourcing: false, ignoreMandatoryFields: true }
                   });
-               }
-               log.debug(stLogTitle, 'All leads deactivated successfully');
-               }
-              
+                  childrenUpdated++;
+                  return true;
+               });
+            }
+
+            log.debug(stLogTitle, { parentsUpdated: parentsUpdated, childrenUpdated: childrenUpdated });
+
          } catch (error) {
             log.error(stLogTitle, error);
             throw errorModule.create({
@@ -1735,3 +1742,4 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          snapshotAprobados: snapshotAprobados
       }
    });
+

@@ -59,8 +59,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                     
                      if (!infoRepetido?.id) {
 
-                        // const score = scoreLib.scoreFinal(docNumber);
-                           const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true, strictRules: true });
+                         const score = scoreLib.scoreFinal(docNumber);
+                           // const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true, strictRules: true });
                         
                            // Extract BCU data for t2 and t6 periods
                            const bcuData = auxLib.extractBcuData(score);
@@ -342,7 +342,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                                   'custentity_sdb_montoofrecido':ofertaFinal?.internalid ? parseFloat(ofertaFinal?.oferta) : '',
                                   'custentity_elm_oferta_final': ofertaFinal?.internalid ? parseFloat(ofertaFinal?.cuotaFinal) : '',
                                   'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? parseFloat(ofertaFinal?.cuotaFinal) : '',
-                                  'custentity_elm_monto_cuota': ofertaFinal?.name ? ofertaFinal?.name : '',
+                                  'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
                                   'custentity_elm_plazo': ofertaFinal?.plazo ? ofertaFinal?.plazo : '',
                                   'custentity_score': infoRepetido.score,
                                   'custentity_elm_lead_repetido_original': '',
@@ -351,7 +351,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                                   'custentity_sdb_actividad': activity,
                                   'custentity_sdb_fechanac': dateOfBirth,
                                   'custentity_elm_fecha_ingreso': workStartDate,
-                                  'custentity_sdb_infolab_importe': salary
+                                  'custentity_sdb_infolab_importe': salary,
+                                  'custentity_sdb_edad': age,
                               }
                            }); 
                            log.debug('infoRepetido logic newCustomerId S1', idPrelid);  
@@ -444,9 +445,10 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            'custentity_sdb_montoofrecido':ofertaFinal?.internalid ? parseFloat(ofertaFinal?.oferta) : '',
                            'custentity_elm_oferta_final': ofertaFinal?.internalid ? parseFloat(ofertaFinal?.cuotaFinal) : '',
                            'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? parseFloat(ofertaFinal?.cuotaFinal) : '',
-                           'custentity_elm_monto_cuota': ofertaFinal?.name ? ofertaFinal?.name : '',
+                           'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
                            'custentity_elm_plazo': ofertaFinal?.plazo ? ofertaFinal?.plazo : '',
-                  
+                           'custentity_sdb_edad': age,
+
                         }
                      }); 
                      log.debug('updateAlPrestamoScenarioID S1', updateAlPrestamoScenarioID);

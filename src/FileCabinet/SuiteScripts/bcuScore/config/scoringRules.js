@@ -163,7 +163,7 @@ define(['N/search', 'N/log'], function (search, log) {
                 }
                 return raw;
             }
-            
+
             // Construir objeto de reglas desde campos del record
             const customRules = {
                 baseScore: parseFloat(getFieldValue('custrecord_sdb_score_base_score')) || DEFAULT_RULES.baseScore,
@@ -203,6 +203,7 @@ define(['N/search', 'N/log'], function (search, log) {
             });
             return null;
         }
+    }
 
     function verifyBinnedCompleteness(binned) {
         var required = Object.keys(DEFAULT_RULES.binned || {});
@@ -237,7 +238,6 @@ define(['N/search', 'N/log'], function (search, log) {
         err.name = 'ScoringRulesError';
         err.code = code;
         return err;
-    }
     }
 
     /**
@@ -351,6 +351,7 @@ define(['N/search', 'N/log'], function (search, log) {
         // Public API
     return {
         getScoringRules: getScoringRules,
+        getRules: getScoringRules, // Alias para compatibilidad con consumidores existentes
         getDefaultRules: getDefaultRules,
         invalidateCache: invalidateCache,
         validateRules: validateRules,

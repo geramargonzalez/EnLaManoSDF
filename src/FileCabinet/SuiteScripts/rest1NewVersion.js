@@ -2,8 +2,8 @@
  * @NApiVersion 2.1
  * @NScriptType Restlet
  */
-define(['N/search', './SDB-Enlamano-score.js', 'N/runtime', './ELM_Aux_Lib.js', 'N/record'],
-function (search, scoreLib, runtime, auxLib, record) {
+define(['N/search', './SDB-Enlamano-score.js', 'N/runtime', './ELM_Aux_Lib.js', 'N/record', './ELM_SCORE_BCU_LIB.js'],
+function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
   // ---------- Utils de uso general ----------
   const LOG_PREFIX = 'S1';
@@ -102,7 +102,14 @@ function (search, scoreLib, runtime, auxLib, record) {
         
         if (!infoRep?.id) {
           // Caso NUEVO â†’ Scoring & BCU
-          const score = scoreLib.scoreFinal(docNumber);
+          // Usar motor bcuScore optimizado con fallback al SDB clásico
+          let score;
+          try {
+            score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, strictRules: true, debug: false });
+          } catch (e) {
+            // Fallback al motor antiguo si algo falla
+            score = scoreLib.scoreFinal(docNumber);
+          }
           if (score?.error_reglas) {
             const approvalStatus =
               score.error_reglas === 500 ? params.estadoErrorBCU :
@@ -498,3 +505,4 @@ function (search, scoreLib, runtime, auxLib, record) {
 
   return { post };
 });
+

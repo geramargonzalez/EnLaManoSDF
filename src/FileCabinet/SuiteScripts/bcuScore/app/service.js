@@ -1,10 +1,4 @@
 /**
-});
-    };
-        try {
-            var __t0 = Date.now();
-});
-/**
  * @NApiVersion 2.1
  * @description Servicio de orquestación para scoring BCU
  */
@@ -34,63 +28,79 @@ define([
      */
     function calculateScore(documento, options) {
         options = options || {};
-        // Fuerzo bypass del cache: cada cálculo debe ser único
-        // (según requerimiento del usuario, no se debe reutilizar resultados previos)
         options.forceRefresh = true;
 
-        // Skip logging detallado en producción para velocidad
-        const  isDebugMode = options.debug === true;
+        const isDebugMode = options.debug === true;
         const requestId = isDebugMode ? generateRequestId() : null;
 
         try {
-            // Validación rápida con regex pre-compilada
+            const __t0 = Date.now();
+
             if (!DOCUMENT_REGEX.test(documento.replace(/[^\d]/g, ''))) {
-                throw createServiceError('INVALID_DOCUMENT', 'Documento inválido');
+                throw createServiceError('INVALID_DOCUMENT', 'Documento invalido');
             }
 
+            scoringRules.setStrictMode(options && options.strictRules === true);
+            const __tRules0 = Date.now();
+            const rules = scoringRules.getRules();
+            const __tRules1 = Date.now();
+            if (!rules) {
+                throw createServiceError('RULES_UNAVAILABLE', 'No se pudieron cargar reglas de scoring');
+            }
 
-            // Bypass cache: siempre forzamos refresh para que cada cálculo sea único
-            // (Se mantiene options.forceRefresh para compatibilidad, pero lo forzamos arriba)
+            const __tFetch0 = Date.now();
+            const normalizedData = fetchProviderData(documento, options);
+            const __tFetch1 = Date.now();
+            if (!normalizedData) {
+                throw createServiceError('PROVIDER_NO_DATA', 'Proveedor no devolvio datos');
+            }
 
-            // Path crítico: obtener reglas (cached)
-            scoringRules.setStrictMode(options && options.strictRules === true);\r\n            const rules = \r\n            
-            
-            // Path crítico: obtener datos del proveedor
-            var __tFetch0 = Date.now();\r\n            \r\n            var __tFetch1 = Date.now();
+            const __tScore0 = Date.now();
+            const scoreResult = scoreEngine.computeScore(normalizedData, rules);
+            const __tScore1 = Date.now();
+            if (!scoreResult || typeof scoreResult !== 'object') {
+                throw createServiceError('SCORE_COMPUTE_ERROR', 'Resultado de scoring invalido');
+            }
 
-            // Path crítico: calcular score (O(n) puro)
-            var __tScore0 = Date.now();\r\n            \r\n            var __tScore1 = Date.now();
+            scoreResult.metadata = scoreResult.metadata || {};
+            if (!scoreResult.metadata.calculatedAt) {
+                scoreResult.metadata.calculatedAt = new Date();
+            }
+            scoreResult.metadata.provider = (options.provider || PROVIDER_EQUIFAX || '').toString().toLowerCase();
 
-            // Metadata mínima para producción
             if (isDebugMode) {
                 scoreResult.metadata.requestId = requestId;
-                \r\n            // Adjuntar timings de la ejecuci�n\r\n            scoreResult.metadata.timings = {\r\n                rulesMS: (__tRules1 - __tRules0),\r\n                fetchMS: (__tFetch1 - __tFetch0),\r\n                scoreMS: (__tScore1 - __tScore0),\r\n                totalMS: (__tScore1 - __t0)\r\n            };
-            
-            // No cache: no almacenamos resultados para garantizar unicidad por solicitud
-            // cacheScore(documento, options.provider, scoreResult);
-            
-            // Log mínimo solo si es debug o error
-            if (isDebugMode || scoreResult.metadata?.isRejected) {
+                scoreResult.metadata.timings = {
+                    rulesMS: (__tRules1 - __tRules0),
+                    fetchMS: (__tFetch1 - __tFetch0),
+                    scoreMS: (__tScore1 - __tScore0),
+                    totalMS: (__tScore1 - __t0)
+                };
+            }
+
+            if (isDebugMode || (scoreResult.metadata && scoreResult.metadata.isRejected)) {
                 log.audit({
                     title: 'BCU Score',
                     details: {
-                        doc: documento.substr(-4), // Solo últimos 4 dígitos
+                        doc: documento.substr(-4),
                         score: scoreResult.finalScore,
-                        rejected: scoreResult.metadata?.isRejected,
-                        ,\r\n                        timings: (scoreResult.metadata && scoreResult.metadata.timings)\r\n                    }\r\n                });
+                        rejected: scoreResult.metadata && scoreResult.metadata.isRejected,
+                        timings: scoreResult.metadata.timings
+                    }
+                });
             }
 
             return scoreResult;
-
         } catch (error) {
-            // Log solo errores críticos
-            log.error({
-                title: 'BCU Score Error',
-                details: {
-                    doc: documento.substr(-4),
-                    error: error.message || error.toString()
-                }
-            });
+            try {
+                log.error({
+                    title: 'BCU Score Error',
+                    details: {
+                        doc: (documento || '').toString().substr(-4),
+                        error: error && (error.message || error.toString())
+                    }
+                });
+            } catch (inner) {}
 
             return createErrorScoreResult(error, requestId);
         }
@@ -382,6 +392,7 @@ define([
         }
     };
 });
+
 
 
 
