@@ -90,6 +90,15 @@ define([
                 });
             }
 
+            // Construir una tabla HTML con variables extraídas de logTxt para visualización clara
+            try {
+                scoreResult.variablesTable = buildVariablesTable(scoreResult.logTxt || '');
+            } catch (tblErr) {
+                // no bloquear el flujo por errores al construir la tabla
+                scoreResult.variablesTable = '';
+                log.debug('Variables table build error', tblErr.toString());
+            }
+
             return scoreResult;
         } catch (error) {
             try {
@@ -276,6 +285,52 @@ define([
                 confidence: { level: 'NONE', score: 0 }
             }
         };
+    }
+
+    /**
+     * Construye una tabla HTML simple a partir del texto de logTxt
+     * Busca líneas con formato `name: value` y las convierte en filas
+     */
+    function buildVariablesTable(logTxt) {
+        if (!logTxt || typeof logTxt !== 'string') return '';
+        // Normalizar separadores y extraer tokens relevantes
+        // Reemplazamos etiquetas HTML por saltos de línea para facilitar parseo
+        var cleaned = logTxt.replace(/<\/?P[^>]*>/gi, '\n').replace(/<[^>]+>/g, '');
+        var lines = cleaned.split(/\n+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+
+        // Buscamos pares clave: valor en las líneas
+        var vars = [];
+        var kvRegex = /([a-zA-Z0-9_\- ]+):\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?|[^\s].*)$/i;
+        for (var i = 0; i < lines.length; i++) {
+            var match = lines[i].match(kvRegex);
+            if (match) {
+                var key = match[1].trim();
+                var value = match[2].trim();
+                // Normalizar nombres cortos
+                if (key.length > 0 && vars.length < 100) {
+                    vars.push({ k: key, v: value });
+                }
+            }
+        }
+
+        if (vars.length === 0) return '';
+
+        var html = '<table style="border-collapse:collapse;border:1px solid #ddd;font-family:Arial,Helvetica,sans-serif;font-size:12px;">';
+        html += '<thead><tr><th style="border:1px solid #ddd;padding:6px;background:#f6f6f6">Variable</th><th style="border:1px solid #ddd;padding:6px;background:#f6f6f6">Valor</th></tr></thead><tbody>';
+        for (var j = 0; j < vars.length; j++) {
+            html += '<tr>';
+            html += '<td style="border:1px solid #ddd;padding:6px;">' + escapeHtml(vars[j].k) + '</td>';
+            html += '<td style="border:1px solid #ddd;padding:6px;">' + escapeHtml(vars[j].v) + '</td>';
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+        return html;
+    }
+
+    // pequeño helper para escapar HTML
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     /**

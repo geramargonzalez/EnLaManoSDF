@@ -5,7 +5,7 @@
 
 define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"],
    function (scoreLib, auxLib, runtime, record) {
-      function post(requestBody) {
+      function post(requestBody) { 
          const logTitle = 'post';
          const objScriptParam = getScriptParameters();
          let docNumber = requestBody?.docNumber;

@@ -3,8 +3,8 @@
  *@NScriptType Restlet
  */ 
  
-define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 'N/record', './ELM_SCORE_BCU_LIB.js', 'N/log'],
-   function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) { 
+define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 'N/record'/* , './ELM_SCORE_BCU_LIB.js' */],
+   function (search, scoreLib, runtime, auxLib, record/* , bcuScoreLib */) { 
 
       function post(requestBody) {
          const logTitle = 'post';

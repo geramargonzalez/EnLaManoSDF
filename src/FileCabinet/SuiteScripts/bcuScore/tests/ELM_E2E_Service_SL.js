@@ -1354,21 +1354,21 @@ define([
         let contributions = score.contributions || {};
         let rawData = score.rawData || {};
         let validation = score.validation || {};
-        
+
         html += '<div class="summary">';
         html += '<h2>📊 Análisis de Score - Variables Importantes</h2>';
-        
-        // Variables Clave del Score
+
+        // Variables Clave del Score (tabla clara y compacta)
         html += '<h3>🔑 Variables Clave</h3>';
-        html += '<table class="comparison-table">';
+        html += '<table class="comparison-table" style="width:100%;">';
         html += '<thead><tr>';
-        html += '<th>Variable</th>';
-        html += '<th>Valor Raw</th>';
-        html += '<th>Contribución</th>';
-        html += '<th>Impacto</th>';
+        html += '<th style="width:30%">Variable</th>';
+        html += '<th style="width:30%">Valor Raw</th>';
+        html += '<th style="width:20%">Contribución</th>';
+        html += '<th style="width:20%">Impacto (visual)</th>';
         html += '</tr></thead>';
         html += '<tbody>';
-        
+
         // Definir las variables más importantes en orden
         var importantVars = [
             { key: 'vigente', label: 'Créditos Vigentes', format: 'currency' },
@@ -1384,73 +1384,196 @@ define([
             { key: 'monto_operacion', label: 'Monto Operación', format: 'currency' },
             { key: 'nuevos', label: 'Créditos Nuevos', format: 'currency' }
         ];
-        
+
+        // small helper to summarize large/complex values for table cells
+        function summarizeForTable(val) {
+            if (val === null || val === undefined) return '<em>N/A</em>';
+            if (Array.isArray(val)) {
+                var preview = val.slice(0,3).map(function(v){ return escapeHtml(String(v)).replace(/\n/g,' '); }).join(', ');
+                return '<em>Array[' + val.length + ']</em> ' + (preview ? ' : ' + preview : '');
+            }
+            if (typeof val === 'object') {
+                var keys = Object.keys(val || {});
+                var previewKeys = keys.slice(0,5).join(', ');
+                return '<em>Object{' + keys.length + ' keys}</em> ' + (previewKeys ? ' : ' + escapeHtml(previewKeys) : '');
+            }
+            var s = String(val);
+            if (s.length > 120) return escapeHtml(s.substring(0, 120)) + '...';
+            return escapeHtml(s);
+        }
+
         for (var i = 0; i < importantVars.length; i++) {
             var varInfo = importantVars[i];
             var varKey = varInfo.key;
-            
-            // Buscar en contributions
+
+            // Buscar en contributions y rawData
             var contribution = contributions[varKey];
             var rawValue = rawData[varKey];
-            
-            // Solo mostrar si existe
+
+            // Solo mostrar si existe en alguno
             if (contribution !== undefined || rawValue !== undefined) {
                 html += '<tr>';
                 html += '<td><strong>' + varInfo.label + '</strong><br><small><code>' + varKey + '</code></small></td>';
-                
+
                 // Valor Raw
                 if (rawValue !== undefined) {
-                    var formattedValue = formatValue(rawValue, varInfo.format);
-                    html += '<td>' + formattedValue + '</td>';
+                    html += '<td>' + summarizeForTable(rawValue) + '</td>';
                 } else {
                     html += '<td><em>N/A</em></td>';
                 }
-                
-                // Contribución (WOE score)
+
+                // Contribución
                 if (contribution !== undefined) {
                     var contribValue = contribution.value || contribution.rawValue || contribution;
-                    var contribFormatted = typeof contribValue === 'number' ? contribValue.toFixed(4) : String(contribValue);
-                    
-                    // Color según impacto
-                    var color = 'inherit';
+                    var contribFormatted = typeof contribValue === 'number' ? contribValue.toFixed(4) : summarizeForTable(contribValue);
+
+                    var color = '#6c757d';
                     if (typeof contribValue === 'number') {
-                        if (contribValue > 0.05) color = '#28a745'; // Verde (positivo)
-                        else if (contribValue < -0.05) color = '#dc3545'; // Rojo (negativo)
-                        else color = '#6c757d'; // Gris (neutral)
+                        if (contribValue > 0.05) color = '#28a745';
+                        else if (contribValue < -0.05) color = '#dc3545';
                     }
-                    
+
                     html += '<td style="color: ' + color + '; font-weight: bold;">' + contribFormatted + '</td>';
-                    
+
                     // Impacto visual
                     html += '<td>';
                     if (typeof contribValue === 'number') {
                         var impactWidth = Math.min(Math.abs(contribValue) * 500, 100);
                         var impactColor = contribValue > 0 ? '#28a745' : '#dc3545';
                         html += '<div style="background-color: ' + impactColor + '; width: ' + impactWidth + '%; height: 10px; border-radius: 3px;"></div>';
-                        html += '<small>' + (contribValue > 0 ? '📈 Sube' : '📉 Baja') + ' el score</small>';
+                        html += '<small>' + (contribValue > 0 ? '📈 Sube' : '📉 Baja') + '</small>';
                     } else {
                         html += '<em>N/A</em>';
+                    }
+                    // Add view button to open modal with full JSON/value
+                    try {
+                        var btnId = 'view_var_' + varKey.replace(/[^a-z0-9_]/gi, '_') + '_' + i;
+                        html += '<div style="margin-top:6px;"><button onclick="openVarModal(\'' + btnId + '\')" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;">Ver</button></div>';
+                        // store the JSON in a hidden element
+                        html += '<div id="' + btnId + '" style="display:none;">' + escapeHtml(JSON.stringify(contribution !== undefined ? contribution : rawValue, null, 2)) + '</div>';
+                    } catch (e) {
+                        // ignore
                     }
                     html += '</td>';
                 } else {
                     html += '<td colspan="2"><em>N/A</em></td>';
                 }
-                
+
                 html += '</tr>';
             }
         }
-        
+
         html += '</tbody>';
         html += '</table>';
-        
-        // Top Positive Contributions
+
+        // Nueva sección: Resumen conciso para variables relacionadas con t2 y t6
+        html += '<h3>🔎 Resumen rápido: Variables t2 / t6</h3>';
+        html += '<table class="comparison-table" style="width:100%;">';
+        html += '<thead><tr><th>Variable</th><th>Resumen</th><th>Tipo</th></tr></thead><tbody>';
+
+        // Buscar claves que contengan t2 o t6 en contributions y rawData
+        var seenKeys = {};
+        function addSummaryForKey(k, v) {
+            if (seenKeys[k]) return; seenKeys[k] = true;
+            var type = Array.isArray(v) ? 'array' : (v && typeof v === 'object' ? 'object' : typeof v);
+            var summary = '';
+            if (Array.isArray(v)) {
+                summary = 'Array length: ' + v.length + ' — preview: ' + escapeHtml(JSON.stringify(v.slice(0,3)));
+            } else if (v && typeof v === 'object') {
+                var keys = Object.keys(v).slice(0,5);
+                summary = 'Object keys: ' + Object.keys(v).length + ' — sample: ' + escapeHtml(JSON.stringify(keys));
+            } else {
+                var s = String(v || '');
+                if (s.length > 120) s = s.substring(0,120) + '...';
+                summary = escapeHtml(s);
+            }
+            var safeId = 't2t6_' + k.replace(/[^a-z0-9_]/gi, '_');
+            html += '<tr><td><code>' + escapeHtml(k) + '</code></td><td style="font-size:12px;">' + summary + '</td><td>' + type + '</td>';
+            html += '<td><button onclick="openVarModal(\'' + safeId + '\')" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;">Ver</button></td></tr>';
+            // hidden holder with JSON
+            html += '<div id="' + safeId + '" style="display:none;">' + escapeHtml(JSON.stringify(v, null, 2)) + '</div>';
+        }
+
+        // scan contributions and rawData recursively to capture nested keys and variants like ent_t6, t2_MnPesos, etc.
+        var maxMatches = 100;
+        var foundCount = 0;
+        var keyPattern = /(^|[^a-z0-9])(t2|t_2|t6|t_6|ent_t6)([^a-z0-9]|$)/i;
+
+        function scanObj(obj, prefix, depth) {
+            if (!obj || foundCount >= maxMatches) return;
+            if (depth > 6) return; // avoid too deep recursion
+
+            if (Array.isArray(obj)) {
+                for (var ai = 0; ai < obj.length && foundCount < maxMatches; ai++) {
+                    var val = obj[ai];
+                    var p = prefix + '[' + ai + ']';
+                    // for array elements, if primitive, skip key check, but if object inspect
+                    if (val && typeof val === 'object') scanObj(val, p, depth + 1);
+                }
+                return;
+            }
+
+            if (typeof obj === 'object') {
+                for (var k in obj) {
+                    if (!Object.prototype.hasOwnProperty.call(obj, k) || foundCount >= maxMatches) continue;
+                    var v = obj[k];
+                    var fullKey = prefix ? (prefix + '.' + k) : k;
+
+                    // check key name pattern
+                    if (keyPattern.test(k) || keyPattern.test(fullKey)) {
+                        addSummaryForKey(fullKey, v);
+                        foundCount++;
+                    }
+
+                    // if value is object/array, recurse
+                    if (v && typeof v === 'object') {
+                        scanObj(v, fullKey, depth + 1);
+                    }
+                }
+            }
+        }
+
+        scanObj(contributions, '', 0);
+        scanObj(rawData, '', 0);
+
+        // If none found, put a friendly note
+        if (Object.keys(seenKeys).length === 0) {
+            html += '<tr><td colspan="3" style="color:#6c757d;">No se encontraron variables que contengan <code>t2</code> o <code>t6</code> en contributions/rawData</td></tr>';
+        }
+
+    html += '</tbody></table>';
+
+    // Modal container and JavaScript for viewing full variable JSON
+    html += '<div id="varModal" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;">';
+    html += '<div style="background:#fff;padding:20px;border-radius:6px;max-width:90%;max-height:90%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,0.3);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+    html += '<h3 id="varModalTitle" style="margin:0;font-size:18px;">Variable</h3>';
+    html += '<button onclick="closeVarModal()" style="padding:6px 10px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;">Cerrar</button>';
+    html += '</div>';
+    html += '<pre id="varModalContent" style="background:#f8f9fa;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;">JSON</pre>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<script>';
+    html += 'function openVarModal(id) {';
+    html += '  try {';
+    html += '    var holder = document.getElementById(id); if (!holder) return;';
+    html += '    var content = holder.innerHTML || holder.textContent || "";';
+    html += '    document.getElementById("varModalContent").innerText = content;';
+    html += '    document.getElementById("varModalTitle").innerText = id;';
+    html += '    document.getElementById("varModal").classList.remove("hidden");';
+    html += '  } catch (e) { console && console.error && console.error(e); }';
+    html += '}';
+    html += 'function closeVarModal() { document.getElementById("varModal").classList.add("hidden"); }';
+    html += '</script>';
+
+        // Top Positive / Negative Contributions
         html += '<h3>📈 Top Variables que SUBEN el Score</h3>';
         html += generateTopContributions(contributions, true, 5);
-        
-        // Top Negative Contributions
+
         html += '<h3>📉 Top Variables que BAJAN el Score</h3>';
         html += generateTopContributions(contributions, false, 5);
-        
+
         // Validation Issues
         if (validation.issues && validation.issues.length > 0) {
             html += '<h3>⚠️ Validaciones y Advertencias</h3>';
@@ -1460,7 +1583,7 @@ define([
             }
             html += '</ul>';
         }
-        
+
         // Data Quality
         html += '<h3>✅ Calidad de Datos</h3>';
         html += '<p><strong>Completitud:</strong> ';
@@ -1471,12 +1594,12 @@ define([
         }
         var completeness = Math.round((presentVars / totalVars) * 100);
         html += completeness + '% (' + presentVars + '/' + totalVars + ' variables presentes)</p>';
-        
+
         html += '<p><strong>Fuente de Datos:</strong> ' + (score.metadata && score.metadata.provider ? score.metadata.provider : 'N/A') + '</p>';
         html += '<p><strong>Fecha de Consulta:</strong> ' + (score.metadata && score.metadata.calculatedAt ? score.metadata.calculatedAt : 'N/A') + '</p>';
-        
+
         html += '</div>';
-        
+
         return html;
     }
 

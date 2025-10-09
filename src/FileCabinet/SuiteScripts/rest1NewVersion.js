@@ -102,14 +102,14 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
         
         if (!infoRep?.id) {
           // Caso NUEVO â†’ Scoring & BCU
-          // Usar motor bcuScore optimizado con fallback al SDB clásico
+          // Usar motor bcuScore optimizado con fallback al SDB clï¿½sico
           let score;
           try {
             score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, strictRules: true, debug: false });
           } catch (e) {
             // Fallback al motor antiguo si algo falla
             score = scoreLib.scoreFinal(docNumber);
-          }
+          } 
           if (score?.error_reglas) {
             const approvalStatus =
               score.error_reglas === 500 ? params.estadoErrorBCU :
@@ -297,7 +297,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 'custentity_sdb_montoofrecido': ofertaFinal?.internalid ? toNum(ofertaFinal?.oferta) : '',
                 'custentity_elm_oferta_final': ofertaFinal?.internalid ? toNum(ofertaFinal?.cuotaFinal) : '',
                 'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? toNum(ofertaFinal?.cuotaFinal) : '',
-                'custentity_elm_monto_cuota': ofertaFinal?.name || '',
+                'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
                 'custentity_elm_plazo': ofertaFinal?.plazo || '',
                 'custentity_score': infoRep.score,
                 'custentity_elm_lead_repetido_original': '',
@@ -306,7 +306,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 'custentity_sdb_actividad': activity,
                 'custentity_sdb_fechanac': dateOfBirth,
                 'custentity_elm_fecha_ingreso': workStartDate,
-                'custentity_sdb_infolab_importe': salary
+                'custentity_sdb_infolab_importe': salary,
+                'custentity_sdb_edad': age,
               },
               options: { enableSourcing: false, ignoreMandatoryFields: true }
             });
@@ -482,14 +483,15 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       'custentity_sdb_montoofrecido': ofertaFinal?.internalid ? toNum(ofertaFinal.oferta) : '',
       'custentity_elm_oferta_final': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
       'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
-      'custentity_elm_monto_cuota': ofertaFinal?.name || '',
+      'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
       'custentity_elm_plazo': ofertaFinal?.plazo || '',
       'custentity_sdb_actividad': activity || '',
       'custentity_sdb_fechanac': dateOfBirth || '',
       'custentity_elm_fecha_ingreso': workStartDate || '',
       'custentity_sdb_infolab_importe': isEmpty(salary) ? '' : salary,
       'custentity_score': isEmpty(score) ? '' : score,
-      'mobilephone': mobilephone || ''
+      'mobilephone': mobilephone || '',
+      'custentity_sdb_edad': age,
     };
 
     // Limpieza de undefined para evitar errores en submitFields
