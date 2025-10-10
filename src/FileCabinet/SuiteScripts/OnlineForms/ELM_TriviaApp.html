@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trivia Interactiva</title>
+  <style>
+    :root {
+      --bg-start: #4f46e5;
+      --bg-end: #06b6d4;
+      --surface: #ffffff;
+      --text: #0b1220;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-600: #1d4ed8;
+      --accent: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --ring: rgba(37, 99, 235, 0.25);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      color: var(--text);
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .app {
+      width: min(780px, 100%);
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.15);
+      overflow: hidden;
+    }
+    header.app-header {
+      padding: 22px 24px 14px;
+      border-bottom: 1px solid #eef2f7;
+    }
+    .title {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: .2px;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .content { padding: 22px; }
+    .views { position: relative; min-height: 420px; }
+    .view {
+      position: absolute; inset: 0;
+      opacity: 0; transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity .28s ease, transform .28s ease;
+    }
+    .view.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+    .grid { display: grid; gap: 14px; }
+    @media (min-width: 700px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+
+    label { font-size: 12px; color: var(--muted); display: block; margin: 2px 0 6px; }
+    .field { display: flex; flex-direction: column; }
+    input[type="text"], input[type="tel"] {
+      padding: 11px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      outline: none;
+      font-size: 15px;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    input[type="text"]:focus, input[type="tel"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px var(--ring);
+    }
+    .invalid input { border-color: var(--error); }
+    .form-error { color: var(--error); font-size: 13px; min-height: 18px; }
+
+    .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 10px; }
+    .btn {
+      appearance: none;
+      border: 0; border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 600; font-size: 14px;
+      cursor: pointer;
+      transition: transform .05s ease, background-color .2s ease, box-shadow .2s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 6px 14px rgba(37, 99, 235, .3); }
+    .btn-primary:hover { background: var(--primary-600); }
+    .btn-ghost { background: #f3f4f6; color: #111827; }
+    .btn-ghost:hover { background: #e5e7eb; }
+    .btn-success { background: var(--accent); color: #fff; }
+    .btn-danger { background: var(--error); color: #fff; }
+    .btn[disabled] { opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+    .progress { height: 8px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+    .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #60a5fa); transition: width .25s ease; }
+    .progress-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .progress-text { font-size: 12px; color: var(--muted); }
+
+    .question { font-size: 18px; font-weight: 700; margin: 12px 0 12px; }
+    .options { display: grid; gap: 10px; margin: 6px 0 6px; }
+    .option {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; text-align: left;
+      border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 12px 14px; background: #fff; color: inherit;
+    }
+    .option:hover { border-color: var(--primary); box-shadow: 0 0 0 4px var(--ring); }
+    .option.selected { border-color: var(--primary); background: #f0f6ff; }
+
+    .muted { color: var(--muted); font-size: 13px; }
+    .kpi { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 6px; }
+    .kpi .big { font-size: 32px; font-weight: 800; }
+    .kpi .tag { font-size: 12px; padding: 4px 8px; border-radius: 999px; }
+    .tag.success { background: #dcfce7; color: #166534; }
+    .tag.warn { background: #fef3c7; color: #92400e; }
+    .tag.error { background: #fee2e2; color: #991b1b; }
+
+    .save-status { margin-top: 12px; font-size: 14px; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; border-radius: 999px;
+      border: 2px solid #c7d2fe; border-top-color: var(--primary);
+      animation: spin .7s linear infinite; vertical-align: text-bottom; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @keyframes shake { 10%, 90% {transform: translateX(-1px);} 20%, 80% {transform: translateX(2px);} 30%, 50%, 70% {transform: translateX(-4px);} 40%, 60% {transform: translateX(4px);} }
+    .shake { animation: shake .4s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .view { transition: none; }
+      .option:hover { box-shadow: none; }
+      .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" role="main" aria-label="Aplicación de Trivia Interactiva">
+    <header class="app-header">
+      <h1 class="title">Trivia Interactiva</h1>
+      <p class="subtitle">Completá tus datos y poné a prueba tus conocimientos.</p>
+    </header>
+
+    <section class="content">
+      <div class="views">
+        <!-- 1) Formulario de registro -->
+        <div id="view-form" class="view active" aria-labelledby="form-title">
+          <h2 id="form-title" class="sr-only" style="position:absolute;left:-9999px;">Formulario de registro</h2>
+          <form id="registerForm" novalidate>
+            <div class="grid cols-2">
+              <div class="field" id="field-nombre">
+                <label for="nombre">Nombre</label>
+                <input type="text" id="nombre" name="nombre" placeholder="Ej.: Ana" required />
+              </div>
+              <div class="field" id="field-apellido">
+                <label for="apellido">Apellido</label>
+                <input type="text" id="apellido" name="apellido" placeholder="Ej.: Pérez" required />
+              </div>
+              <div class="field" id="field-cedula">
+                <label for="cedula">Cédula</label>
+                <input type="text" id="cedula" name="cedula" placeholder="Ej.: 4.123.456-7" required />
+              </div>
+              <div class="field" id="field-telefono">
+                <label for="telefono">Teléfono</label>
+                <input type="tel" id="telefono" name="telefono" placeholder="Ej.: 091234567" inputmode="tel" required />
+              </div>
+            </div>
+            <div id="formError" class="form-error" aria-live="polite"></div>
+            <div class="actions">
+              <button type="submit" class="btn btn-primary" id="btnStart">Comenzar</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 2) Vista de preguntas -->
+        <div id="view-quiz" class="view" aria-labelledby="quiz-title" aria-live="polite">
+          <div class="progress-row">
+            <div class="progress" style="flex:1; margin-right: 12px;">
+              <div id="progressBar" class="bar"></div>
+            </div>
+            <div id="progressText" class="progress-text">Pregunta 1 de 5</div>
+          </div>
+          <div class="question" id="questionText">Pregunta aparecerá aquí</div>
+          <div class="options" id="options"></div>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="btnNext" disabled>Siguiente</button>
+          </div>
+          <p class="muted" id="helperText"></p>
+        </div>
+
+        <!-- 3) Vista de resultado -->
+        <div id="view-result" class="view" aria-labelledby="result-title">
+          <h2 id="result-title" class="sr-only" style="position:absolute;left:-9999px;">Resultado</h2>
+          <div class="kpi">
+            <span class="big" id="scoreValue">0/0</span>
+            <span id="scorePercent" class="muted">0%</span>
+            <span id="scoreTag" class="tag">—</span>
+          </div>
+          <p id="scoreMessage" style="margin-top: 2px; font-weight: 600;"></p>
+
+          <div class="save-status" id="saveStatus" aria-live="polite"></div>
+
+          <div class="actions">
+            <button type="button" class="btn btn-success" id="btnRetrySend" style="display:none;">Reintentar envío</button>
+            <button type="button" class="btn btn-ghost" id="btnRestart">Volver a empezar</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ===== Preguntas (fácil de ampliar) =====
+    // Agregue o edite elementos en este arreglo. Cada pregunta tiene 3 opciones y el índice de la correcta.
+    const preguntas = [
+      {
+        pregunta: "¿Cuál es la capital de Uruguay?",
+        opciones: ["Montevideo", "Buenos Aires", "Asunción"],
+        correcta: 0
+      },
+      {
+        pregunta: "¿Cuántos departamentos tiene Uruguay?",
+        opciones: ["19", "21", "17"],
+        correcta: 0
+      },
+      {
+        pregunta: "¿Cuál es la moneda oficial de Uruguay?",
+        opciones: ["Peso uruguayo", "Real", "Peso argentino"],
+        correcta: 0
+      },
+      {
+        pregunta: "¿Cuál es el deporte más popular en Uruguay?",
+        opciones: ["Fútbol", "Rugby", "Básquetbol"],
+        correcta: 0
+      },
+      {
+        pregunta: "¿Qué colores predominan en la bandera de Uruguay?",
+        opciones: ["Azul y blanco con sol", "Rojo y blanco", "Verde y amarillo"],
+        correcta: 0
+      }
+    ];
+
+    // ===== Configuración del RESTlet =====
+    // Reemplace XXX por el ID interno del script del RESTlet (y el deploy si corresponde)
+    const RESTLET_SCRIPT_ID = 'XXX';
+    const RESTLET_DEPLOY_ID = '1';
+    const RESTLET_URL = `/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}`;
+
+    class TriviaApp {
+      constructor(preguntas) {
+        this.preguntas = preguntas;
+        this.state = {
+          idx: 0,
+          respuestas: Array(preguntas.length).fill(null),
+          puntaje: 0,
+          participante: null,
+          guardando: false,
+        };
+
+        // Vistas
+        this.viewForm = document.getElementById('view-form');
+        this.viewQuiz = document.getElementById('view-quiz');
+        this.viewResult = document.getElementById('view-result');
+
+        // Formulario
+        this.form = document.getElementById('registerForm');
+        this.$nombre = document.getElementById('nombre');
+        this.$apellido = document.getElementById('apellido');
+        this.$cedula = document.getElementById('cedula');
+        this.$telefono = document.getElementById('telefono');
+        this.formError = document.getElementById('formError');
+
+        // Quiz
+        this.$progressBar = document.getElementById('progressBar');
+        this.$progressText = document.getElementById('progressText');
+        this.$questionText = document.getElementById('questionText');
+        this.$options = document.getElementById('options');
+        this.$btnNext = document.getElementById('btnNext');
+        this.$helper = document.getElementById('helperText');
+
+        // Resultados
+        this.$scoreValue = document.getElementById('scoreValue');
+        this.$scorePercent = document.getElementById('scorePercent');
+        this.$scoreTag = document.getElementById('scoreTag');
+        this.$scoreMessage = document.getElementById('scoreMessage');
+        this.$saveStatus = document.getElementById('saveStatus');
+        this.$btnRetrySend = document.getElementById('btnRetrySend');
+        this.$btnRestart = document.getElementById('btnRestart');
+      }
+
+      init() {
+        this.bindForm();
+        this.bindQuiz();
+        this.bindResult();
+        this.showView('form');
+      }
+
+      // ----- Navegación entre vistas -----
+      showView(name) {
+        [this.viewForm, this.viewQuiz, this.viewResult].forEach(v => v.classList.remove('active'));
+        if (name === 'form') this.viewForm.classList.add('active');
+        if (name === 'quiz') this.viewQuiz.classList.add('active');
+        if (name === 'result') this.viewResult.classList.add('active');
+      }
+
+      // ----- Formulario -----
+      bindForm() {
+        this.form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const ok = this.validateForm();
+          if (!ok) return;
+          this.state.participante = {
+            nombre: this.$nombre.value.trim(),
+            apellido: this.$apellido.value.trim(),
+            cedula: this.$cedula.value.trim(),
+            telefono: this.$telefono.value.trim(),
+          };
+          this.resetQuiz();
+          this.showView('quiz');
+          this.renderQuestion(0);
+        });
+      }
+
+      validateForm() {
+        let error = '';
+        const trim = v => (v || '').trim();
+        const nombre = trim(this.$nombre.value);
+        const apellido = trim(this.$apellido.value);
+        const cedula = trim(this.$cedula.value);
+        const telefono = trim(this.$telefono.value);
+
+        // Limpia estados
+        ['nombre','apellido','cedula','telefono'].forEach(id => {
+          document.getElementById(`field-${id}`).classList.remove('invalid');
+        });
+
+        if (!nombre) { error = 'Por favor ingresá tu nombre.'; document.getElementById('field-nombre').classList.add('invalid'); }
+        else if (!apellido) { error = 'Por favor ingresá tu apellido.'; document.getElementById('field-apellido').classList.add('invalid'); }
+        else if (!cedula) { error = 'Por favor ingresá tu cédula.'; document.getElementById('field-cedula').classList.add('invalid'); }
+        else if (!telefono) { error = 'Por favor ingresá tu teléfono.'; document.getElementById('field-telefono').classList.add('invalid'); }
+        else if (!/^[0-9 .\-]+$/.test(cedula)) { error = 'La cédula debe contener solo números y separadores.'; document.getElementById('field-cedula').classList.add('invalid'); }
+        else if (!/^[0-9 +()\-]{7,}$/.test(telefono)) { error = 'El teléfono no parece válido.'; document.getElementById('field-telefono').classList.add('invalid'); }
+
+        this.formError.textContent = error;
+        if (error) {
+          this.form.classList.remove('shake');
+          void this.form.offsetWidth; // restart animation
+          this.form.classList.add('shake');
+          setTimeout(() => this.form.classList.remove('shake'), 450);
+          return false;
+        }
+        return true;
+      }
+
+      // ----- Quiz -----
+      bindQuiz() {
+        this.$options.addEventListener('click', (e) => {
+          const btn = e.target.closest('button.option');
+          if (!btn) return;
+          const selectedIndex = parseInt(btn.dataset.index, 10);
+          this.selectOption(selectedIndex);
+        });
+
+        this.$btnNext.addEventListener('click', () => {
+          if (this.state.respuestas[this.state.idx] == null) {
+            this.$helper.textContent = 'Seleccioná una opción para continuar.';
+            this.$helper.classList.remove('shake');
+            void this.$helper.offsetWidth;
+            this.$helper.classList.add('shake');
+            setTimeout(() => this.$helper.classList.remove('shake'), 400);
+            return;
+          }
+          if (this.state.idx >= this.preguntas.length - 1) {
+            this.finishQuiz();
+          } else {
+            this.renderQuestion(this.state.idx + 1);
+          }
+        });
+      }
+
+      resetQuiz() {
+        this.state.idx = 0;
+        this.state.respuestas = Array(this.preguntas.length).fill(null);
+        this.state.puntaje = 0;
+        this.$helper.textContent = '';
+        this.$btnNext.disabled = true;
+      }
+
+      renderQuestion(index) {
+        this.state.idx = index;
+        const q = this.preguntas[index];
+        this.$questionText.textContent = q.pregunta;
+        this.$options.innerHTML = '';
+        q.opciones.forEach((op, i) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'option btn';
+          btn.dataset.index = String(i);
+          btn.innerHTML = `${String.fromCharCode(65 + i)}. ${op}`;
+          if (this.state.respuestas[index] === i) btn.classList.add('selected');
+          this.$options.appendChild(btn);
+        });
+
+        // Barra de progreso y textos
+        const n = this.preguntas.length;
+        this.$progressText.textContent = `Pregunta ${index + 1} de ${n}`;
+        this.$progressBar.style.width = `${((index) / n) * 100}%`;
+        this.$helper.textContent = '';
+        const hasSelection = this.state.respuestas[index] != null;
+        this.$btnNext.disabled = !hasSelection;
+        this.$btnNext.textContent = index === n - 1 ? 'Finalizar' : 'Siguiente';
+      }
+
+      selectOption(i) {
+        // Marca selección
+        [...this.$options.querySelectorAll('.option')].forEach(btn => btn.classList.remove('selected'));
+        const btn = this.$options.querySelector(`.option[data-index="${i}"]`);
+        if (btn) btn.classList.add('selected');
+        this.state.respuestas[this.state.idx] = i;
+        this.$btnNext.disabled = false;
+      }
+
+      finishQuiz() {
+        const total = this.preguntas.length;
+        let score = 0;
+        this.state.respuestas.forEach((r, i) => { if (r === this.preguntas[i].correcta) score++; });
+        this.state.puntaje = score;
+        this.updateResultUI(score, total);
+        this.showView('result');
+        this.submitToNetSuite();
+      }
+
+      updateResultUI(score, total) {
+        const pct = Math.round((score / total) * 100);
+        this.$scoreValue.textContent = `${score}/${total}`;
+        this.$scorePercent.textContent = `${pct}%`;
+        let tagClass = 'success';
+        let tagText = 'Excelente';
+        let msg = '¡Excelente desempeño!';
+        if (pct >= 80) { tagClass = 'success'; tagText = 'Excelente'; msg = '¡Excelente! Dominaste esta trivia.'; }
+        else if (pct >= 50) { tagClass = 'warn'; tagText = 'Buen intento'; msg = 'Buen intento, estás cerca de la perfección.'; }
+        else { tagClass = 'error'; tagText = 'Podés mejorar'; msg = 'Podés mejorar. ¡Volvé a intentarlo!'; }
+        this.$scoreTag.className = `tag ${tagClass}`;
+        this.$scoreTag.textContent = tagText;
+        this.$scoreMessage.textContent = msg;
+      }
+
+      // ----- Envío a NetSuite -----
+      async submitToNetSuite() {
+        const payload = {
+          nombre: this.state.participante?.nombre || '',
+          apellido: this.state.participante?.apellido || '',
+          cedula: this.state.participante?.cedula || '',
+          telefono: this.state.participante?.telefono || '',
+          puntaje: this.state.puntaje,
+        };
+        this.renderSaving('Guardando datos…');
+        this.$btnRetrySend.style.display = 'none';
+        try {
+          const res = await fetch(RESTLET_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          let data = null;
+          try { data = await res.clone().json(); } catch (_) { data = { raw: await res.text() }; }
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+          const ok = (data && (data.success === true || data.status === 'success')) || res.ok;
+          if (ok) {
+            const id = data?.id || data?.internalId || '—';
+            this.renderSuccess(`Datos guardados correctamente. ID: ${id}`);
+          } else {
+            throw new Error('Respuesta inesperada del servidor');
+          }
+        } catch (err) {
+          console.error('Error al guardar en NetSuite:', err);
+          this.renderError('No se pudo guardar en NetSuite. Verificá el script/deploy y los permisos.');
+          this.$btnRetrySend.style.display = '';
+        }
+      }
+
+      bindResult() {
+        this.$btnRetrySend.addEventListener('click', () => this.submitToNetSuite());
+        this.$btnRestart.addEventListener('click', () => {
+          this.form.reset();
+          this.formError.textContent = '';
+          this.resetQuiz();
+          this.showView('form');
+        });
+      }
+
+      renderSaving(text) {
+        this.$saveStatus.innerHTML = `<span class="spinner"></span>${text}`;
+      }
+      renderSuccess(text) {
+        this.$saveStatus.innerHTML = `✅ ${text}`;
+      }
+      renderError(text) {
+        this.$saveStatus.innerHTML = `❌ ${text}`;
+      }
+    }
+
+    // Inicialización
+    (function () {
+      const app = new TriviaApp(preguntas);
+      app.init();
+    })();
+  </script>
+</body>
+</html>
+

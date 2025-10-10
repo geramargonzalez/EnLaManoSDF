@@ -90,8 +90,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                          
                      
                            const score = scoreLib.scoreFinal(docNumber);
-                           log.debug('Score', JSON.stringify(score));
-                            const bcuData = auxLib.extractBcuData(score);
+                           const bcuData = auxLib.extractBcuData(score);
                            const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
                            const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
                            const cantEntidadesT2 = t2Info?.entidades.length || 0;
@@ -142,14 +141,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
-
-
                                if (source == 'AlPrestamo' && !ofertaFinal) {
                                   isLatente = false;
                               }
-
-                              
-                              
                               if (isLatente) {
                                   const estadoAprobExternal = mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.estadoLatente;
                                   const estadoAprobadoInTernal =  mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.pendienteDeEvaluacion;

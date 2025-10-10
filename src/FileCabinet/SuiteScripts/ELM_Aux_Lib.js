@@ -230,6 +230,44 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
       }
 
+      function isClientActive(docNumber) {
+         const stLogTitle = 'isClientActive';
+         try {
+            let isClient = false;
+            const listaNegra = search.create({
+                  type: "customrecord_sdb_lista_negra",
+                  filters:
+                  [
+                     ["custrecord_sdb_nrodoc","equalto",docNumber]
+                  ],
+                  columns:
+                  [
+                     search.createColumn({name: "custrecord_sdb_nombre", label: "Nombre"})
+                  ]
+               });
+               var searchResultCount = customrecord_sdb_lista_negraSearchObj.runPaged().count;
+               log.debug("listaNegra result count",searchResultCount);
+               listaNegra.run().each(function(result){
+                  // Process each result
+                  // .run().each has a limit of 4,000 results
+                  if(result.getValue('custrecord_sdb_nombre') == 'prest_act'){
+                     isClient = true;
+                  }
+                  return true;
+               });
+
+               return isClient;
+
+         } catch (error) {
+            log.error(stLogTitle, error);
+            throw errorModule.create({
+               name: 'IS_CLIENT_ERROR',
+               message: 'Error checking if document number is client: ' + docNumber + '. Details: ' + error.message,
+               notifyOff: true
+            });
+         }
+      }
+
       function checkMocasist(docNumber) {
          var stLogTitle = 'checkMocasist';
          try {
@@ -713,6 +751,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       function getPonderador(score, peor_calif_bcu, endeudamiento, salario, actividad, edad, canal) {
          const stLogTitle = 'getPonderador';
          try {
+            
             const montoCuotaObj = {
                montoCuotaId: -1,
                ponderador: -1
@@ -755,7 +794,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
             
             // Add canal filter only if canal has a value
-            log.debug('montoCuotaSS filters', JSON.stringify(filters));
+
             montoCuotaSS.run().each(function (result) {
                montoCuotaObj.montoCuotaId = result.id;
                montoCuotaObj.montoCuotaName = result.getValue('name');
@@ -1739,7 +1778,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          updateLogWithResponse: updateLogWithResponse,
          createRecordAuditCambios:createRecordAuditCambios,
          createEtapaSolicitud: createEtapaSolicitud,
-         snapshotAprobados: snapshotAprobados
+         snapshotAprobados: snapshotAprobados,
+         isClientActive: isClientActive,
       }
    });
 

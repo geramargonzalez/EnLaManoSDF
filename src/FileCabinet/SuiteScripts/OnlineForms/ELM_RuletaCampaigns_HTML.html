@@ -1,0 +1,359 @@
+<!doctype html>
+
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ruleta de Premios</title>
+  <style>
+    :root{
+      --bg:#0b1020; --card:#11172a; --ink:#eaf0ff; --muted:#95a2c7;
+      --accent:#5ef0ff; --accent-2:#8b5cf6; --win:#22c55e; --danger:#ef4444;
+      --radius:18px; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1000px 700px at 70% -100px, #1c2d52 0%, #0b1020 55%);color:var(--ink);
+         font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,"Noto Sans",sans-serif}
+    .wrap{max-width:600px;margin:40px auto;padding:24px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+          border:1px solid rgba(255,255,255,.08); border-radius:var(--radius); box-shadow:var(--shadow)}
+    .panel{padding:30px}
+
+    .title{font-weight:700;font-size:26px;letter-spacing:.2px;margin:0 0 8px;text-align:center}
+    .subtitle{color:var(--muted);font-size:16px;text-align:center;margin-bottom:24px}
+    
+    .form-group{margin-bottom:16px}
+    label{display:block;margin-bottom:6px;font-weight:600;font-size:14px}
+    input[type="text"], input[type="number"]{width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.15);
+                                               background:#0f1526; color:var(--ink);font-size:16px}
+    input:focus{outline:none;border-color:var(--accent)}
+    
+    .stage{display:flex;align-items:center;justify-content:center; padding:16px}
+    canvas{display:block; max-width:100%; height:auto}
+
+    .controls{display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;justify-content:center}
+    button{appearance:none; border:0; cursor:pointer; border-radius:14px; padding:14px 24px; font-weight:700;font-size:16px;width:100%}
+    .primary{background:linear-gradient(90deg,var(--accent-2),var(--accent)); color:#071018}
+    .primary:disabled{opacity:0.5;cursor:not-allowed}
+
+    .pointer{position:relative; width:0; height:0; border-left:16px solid transparent; border-right:16px solid transparent;
+             border-bottom:26px solid #ffd166; margin: 0 auto 8px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.35));}
+    .pointer::after{content:""; position:absolute; left:-10px; top:22px; width:20px; height:8px; background:#a16207; border-radius:4px}
+
+    .result{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.5)}
+    .result.show{display:grid}
+    .modal{background:var(--card); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:30px; width:min(520px,92%);text-align:center}
+    .badge{display:inline-block;padding:6px 12px;border-radius:999px;font-size:14px;font-weight:700; background:rgba(34,197,94,.16); color:#86efac;margin-bottom:12px}
+    .result h2{font-size:32px;margin:10px 0}
+    .result p{color:var(--muted);margin:8px 0 20px}
+    
+    .hidden{display:none!important}
+    
+    /* Ocultar campos cuando el formulario está oculto */
+    body.show-wheel #formSection,
+    body.show-wheel .nlform-field:not(#wheelSection):not(#result) {display:none!important}
+    
+    body.show-wheel #wheelSection {display:block!important}
+  </style>
+</head>
+<body>
+<NLFORM>
+  <div class="wrap">
+    <!-- Formulario de datos -->
+    <div class="card panel" id="formSection">
+      <h1 class="title">¡Participa y Gana!</h1>
+      <p class="subtitle">Ingresa tus datos para girar la ruleta</p>
+      
+      <div class="form-group">
+        <label for="firstname">Nombre</label>
+        <NLFIRSTNAME></NLFIRSTNAME>
+      </div>
+      
+      <div class="form-group">
+        <label for="lastname">Apellido</label>
+        <NLLASTNAME></NLLASTNAME>
+      </div>
+      
+      <div class="form-group">
+        <label for="phone">Celular</label>
+        <NLPHONE></NLPHONE>
+      </div>
+      
+      <div class="form-group">
+        <label for="custentity_sdb_nrdocumento">Cédula (sin puntos ni guiones)</label>
+        <NLCUSTENTITY_SDB_NRDOCUMENTO></NLCUSTENTITY_SDB_NRDOCUMENTO>
+      </div>
+      
+      <div class="controls">
+        <button type="button" id="startBtn" class="primary">Continuar</button>
+      </div>
+    </div>
+
+    <!-- Ruleta (oculta inicialmente) -->
+    <div class="card panel hidden" id="wheelSection">
+      <h1 class="title">¡Gira la Ruleta!</h1>
+      <p class="subtitle" id="userName">Buena suerte</p>
+      
+      <div class="stage">
+        <div style="width:100%; max-width:500px;">
+          <div class="pointer"></div>
+          <canvas id="wheel" width="600" height="600" aria-label="ruleta"></canvas>
+        </div>
+      </div>
+      
+      <div class="controls">
+        <button type="button" id="spinBtn" class="primary">🎰 Girar Ruleta</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Campo oculto solo para el premio -->
+  <input type="hidden" id="premio" name="custentity_premio" value="">
+
+  <!-- Modal de resultado -->
+  <div class="result" id="result">
+    <div class="modal">
+      <div class="badge">¡Felicitaciones!</div>
+      <h2 id="resTitle">Resultado</h2>
+      <p id="resDesc">Tu premio</p>
+      <p class="subtitle">Redirigiendo en <span id="countdown">3</span> segundos...</p>
+    </div>
+  </div>
+</NLFORM>
+<script>
+(function(){
+  // ======== DATOS DEL USUARIO ========
+  let userData = {
+    nombre: '',
+    apellido: '',
+    cedula: ''
+  };
+
+  // ======== UTIL ========
+  const TAU = Math.PI * 2;
+  const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+  // ======== RULETA CORE ========
+  let canvas, ctx, size, r, cx, cy;
+  
+  function initCanvas() {
+    canvas = document.getElementById('wheel');
+    ctx = canvas.getContext('2d');
+    size = canvas.width;
+    r = size/2;
+    cx = r;
+    cy = r;
+  }
+
+  let segments = [
+    { label: 'Sigue Participando', weight: 2, color: '#334155' },
+    { label: '5% OFF', weight: 3, color: '#0ea5e9' },
+    { label: 'Envío Gratis', weight: 2, color: '#22c55e' },
+    { label: '10% OFF', weight: 2, color: '#f59e0b' },
+    { label: '15% OFF', weight: 1, color: '#ef4444' },
+    { label: 'Gift Card $500', weight: 1, color: '#8b5cf6' },
+  ];
+
+  let spinning = false;
+  let angle = -Math.PI/2; // 12 en punto hacia arriba
+  let onResult = (seg, idx) => { };
+
+  function totalWeight(){ return segments.reduce((a,s)=>a+(+s.weight||0),0) || 1; }
+
+  function draw(){
+    if (!ctx) return; // No dibujar si el canvas no está inicializado
+    ctx.clearRect(0,0,size,size);
+
+    // Fondo
+    ctx.save();
+    const grd = ctx.createRadialGradient(cx,cy,40,cx,cy,r);
+    grd.addColorStop(0,'#0f172a'); grd.addColorStop(1,'#0b1020');
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(cx,cy,r,0,TAU); ctx.fill();
+
+    // Borde
+    ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(255,255,255,.15)';
+
+    // Calcular ángulos según peso
+    const tw = totalWeight();
+    let start = angle; // ángulo actual para rotación
+
+    for(const segment of segments){
+      const ratio = (segment.weight || 1) / tw;
+      const sweep = ratio * TAU;
+      const a0 = start, a1 = start + sweep;
+
+      // Sector
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r-6,a0,a1); ctx.closePath();
+      ctx.fillStyle = segment.color || '#0ea5e9'; ctx.fill(); ctx.stroke();
+
+      // Texto
+      const mid = (a0+a1)/2;
+      ctx.save();
+      ctx.translate(cx + Math.cos(mid)*(r*0.65), cy + Math.sin(mid)*(r*0.65));
+      ctx.rotate(mid + Math.PI/2);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui, Arial';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const text = segment.label;
+      // recorte para textos largos
+      const maxW = r * 0.9; let t = text;
+      while(ctx.measureText(t).width > maxW && t.length>3){ t = t.slice(0,-2); }
+      ctx.fillText(t,0,0); ctx.restore();
+
+      start = a1;
+    }
+
+    // Centro
+    ctx.beginPath(); ctx.arc(cx,cy,22,0,TAU); ctx.fillStyle = '#0ea5e9'; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,10,0,TAU); ctx.fillStyle = '#fff'; ctx.fill();
+
+    ctx.restore();
+  }
+
+
+
+  function pickWeighted(){
+    let x = Math.random() * totalWeight();
+    for(let i=0;i<segments.length;i++){
+      x -= (segments[i].weight || 1);
+      if (x < 0) return i;
+    }
+    return segments.length-1;
+  }
+
+  function angleForIndex(index){
+    // Devuelve un ángulo final tal que el segmento index quede arriba (12 en punto).
+    const tw = totalWeight();
+    let acc = 0;
+    for(let i=0;i<segments.length;i++){
+      const ratio = (segments[i].weight||1)/tw;
+      const sweep = ratio * TAU;
+      if (i === index){
+        const mid = acc + sweep/2; // centro del segmento
+        const targetAngle = -Math.PI/2 - mid; // para que su centro quede en 12
+        return targetAngle;
+      }
+      acc += sweep;
+    }
+    return -Math.PI/2;
+  }
+
+  async function spin(){
+    if (spinning || segments.length === 0) return;
+    spinning = true;
+
+    // Elegimos ganador por peso
+    const idx = pickWeighted();
+    const target = angleForIndex(idx);
+
+    // Agregar vueltas extra para animación (entre 3.5 y 5.5 vueltas)
+    const extra = TAU * (3.5 + Math.random()*2);
+    const startAngle = angle;
+    const endAngle = target - extra;
+
+    const D = 4000 + Math.random()*1200; // duración 4-5.2s
+    const t0 = performance.now();
+
+    return new Promise(resolve=>{
+      function frame(t){
+        const p = Math.min(1, (t - t0)/D);
+        const e = easeOutCubic(p);
+        angle = startAngle + (endAngle - startAngle) * e;
+        draw();
+        if (p < 1) requestAnimationFrame(frame); else {
+          spinning = false;
+          const winner = segments[idx];
+          onResult(winner, idx);
+          showResult(winner);
+          resolve(winner);
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  function showResult(seg){
+    const modal = document.getElementById('result');
+    document.getElementById('resTitle').textContent = seg.label;
+    document.getElementById('resDesc').textContent = '¡Has ganado!';
+    modal.classList.add('show');
+    
+    // Guardar el premio en campo oculto
+    document.getElementById('premio').value = seg.label;
+    
+    // Countdown
+    let counter = 3;
+    const countdownEl = document.getElementById('countdown');
+    const interval = setInterval(function() {
+      counter--;
+      if (counter > 0) {
+        countdownEl.textContent = counter;
+      } else {
+        clearInterval(interval);
+        // Enviar el formulario a NetSuite
+        document.querySelector('form').submit();
+      }
+    }, 1000);
+  }
+
+  // ======== DOM HOOKS ========
+  
+  // Botón para iniciar (después del formulario)
+  document.getElementById('startBtn').addEventListener('click', function(e){
+    e.preventDefault(); // Prevenir submit del formulario
+    
+    // Obtener valores de los campos de NetSuite
+    const nombre = document.querySelector('input[name="firstname"]').value.trim();
+    const apellido = document.querySelector('input[name="lastname"]').value.trim();
+    const telefono = document.querySelector('input[name="phone"]').value.trim();
+    const cedula = document.querySelector('input[name="custentity_sdb_nrdocumento"]').value.trim();
+    
+    if (!nombre || !apellido || !telefono || !cedula) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+    
+    userData = { nombre, apellido, telefono, cedula };
+    
+    // Mostrar ruleta y ocultar formulario
+    document.body.classList.add('show-wheel');
+    document.getElementById('formSection').classList.add('hidden');
+    document.getElementById('wheelSection').classList.remove('hidden');
+    document.getElementById('userName').textContent = 'Buena suerte, ' + nombre + '!';
+    
+    // Inicializar canvas después de mostrarlo
+    setTimeout(function() {
+      initCanvas();
+      draw();
+    }, 100);
+  });
+  
+  // Botón para girar la ruleta
+  document.getElementById('spinBtn').addEventListener('click', function(e) {
+    e.preventDefault(); // Prevenir submit
+    spin();
+  });
+
+  // ======== API PÚBLICA ========
+  window.Ruleta = {
+    setSegments(arr){
+      // arr: [{label, weight, color?}] — color opcional
+      if (!Array.isArray(arr) || !arr.length) return;
+      segments = arr.map(s=>({
+        label: String(s.label||'Segmento'),
+        weight: Math.max(1, parseInt(s.weight||1,10)),
+        color: s.color || '#0ea5e9'
+      }));
+      angle = -Math.PI/2;
+      draw();
+    },
+    onResult(cb){ onResult = typeof cb === 'function' ? cb : onResult; },
+    spin,
+    get segments(){ return segments.slice(); },
+    getUserData(){ return userData; }
+  };
+
+})();
+</script>
+</body>
+</html>
