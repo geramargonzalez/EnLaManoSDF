@@ -34,6 +34,18 @@ define(['N/log'], function (log) {
         return false;
     }
 
+    // Versión optimizada: chequea flag booleano antes de normalizar cadenas
+    function containsContingencyFast(rubros) {
+        if (!Array.isArray(rubros)) return false;
+        for (let i = 0, n = rubros.length; i < n; i++) {
+            const r = rubros[i] || {};
+            if (r.cont === true) return true;
+            const rubro = safeUpper((r.rubro || r.Rubro || r.tipo || r.Tipo || '').toString()).trim();
+            if (rubro.indexOf('CONTING') > -1 || rubro === 'CONTINGENCIAS') return true;
+        }
+        return false;
+    }
+
     function containsVigenciaRubro(rubros) {
         if (!Array.isArray(rubros)) return false;
         for (let i = 0; i < rubros.length; i++) {
@@ -44,6 +56,21 @@ define(['N/log'], function (log) {
             if (rubro.indexOf('VIGENTE') === 0 || rubro === 'VIGENTE') {
                 return true;
             }
+        }
+        return false;
+    }
+
+    // Optimizada: chequea flags booleanos antes y evita normalización innecesaria
+    function containsVigenciaRubroFast(rubros) {
+        if (!Array.isArray(rubros)) return false;
+        for (let i = 0, n = rubros.length; i < n; i++) {
+            const r = rubros[i] || {};
+            if (r.vig === true || r.vigente === true || r.vigencia === true) return true;
+            const rubro = (r.rubro || r.Rubro || r.nombre || r.tipo || '').toString();
+            if (!rubro) continue;
+            if (rubro.length < 7) continue;
+            const up = rubro.toUpperCase();
+            if (up.indexOf('VIGENTE') === 0 || up === 'VIGENTE') return true;
         }
         return false;
     }
@@ -59,6 +86,8 @@ define(['N/log'], function (log) {
 
         // Inicializar log para compatibilidad con el script original
         let logTxt = '<P>En scoring...</P>';
+        const debugEnabled = !!(scoringRules && scoringRules.debug);
+        function dbg(title, details) { if (debugEnabled) { try { log.debug(title, details); } catch (e) {} } }
 
         const rejectionRules = scoringRules.rejectionRules;
         const flags = normalizedData.flags || {};
@@ -113,7 +142,7 @@ define(['N/log'], function (log) {
 
         // Coeficientes binned centralizados en scoringRules.binned
         const binnedFromRules = (scoringRules && scoringRules.binned) || {};
-        try { log.debug('Binned snapshot', binnedFromRules); } catch (e) {}
+        if (debugEnabled) { try { log.debug('Binned snapshot', binnedFromRules); } catch (e) {} }
 
         function getBinnedValue(binnedKey) {
             if (typeof binnedFromRules[binnedKey] === 'number') return binnedFromRules[binnedKey];
@@ -171,7 +200,7 @@ define(['N/log'], function (log) {
         let t6_mePesos = -1;
 
         // Intentar desde rubrosValoresGenerales directamente (igual que producción)
-        try {
+        if (debugEnabled) { try {
             if (t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) {
                 t2_mnPesos = t0.rubrosValoresGenerales[0].MnPesos;
             }
@@ -229,7 +258,6 @@ define(['N/log'], function (log) {
         }
 
         // Construir estructuras t2/t6 similares a las del original para las comprobaciones por NombreEntidad y Calificacion
-        let objectCalification = { '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10 };
         let malasCalificaciones = ['2B', '3', '4', '5']; // Malas calificaciones que causan rechazo inmediato
         let calificacionMinima = '0'; // Inicializar calificacionMinima
 
@@ -245,34 +273,36 @@ define(['N/log'], function (log) {
             }
             
             let nombreEntidad = e.entidad || e.nombreEntidad || '';
-            let hasCont = containsContingency(e.rubros || []);
+            let hasCont = containsContingencyFast(e.rubros || []);
             
             // DEBUG: Log TODAS las entidades para encontrar el problema
-            log.debug('Entity ' + i, {
-                nombre: nombreEntidad,
-                hasCont: hasCont,
-                rubrosCount: (e.rubros || []).length,
-                primerosRubros: (e.rubros || []).slice(0, 3).map(function(r) { 
-                    return { Rubro: r.Rubro, rubro: r.rubro }; 
-                })
-            });
+            if (debugEnabled) {
+                dbg('Entity ' + i, {
+                    nombre: nombreEntidad,
+                    hasCont: hasCont,
+                    rubrosCount: (e.rubros || []).length,
+                    primerosRubros: (e.rubros || []).slice(0, 3).map(function(r) { 
+                        return { Rubro: r.Rubro, rubro: r.rubro }; 
+                    })
+                });
+            }
             
             // DEBUG: Log específico para entidades con "Vizcaya" o "BBVA" en el nombre
-            if (nombreEntidad.indexOf('Vizcaya') > -1 || nombreEntidad.toUpperCase().indexOf('BBVA') > -1) {
-                log.debug('BBVA/Vizcaya Entity Found', {
+            if (debugEnabled && (nombreEntidad.indexOf('Vizcaya') > -1 || nombreEntidad.toUpperCase().indexOf('BBVA') > -1)) {
+                dbg('BBVA/Vizcaya Entity Found', {
                     nombre: nombreEntidad,
                     hasCont: hasCont,
                     rubrosLength: (e.rubros || []).length,
-                    todosLosRubros: JSON.stringify(e.rubros || [])
+                    todosLosRubros: JSON.stringify((e.rubros || []).slice(0, 10))
                 });
             }
             
             t2List.push({
                 NombreEntidad: nombreEntidad,
                 Calificacion: calif,
-                CalificacionMinima0: objectCalification[calif] || 0,
+                CalificacionMinima0: RATING_ORDER[safeUpper(calif)] || 0,
                 Cont: hasCont,
-                vig: containsVigenciaRubro(e.rubros || [])
+                vig: containsVigenciaRubroFast(e.rubros || [])
             });
             
             // Actualizar calificacionMinima igual que producción
@@ -290,9 +320,9 @@ define(['N/log'], function (log) {
             t6List.push({
                 NombreEntidad: e2.entidad || e2.nombreEntidad || '',
                 Calificacion: (e2.rating || e2.calificacion || '').toString(),
-                CalificacionMinima: objectCalification[(e2.rating || e2.calificacion || '')] || 0,
-                Cont: containsContingency(e2.rubros || []),
-                vig: containsVigenciaRubro(e2.rubros || [])
+                CalificacionMinima: RATING_ORDER[safeUpper(e2.rating || e2.calificacion || '')] || 0,
+                Cont: containsContingencyFast(e2.rubros || []),
+                vig: containsVigenciaRubroFast(e2.rubros || [])
             });
         }
 
@@ -304,21 +334,8 @@ define(['N/log'], function (log) {
         else if (t6len > 5) ent_t6_binned_res = 80; // replicando el comportamiento del original
 
         // recorrer t6 para asignaciones por entidad
-        let contador = 0;
-        let min = 0;
-        let objectMin = {};
-        for (let k = 0; k < t6List.length; k++) {
-            let current = t6List[k];
-            if ((current.CalificacionMinima || 0) >= min) {
-                min = current.CalificacionMinima || 0;
-                objectMin = current;
-            }
-        }
-
-        // t6 por calificacion
-        if ((objectMin.CalificacionMinima || 0) >= 5) {
-            t6_binned_res = -9.95;
-        }
+        let contador = t6len;
+        let __maxCalifMinT6 = 0;
 
         // Defaults negativos antes del recorrido para evitar resets dentro del loop
         t6_creditel_binned_res = -17.15;
@@ -329,45 +346,48 @@ define(['N/log'], function (log) {
         t6_pronto_binned_res = -7.86;
         cred_dir_binned_res = -4.12;
 
-        for (let key in t6List) {
-            let current = t6List[key];
-            contador = contador + 1;
+        for (let __i = 0, __n = t6List.length; __i < __n; __i++) {
+            let current = t6List[__i];
+            const nameU = safeUpper(current.NombreEntidad);
+            const califU = safeUpper(current.Calificacion);
+            const calMinNum = current.CalificacionMinima || 0;
+            if (calMinNum >= __maxCalifMinT6) __maxCalifMinT6 = calMinNum;
 
             if (t6_binned_res !== -9.95) {
-                if (!current.Calificacion || current.Calificacion === '') {
+                if (!califU) {
                     t6_binned_res = -68.53;
-                } else if (current.Calificacion === '2B' && t6_binned_res !== 14.88) {
+                } else if (califU === '2B' && t6_binned_res !== 14.88) {
                     t6_binned_res = 14.88;
-                } else if (['1C', '1A', '2A', '0'].indexOf(current.Calificacion) > -1) {
+                } else if (califU === '1C' || califU === '1A' || califU === '2A' || califU === '0') {
                     t6_binned_res = 31.94;
                 }
             }
 
             // creditel (SOCUR)
-            if ((current.NombreEntidad || '').indexOf('SOCUR') > -1) {
+            if (nameU.indexOf('SOCUR') > -1) {
                 t6_creditel_binned_res = 40.62;
             }
 
             // OCA
-            if ((current.NombreEntidad || '').indexOf('OCA') > -1 && (current.Calificacion === '1C' || current.Calificacion === '1A')) {
+            if (nameU.indexOf('OCA') > -1 && (califU === '1C' || califU === '1A')) {
                 t6_oca_binned_res = 50.39;
             }
 
             // CREDITOS DIRECTOS / cred_dir_binned_res (replicar la lógica tal cual del original, incluyendo su quirks)
-            if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && (current.Calificacion === '1C' || current.Calificacion === '2A')) {
+            if (nameU.indexOf('CREDITOS DIRECTOS') > -1 && (califU === '1C' || califU === '2A')) {
                 cred_dir_binned_res = 30.77;
-            } else if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1 && cred_dir_binned_res !== 30.77 && (current.Calificacion !== '2A' || current.Calificacion !== '1C')) {
+            } else if (nameU.indexOf('CREDITOS DIRECTOS') > -1 && cred_dir_binned_res !== 30.77 && (califU !== '2A' || califU !== '1C')) {
                 cred_dir_binned_res = -90.18;
             }
             
 
             // t6_cred_dir_comp_binned_res
-            if ((current.NombreEntidad || '').indexOf('CREDITOS DIRECTOS') > -1) {
+            if (nameU.indexOf('CREDITOS DIRECTOS') > -1) {
                 t6_cred_dir_comp_binned_res = 37.78;
             }
 
             // bancos (IMPORTANTE: replicar bug de precedencia del original)
-            if ((current.NombreEntidad || '').indexOf('Vizcaya') > -1 || (current.NombreEntidad || '').indexOf('Bandes') > -1 || (current.NombreEntidad || '').indexOf('Banco Ita') > -1 || (current.NombreEntidad || '').indexOf('Santander') > -1 || (current.NombreEntidad || '').indexOf('Scotiabank') > -1 || (current.NombreEntidad || '').indexOf('HSBC') > -1 && (current.Calificacion === '1A' || current.Calificacion === '1C' || current.Calificacion === '2A')) {
+            if (nameU.indexOf('VIZCAYA') > -1 || nameU.indexOf('BANDES') > -1 || nameU.indexOf('BANCO ITA') > -1 || nameU.indexOf('SANTANDER') > -1 || nameU.indexOf('SCOTIABANK') > -1 || (nameU.indexOf('HSBC') > -1 && (califU === '1A' || califU === '1C' || califU === '2A'))) {
                 t6_banco_binned_res = 51.06;
             }
 
@@ -376,23 +396,22 @@ define(['N/log'], function (log) {
             // El original evaluaba: if (!current.NombreEntidad.vig && current.Calificacion) { ... }
             // Eso hace que la condición sea siempre verdadera si hay Calificacion.
             // Para igualar el comportamiento, ignoramos 'vig' y activamos por nombre + Calificacion.
-            if (current.Calificacion) {
-                if (((current.NombreEntidad || '').indexOf('ANDA') > -1) || ((current.NombreEntidad || '').indexOf('FUCEREP') > -1) || ((current.NombreEntidad || '').indexOf('ACAC') > -1)) {
+            if (califU) {
+                if ((nameU.indexOf('ANDA') > -1) || (nameU.indexOf('FUCEREP') > -1) || (nameU.indexOf('ACAC') > -1)) {
                     vig_noauto_t6_coop_binned_res = 48.55;
                 }
             }
 
             // BAUTZEN pronto
-            if ((current.NombreEntidad || '').indexOf('BAUTZEN') > -1 && current.Calificacion) {
+            if (nameU.indexOf('BAUTZEN') > -1 && califU) {
                 t6_pronto_binned_res = 36.73;
             }
         }
+        if ((__maxCalifMinT6 || 0) >= 5) {
+            t6_binned_res = -9.95;
+        }
 
-        // Reaplicar ent_t6_binned_res según contador (el original recalcula)
-        if (contador === 0 || contador === 1) ent_t6_binned_res = -63.64;
-        else if (contador === 2 || contador === 3) ent_t6_binned_res = 8;
-        else if (contador === 4 || contador === 5) ent_t6_binned_res = 34.84;
-        else if (contador > 5) ent_t6_binned_res = 80;
+        // ent_t6_binned_res ya calculado por longitud; mantener contador solo para compatibilidad
 
     // Para t0 (t2) - recorrer y asignar binned_res similares
     // permitimos reasignar el objeto ganador durante el recorrido
@@ -412,7 +431,7 @@ define(['N/log'], function (log) {
         brou_grupo_binned_res = -15.44;
         t0_santa_binned_res = -18.27;
 
-        for (let key2 in t2List) {
+        for (let key2 = 0, __n2 = t2List.length; key2 < __n2; key2++) {
             let currentt2 = t2List[key2];
             const name0U = safeUpper(currentt2.NombreEntidad);           
             const calif0 = safeUpper(currentt2.CalificacionMinima0 || currentt2.Calificacion);
@@ -422,20 +441,22 @@ define(['N/log'], function (log) {
             }
 
             // DEBUG: Log detallado para BBVA/Vizcaya
-            if ((currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) {
-                log.debug('BBVA Check in loop', {
+            if (debugEnabled && (currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) {
+                dbg('BBVA Check in loop', {
                     nombre: currentt2.NombreEntidad,
                     Cont: currentt2.Cont,
                     condition: currentt2.Cont && (currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1
                 });
             }
-            if (currentt2.Cont && (((currentt2.NombreEntidad || '')).indexOf('Vizcaya') > -1 || ((currentt2.NombreEntidad || '')).toUpperCase().indexOf('BBVA') > -1)) {
-                logTxt += '<P> => currentt2.NombreEntidad.Cont: ' + currentt2.Cont + '</P>';
-                logTxt += "<P/> tes currentt2.NombreEntidad index BBVA/Vizcaya: " + (((currentt2.NombreEntidad || '').indexOf('Vizcaya') > -1) || ((currentt2.NombreEntidad || '').toUpperCase().indexOf('BBVA') > -1));
+            if (currentt2.Cont && (name0U.indexOf('VIZCAYA') > -1 || name0U.indexOf('BBVA') > -1)) {
+                if (debugEnabled) {
+                    logTxt += '<P> => currentt2.NombreEntidad.Cont: ' + currentt2.Cont + '</P>';
+                    logTxt += '<P/> tes currentt2.NombreEntidad index BBVA/Vizcaya: ' + ((name0U.indexOf('VIZCAYA') > -1) || (name0U.indexOf('BBVA') > -1));
+                }
                 t0_bbva_binned_res = 79.39;
-                log.debug('Binned values Vizcaya CON CONTINGENCIA', t0_bbva_binned_res);
+                dbg('Binned values Vizcaya CON CONTINGENCIA', t0_bbva_binned_res);
             } else {
-                log.debug('Binned values Vizcaya other', t0_bbva_binned_res);
+                dbg('Binned values Vizcaya other', t0_bbva_binned_res);
             }
 
             // t0_fnb_binned_res según object0.CalificacionMinima0
@@ -450,12 +471,34 @@ define(['N/log'], function (log) {
             } else if (t0_fnb_binned_res !== 14.06 && t0_fnb_binned_res !== -6.06) {
                 t0_fnb_binned_res = -42.71;
             }
+
+            // Bloques adicionales integrados (t0_scotia, emp_valor, fucac, brou, santa)
+            if (currentt2.Cont && name0U.indexOf('SCOTIABANK') > -1) {
+                t0_scotia_binned_res = 74.04;
+            }
+
+            if (name0U.indexOf('EMPRENDIMIENTOS') > -1 && calif0) {
+                emp_valor_binned_res = 124.21;
+            }
+
+            if (name0U.indexOf('FUCAC') > -1 && currentt2.Cont) {
+                cont_t0_fucac_binned_res = 74.16;
+            }
+
+            if (name0U.indexOf('REPUBLICA') > -1 && calif0) {
+                brou_grupo_binned_res = 33.61;
+            }
+
+            if (name0U.indexOf('SANTANDER') > -1) {
+                t0_santa_binned_res = 38.33;
+            }
         }
 
         // Más bloques del original (t0_scotia, emp_valor, fucac, brou, santa, scotia, etc.)
-        for (let key3 in t2List) {
+        /* PERF: loop duplicado, integrado en el loop principal
+        for (let key3 = 0, __n3 = t2List.length; key3 < __n3; key3++) {
             let currentt2 = t2List[key3];
-            const name0U = safeUpper(currentt2.NombreEntidad);           
+            const name0U = safeUpper(currentt2.NombreEntidad);
             const calif0 = safeUpper(currentt2.CalificacionMinima0 || currentt2.Calificacion);
 
             if (currentt2.Cont && name0U.indexOf('SCOTIABANK') > -1) {
@@ -478,6 +521,7 @@ define(['N/log'], function (log) {
                 t0_santa_binned_res = 38.33;
             }
         }
+        */
 
         // Calculo final: multiplicar por bins y sumar (limpio y canónico)
         ent_t6_binned_res = ent_t6_binned_res * (ent_t6_binned || 1);
@@ -505,7 +549,7 @@ define(['N/log'], function (log) {
         let total = test + ent_t6_binned_res + t6_binned_res + t6_creditel_binned_res + t6_oca_binned_res + t0_fnb_binned_res + t0_asi_binned_res + t0_bbva_binned_res + t6_cred_dir_comp_binned_res + t6_banco_binned_res + vig_noauto_t6_coop_binned_res + t0_santa_binned_res + emp_valor_binned_res + cont_t0_fucac_binned_res + brou_grupo_binned_res + t6_pronto_binned_res + t0_scotia_binned_res + cred_dir_binned_res;
 
         // Aplicar función logística y escalar a 0-1000 (igual que el original)
-        const __e = Math.exp(total);
+        const __e = Math.exp(Math.max(-50, Math.min(50, total)));
         let scoreNumeric = (__e / (1 + __e)) * 1000;
         let scoreRounded = Math.round(scoreNumeric);
 
@@ -516,7 +560,7 @@ define(['N/log'], function (log) {
         
         
         // Log de datos BCU originales (t0) - debe coincidir con el formato de producción
-        logTxt += '<P> => datosBcu: </P>';
+        if (debugEnabled) { logTxt += '<P> => datosBcu: </P>'; }
         try {
             // Si tenemos datos RAW, usarlos directamente (igual que producción)
             if (normalizedData.rawData && normalizedData.rawData.datosBcu) {
@@ -546,11 +590,11 @@ define(['N/log'], function (log) {
             }
         } catch (e) {
             logTxt += '[Error serializing t0 data]<P/>';
-        }
+        } }
 
         // Log de datos BCU t6 - debe coincidir con el formato de producción
-        logTxt += '<P> => datosBcu_T6: </P>';
-        try {
+        if (debugEnabled) { logTxt += '<P> => datosBcu_T6: </P>'; }
+        if (debugEnabled) { try {
             // Si tenemos datos RAW, usarlos directamente (igual que producción)
             if (normalizedData.rawData && normalizedData.rawData.datosBcuT6) {
                 logTxt += JSON.stringify(normalizedData.rawData.datosBcuT6) + '<P/>';
@@ -579,24 +623,26 @@ define(['N/log'], function (log) {
             }
         } catch (e) {
             logTxt += '[Error serializing t6 data]<P/>';
-        }
+        } }
 
         // Log de cálculo de endeudamiento (formato exacto de producción)
-        logTxt += '<P> ***************** ENDEUDAMIENTO comienzo ****************** </P>';
-        logTxt += '<P> +++++ t2_mnPesos: ' + t2_mnPesos + '<P/>';
-        logTxt += '<P> +++++ t2_mePesos: ' + t2_mePesos + '<P/>';
-        logTxt += '<P> +++++ t6_mnPesos: ' + t6_mnPesos + '<P/>';
-        logTxt += '<P> +++++ t6_mePesos: ' + t6_mePesos + '<P/>';
-        logTxt += '<P> +++++ endeudamiento: ' + endeudamiento + '<P/>';
-        logTxt += '<P> ***************** ENDEUDAMIENTO fin ****************** </P>';
+        if (debugEnabled) logTxt += '<P> ***************** ENDEUDAMIENTO comienzo ****************** </P>';
+        if (debugEnabled) logTxt += '<P> +++++ t2_mnPesos: ' + t2_mnPesos + '<P/>';
+        if (debugEnabled) logTxt += '<P> +++++ t2_mePesos: ' + t2_mePesos + '<P/>';
+        if (debugEnabled) logTxt += '<P> +++++ t6_mnPesos: ' + t6_mnPesos + '<P/>';
+        if (debugEnabled) logTxt += '<P> +++++ t6_mePesos: ' + t6_mePesos + '<P/>';
+        if (debugEnabled) logTxt += '<P> +++++ endeudamiento: ' + endeudamiento + '<P/>';
+        if (debugEnabled) logTxt += '<P> ***************** ENDEUDAMIENTO fin ****************** </P>';
 
         // Log de entidades procesadas en t6 (producción usa el objeto current directamente)
-        for (let i = 0; i < t6List.length; i++) {
-            logTxt += '<P> => t6: ' + t6List[i] + '</P>';
+        if (debugEnabled) {
+            for (let i = 0; i < t6List.length; i++) {
+                logTxt += '<P> => t6: ' + t6List[i] + '</P>';
+            }
         }
 
         // Log de resultados de scoring por variable (formato exacto sin espacio despu�s de <P/>)
-        var __sum=[];
+        if (debugEnabled) { var __sum=[];
         __sum.push('<P/> ent_t6_binned_res: ' + ent_t6_binned_res);
         __sum.push('<P/> t6_binned_res: ' + t6_binned_res);
         __sum.push('<P/> t6_creditel_binned_res: ' + t6_creditel_binned_res);
@@ -616,7 +662,7 @@ define(['N/log'], function (log) {
         __sum.push('<P/> total: ' + total);
         __sum.push('<P/> score: ' + scoreRounded);
         logTxt += __sum.join('');
-        log.debug('t0_bbva_binned_res after bin', t0_bbva_binned_res);
+        dbg('t0_bbva_binned_res after bin', t0_bbva_binned_res); }
 
         // Resultado unificado: contrato moderno + compatibilidad legacy
         let result = { 
@@ -955,16 +1001,12 @@ define(['N/log'], function (log) {
             return '0';
         }
 
-        const ratingOrder = {
-            '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10
-        };
-
         let worstRating = '0';
         let worstNumeric = 0;
 
         for (let i = 0; i < t0Data.entities.length; i++) {
             let rating = String(t0Data.entities[i].rating || '').toUpperCase().trim();
-            let numeric = ratingOrder[rating] || 0;
+            let numeric = RATING_ORDER[rating] || 0;
             if (numeric > worstNumeric) {
                 worstNumeric = numeric;
                 worstRating = rating;
@@ -1146,6 +1188,7 @@ define(['N/log'], function (log) {
  * @property {Object} flags - Banderas de los datos
  * @property {Object} validation - Validación y calidad de datos
  */
+
 
 
 
