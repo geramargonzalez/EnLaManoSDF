@@ -98,7 +98,7 @@ define([
                     try { _normPreview = JSON.stringify(normalizedData, null, 2); } catch (e) { _normPreview = '[unserializable normalizedData]'; }
                     if (_normPreview && _normPreview.length > 2000) _normPreview = _normPreview.substring(0, 2000) + '... [truncated]';
                     log.error({ title: 'SCORE_COMPUTE_ERROR - invalid scoreResult', details: { scoreType: typeof scoreResult, scorePreview: (typeof scoreResult === 'object' ? '[object]' : String(scoreResult)), normalizedDataPreview: _normPreview } });
-                } catch (logErr) { /* ignore logging errors */ }
+                } catch (logErr) {  }
 
                 throw createServiceError('SCORE_COMPUTE_ERROR', 'Resultado de scoring invalido');
             }
@@ -151,7 +151,6 @@ define([
                     }
                 });
             } catch (inner) {}
-
             return createErrorScoreResult(error, requestId);
         }
     }

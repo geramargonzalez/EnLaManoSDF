@@ -4,7 +4,7 @@
  */
 
 define([], function () {
-    'use strict';
+    'use strict'; 
 
     const PROVIDER_EQUIFAX = 'equifax';
     const PROVIDER_BCU = 'bcu';
@@ -21,7 +21,7 @@ define([], function () {
      * @returns {NormalizedBCUData}
      */
     function normalizeEquifaxResponse(raw) {
-        const interconnect = (raw && raw?.interconnectResponse) || {};
+        const interconnect = raw?.interconnectResponse || {};
         const variables = interconnect.variablesDeSalida || {};
         const infoConsulta = interconnect.infoConsulta || {};
 

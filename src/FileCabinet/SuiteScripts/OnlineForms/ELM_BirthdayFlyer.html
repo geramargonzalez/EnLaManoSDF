@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Festejá tu mes con todo! - En la Mano</title>
+  <style>
+    /* Importar fuente Poppins desde Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+
+    /* Reset básico y configuración global */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      /* Paleta de colores */
+      --orange: #ff7a00;
+      --purple-dark: #6d28d9;
+      --purple-light: #a855f7;
+      --purple-medium: #7c3aed;
+      --purple-darker: #4c1d95;
+      --white: #ffffff;
+      --gray-dark: #2d2d2d;
+      --gray-light: rgba(0, 0, 0, 0.08);
+    }
+
+    body {
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-dark);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    /* Contenedor principal del flyer */
+    .flyer {
+      position: relative;
+      max-width: 780px;
+      width: 100%;
+      background: var(--gray-dark);
+      border: 3px solid var(--orange);
+      border-radius: 28px;
+      padding: 60px 50px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Curva decorativa superior derecha - oculta por ahora para simplificar */
+    .flyer::before {
+      content: '';
+      position: absolute;
+      top: -80px;
+      right: -20px;
+      width: 280px;
+      height: 480px;
+      background: transparent;
+      border-radius: 50% 0 50% 50%;
+      transform: rotate(15deg);
+      z-index: 1;
+    }
+
+    /* Curva decorativa inferior izquierda - oculta por ahora para simplificar */
+    .flyer::after {
+      content: '';
+      position: absolute;
+      bottom: -120px;
+      left: -60px;
+      width: 320px;
+      height: 320px;
+      background: transparent;
+      border-radius: 50%;
+      z-index: 1;
+    }
+
+    /* Contenido principal por encima de las decoraciones */
+    .flyer-content {
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Título principal */
+    .main-title {
+      font-size: clamp(42px, 7vw, 72px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      text-transform: uppercase;
+    }
+
+    .main-title .line1 {
+      color: var(--white);
+      display: block;
+    }
+
+    .main-title .line2 {
+      color: var(--white);
+      display: block;
+    }
+
+    .main-title .highlight {
+      color: var(--white);
+    }
+
+    /* Subtítulo */
+    .subtitle {
+      font-size: clamp(18px, 3vw, 26px);
+      font-weight: 400;
+      color: var(--white);
+      margin-bottom: 40px;
+      line-height: 1.4;
+    }
+
+    .subtitle .brand,
+    .subtitle .emphasis {
+      font-weight: 700;
+    }
+
+    /* Botón CTA */
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, var(--purple-dark) 0%, var(--purple-darker) 100%);
+      color: var(--white);
+      font-size: clamp(16px, 2.5vw, 22px);
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 22px 40px;
+      border-radius: 16px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(109, 40, 217, 0.3);
+      transition: all 0.3s ease;
+      text-align: center;
+      text-decoration: none;
+      letter-spacing: 0.5px;
+      margin-bottom: 60px;
+    }
+
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(109, 40, 217, 0.4);
+    }
+
+    .cta-button:active {
+      transform: translateY(0);
+    }
+
+    /* Ícono del botón (emoji o SVG) */
+    .cta-icon {
+      font-size: 1.4em;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    /* Footer con texto y logo */
+    .footer {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 40px;
+    }
+
+    .footer-text {
+      font-size: clamp(20px, 3.5vw, 32px);
+      font-weight: 600;
+      color: var(--white);
+    }
+
+    /* Logo "en la mano" */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      width: clamp(40px, 6vw, 60px);
+      height: clamp(40px, 6vw, 60px);
+      background: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Simulación de mano/ok con círculos */
+    .logo-icon::before {
+      content: '';
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background: var(--purple-dark);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .logo-icon::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: var(--white);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .logo-text {
+      font-size: clamp(22px, 3.5vw, 34px);
+      font-weight: 800;
+      color: var(--white);
+      text-transform: lowercase;
+    }
+
+    /* Confetti decorativo - oculto por ahora para simplificar */
+    .confetti {
+      position: absolute;
+      z-index: 5;
+      pointer-events: none;
+      display: none;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      width: clamp(8px, 1.5vw, 14px);
+      height: clamp(8px, 1.5vw, 14px);
+      border-radius: 50%;
+      opacity: 0.85;
+    }
+
+    /* Posicionamiento individual de confetti */
+    .confetti-1 { top: 8%; right: 18%; background: var(--purple-light); }
+    .confetti-2 { top: 14%; right: 26%; width: 6px; height: 18px; border-radius: 3px; background: var(--purple-medium); transform: rotate(25deg); }
+    .confetti-3 { top: 22%; right: 22%; background: var(--purple-light); }
+    .confetti-4 { top: 35%; right: 12%; width: 8px; height: 20px; border-radius: 4px; background: var(--purple-dark); transform: rotate(-15deg); }
+    .confetti-5 { top: 42%; right: 24%; background: var(--purple-medium); }
+    .confetti-6 { top: 56%; right: 16%; background: var(--purple-light); }
+    .confetti-7 { top: 48%; right: 8%; width: 10px; height: 10px; background: var(--purple-light); }
+    .confetti-8 { bottom: 28%; left: 12%; background: var(--purple-medium); }
+    .confetti-9 { bottom: 35%; left: 8%; width: 7px; height: 20px; border-radius: 3px; background: var(--purple-light); transform: rotate(45deg); }
+    .confetti-10 { bottom: 18%; left: 18%; background: var(--purple-dark); }
+
+    /* Responsive para tablets */
+    @media (max-width: 768px) {
+      .flyer {
+        padding: 50px 40px;
+        border-radius: 24px;
+      }
+
+      .main-title {
+        margin-bottom: 20px;
+      }
+
+      .subtitle {
+        margin-bottom: 32px;
+      }
+
+      .cta-button {
+        padding: 18px 32px;
+        font-size: 18px;
+        margin-bottom: 50px;
+      }
+
+      .footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+    }
+
+    /* Responsive para móviles */
+    @media (max-width: 480px) {
+      .flyer {
+        padding: 40px 28px;
+        border-radius: 20px;
+        border-width: 2px;
+      }
+
+      .flyer::before {
+        width: 200px;
+        height: 380px;
+        top: -60px;
+      }
+
+      .flyer::after {
+        width: 240px;
+        height: 240px;
+        bottom: -100px;
+      }
+
+      .main-title {
+        font-size: 38px;
+      }
+
+      .subtitle {
+        font-size: 16px;
+        margin-bottom: 28px;
+      }
+
+      .cta-button {
+        width: 100%;
+        justify-content: center;
+        padding: 16px 24px;
+        font-size: 16px;
+        border-radius: 12px;
+      }
+
+      .confetti-piece {
+        width: 8px;
+        height: 8px;
+      }
+    }
+
+    /* Animación sutil de entrada */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .flyer-content > * {
+      animation: fadeInUp 0.6s ease-out forwards;
+    }
+
+    .flyer-content > *:nth-child(1) { animation-delay: 0.1s; }
+    .flyer-content > *:nth-child(2) { animation-delay: 0.2s; }
+    .flyer-content > *:nth-child(3) { animation-delay: 0.3s; }
+    .flyer-content > *:nth-child(4) { animation-delay: 0.4s; }
+  </style>
+</head>
+<body>
+  <!-- Contenedor principal del flyer -->
+  <div class="flyer">
+    <!-- Confetti decorativo -->
+    <div class="confetti">
+      <div class="confetti-piece confetti-1"></div>
+      <div class="confetti-piece confetti-2"></div>
+      <div class="confetti-piece confetti-3"></div>
+      <div class="confetti-piece confetti-4"></div>
+      <div class="confetti-piece confetti-5"></div>
+      <div class="confetti-piece confetti-6"></div>
+      <div class="confetti-piece confetti-7"></div>
+      <div class="confetti-piece confetti-8"></div>
+      <div class="confetti-piece confetti-9"></div>
+      <div class="confetti-piece confetti-10"></div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="flyer-content">
+      <!-- Título principal -->
+      <h1 class="main-title">
+        <span class="line1">¡FESTEJÁ</span>
+        <span class="line2">TU MES</span>
+        <span class="line2 highlight">CON TODO!</span>
+      </h1>
+
+      <!-- Subtítulo -->
+      <p class="subtitle">
+        En <span class="brand">En la Mano</span><br>
+        te damos un <span class="emphasis">regalo especial</span>
+      </p>
+
+      <!-- Botón CTA -->
+      <a href="#" class="cta-button">
+        <span class="cta-icon">🎉</span>
+        <span>TASA PREFERENCIAL<br>EN TU PRÉSTAMO.</span>
+      </a>
+
+      <!-- Footer con texto y logo -->
+      <div class="footer">
+        <span class="footer-text">Tu regalo,</span>
+        <div class="logo">
+          <div class="logo-icon"></div>
+          <span class="logo-text">en la<br>mano</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
