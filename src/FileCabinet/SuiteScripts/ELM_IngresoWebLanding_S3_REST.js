@@ -27,8 +27,9 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
 
                let preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.estadoRechazado);
                let blackList = auxLib.checkBlacklist(docNumber);
+               let isBlacklisted = auxLib.isClientActive(docNumber);
 
-               if (!blackList) {
+               if (!blackList || isBlacklisted) {    
                   let mocasist = auxLib.checkMocasist(docNumber);
 
                   if (!mocasist) { 
@@ -76,7 +77,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                                if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
-                              
                               if (isLatente) {
                                  response.success = true;
                                  response.result = 'Listo para recibir datos en servicio 4';

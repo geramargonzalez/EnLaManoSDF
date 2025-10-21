@@ -12,19 +12,21 @@ define(['N/record'], (record) => {
     try {
       const data = typeof body === 'string' ? JSON.parse(body || '{}') : (body || {});
       const required = ['nombre', 'apellido', 'cedula', 'telefono', 'puntaje'];
+      
+      log.debug('POST data', data);
       for (const f of required) {
         if (data[f] == null || data[f] === '') {
           return { success: false, message: `Falta el campo obligatorio: ${f}` };
         }
       }
 
-      const rec = record.create({ type: 'customrecord_trivia', isDynamic: true });
+      /* const rec = record.create({ type: 'customrecord_trivia', isDynamic: true });
       rec.setValue({ fieldId: 'custrecord_nombre', value: String(data.nombre).substring(0, 120) });
       rec.setValue({ fieldId: 'custrecord_apellido', value: String(data.apellido).substring(0, 120) });
       rec.setValue({ fieldId: 'custrecord_cedula', value: String(data.cedula).substring(0, 120) });
       rec.setValue({ fieldId: 'custrecord_telefono', value: String(data.telefono).substring(0, 120) });
       rec.setValue({ fieldId: 'custrecord_puntaje', value: Number(data.puntaje) || 0 });
-
+ */
       const id = rec.save({ enableSourcing: true, ignoreMandatoryFields: false });
       return { success: true, id };
     } catch (e) {

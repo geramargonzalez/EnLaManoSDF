@@ -245,7 +245,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                      search.createColumn({name: "custrecord_sdb_nombre", label: "Nombre"})
                   ]
                });
-               var searchResultCount = customrecord_sdb_lista_negraSearchObj.runPaged().count;
+               var searchResultCount = listaNegra.runPaged().count;
                log.debug("listaNegra result count",searchResultCount);
                listaNegra.run().each(function(result){
                   // Process each result
@@ -1325,11 +1325,12 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       /**
        * deactivateLeadsByDocumentNumber - Deactivates all leads with the specified document number.
        * @param {string} documentNumber - The document number to search for.
+       * @returns {boolean} True if any leads were deactivated (indicating all active leads are now inactive), false otherwise.
        */
       function deactivateLeadsByDocumentNumber(documentNumber) {
          const stLogTitle = 'deactivateLeadsByDocumentNumber';
          try {
-            if (!documentNumber) return;
+            if (!documentNumber) return false;
 
             // 1) Buscar leads “padre” activos y desactivarlos
             const parentIds = [];
@@ -1395,15 +1396,21 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                });
             }
 
-            log.debug(stLogTitle, { parentsUpdated: parentsUpdated, childrenUpdated: childrenUpdated });
+            const totalDeactivated = parentsUpdated + childrenUpdated;
+            log.debug(stLogTitle, { 
+               parentsUpdated: parentsUpdated, 
+               childrenUpdated: childrenUpdated,
+               totalDeactivated: totalDeactivated,
+               allLeadsDeactivated: totalDeactivated > 0
+            });
+
+            // Retornar true si se desactivó al menos 1 lead (indica que todos los activos están ahora inactivos)
+            return totalDeactivated > 0;
 
          } catch (error) {
             log.error(stLogTitle, error);
-            throw errorModule.create({
-               name: 'DEACTIVATE_LEADS_ERROR',
-               message: 'Error deactivating leads for document number: ' + documentNumber + '. Details: ' + error.message,
-               notifyOff: true
-            });
+            // En caso de error, retornar false (asumir que no se desactivó nada)
+            return false;
          }
       }
       /**
@@ -1575,18 +1582,26 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
        * @param {string} responseDetail - The details of the response from the service.
        * @param {boolean} success - Indicates whether the request was successful.
        * @param {string} responseRaw - The name of the service being logged.
+       * @param {object} dataRow - The raw data row associated with the request.
        */
-      function updateLogWithResponse(logId, responseDetail, success, responseRaw) {
+      function updateLogWithResponse(logId, responseDetail, success, responseRaw, dataRow) {
          const logTitle = 'updateLogWithResponse';
          try {
+
+           const values = {
+               'custrecord_elm_logs_resp': responseDetail,
+               'custrecord_elm_logs_success': success,
+               'custrecord_logs_respuesta': responseRaw
+            };
+
+            if (dataRow) {
+               values['custrecord_elm_logs_info_bruta'] = dataRow;
+            }
+
            const idLog = record.submitFields({
                type: 'customrecord_elm_serv_logs',
                id: logId,
-               values: {
-                  'custrecord_elm_logs_resp': responseDetail,
-                  'custrecord_elm_logs_success': success,
-                  'custrecord_logs_respuesta': responseRaw
-               },
+               values: values,
                options: {
                   enableSourcing: false,
                   ignoreMandatoryFields: true

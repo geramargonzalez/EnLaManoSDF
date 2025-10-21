@@ -10,8 +10,9 @@ define([
     '../adapters/bcuAdapter',
     '../adapters/mymAdapter',
     '../domain/score',
-    '../config/scoringRules'
-], function (log, cache, equifaxAdapter, bcuAdapter, mymAdapter, scoreEngine, scoringRules) {
+    '../config/scoringRules',
+    '../../ELM_Aux_Lib'
+], function (log, cache, equifaxAdapter, bcuAdapter, mymAdapter, scoreEngine, scoringRules, auxLib) {
     'use strict';
 
     const  PROVIDER_EQUIFAX = 'equifax';
@@ -49,6 +50,7 @@ define([
             }
 
             const __tFetch0 = Date.now();
+            const idLog = auxLib.createLogRecord(documento, null, false, 6, options?.provider, null);
             const normalizedData = fetchProviderData(documento, options);
             const __tFetch1 = Date.now();
             if (!normalizedData) {
@@ -56,9 +58,48 @@ define([
             }
 
             const __tScore0 = Date.now();
-            const scoreResult = scoreEngine.computeScore(normalizedData, rules);
+            var scoreResult;
+            try {
+                scoreResult = scoreEngine.computeScore(normalizedData, rules);
+                log.debug({ title: 'computeScore result', details: { idLog, scoreResult } });
+                auxLib.updateLogWithResponse(idLog, null, scoreResult?.metadata?.isRejected ? false : true, scoreResult, normalizedData );
+
+            } catch (computeErr) {
+                // Log compute error with normalizedData preview to help debugging
+                try {
+                    var nd = '';
+                    try { nd = JSON.stringify(normalizedData, null, 2); } catch (e) { nd = '[unserializable normalizedData]'; }
+                    if (nd && nd.length > 2000) nd = nd.substring(0, 2000) + '... [truncated]';
+                    log.error({ title: 'computeScore threw exception', details: { error: (computeErr && (computeErr.message || computeErr.toString())), stack: (computeErr && computeErr.stack ? computeErr.stack : null), normalizedDataPreview: nd } });
+                } catch (logErr) { /* ignore logging errors */ }
+                // rethrow to be caught by outer try/catch
+                throw computeErr;
+            }
             const __tScore1 = Date.now();
+
+            // DEBUG HELP: log type and a truncated preview of scoreResult to locate where computeScore fails
+            try {
+                var _preview = '';
+                try {
+                    _preview = JSON.stringify(scoreResult, null, 2);
+                } catch (e) {
+                    _preview = String(scoreResult);
+                }
+                if (_preview && _preview.length > 3000) _preview = _preview.substring(0, 3000) + '... [truncated]';
+                log.debug({ title: 'computeScore result preview', details: { type: typeof scoreResult, preview: _preview } });
+            } catch (dbgErr) {
+                try { log.debug({ title: 'computeScore preview error', details: dbgErr.toString() }); } catch (xx) {}
+            }
+
             if (!scoreResult || typeof scoreResult !== 'object') {
+                // Log more context before throwing to ease debugging (include normalizedData small preview)
+                try {
+                    var _normPreview = '';
+                    try { _normPreview = JSON.stringify(normalizedData, null, 2); } catch (e) { _normPreview = '[unserializable normalizedData]'; }
+                    if (_normPreview && _normPreview.length > 2000) _normPreview = _normPreview.substring(0, 2000) + '... [truncated]';
+                    log.error({ title: 'SCORE_COMPUTE_ERROR - invalid scoreResult', details: { scoreType: typeof scoreResult, scorePreview: (typeof scoreResult === 'object' ? '[object]' : String(scoreResult)), normalizedDataPreview: _normPreview } });
+                } catch (logErr) { /* ignore logging errors */ }
+
                 throw createServiceError('SCORE_COMPUTE_ERROR', 'Resultado de scoring invalido');
             }
 
@@ -171,13 +212,13 @@ define([
      */
     function getCachedScore(documento, provider) {
         try {
-            var cacheKey = buildCacheKey(documento, provider);
-            var scoreCache = cache.getCache({
+            const cacheKey = buildCacheKey(documento, provider);
+            const scoreCache = cache.getCache({
                 name: 'bcuScore',
                 scope: CACHE_SCOPE
             });
             
-            var cachedData = scoreCache.get({ key: cacheKey });
+            const cachedData = scoreCache.get({ key: cacheKey });
             if (cachedData) {
                 return JSON.parse(cachedData);
             }

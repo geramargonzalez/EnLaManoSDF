@@ -3,48 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trivia Interactiva</title>
+  <title>Juga y Gana</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap');
     :root {
-      --bg-start: #4f46e5;
-      --bg-end: #06b6d4;
+      /* enlamano palette */
+      --bg-start: #5b1fa8; /* deep purple */
+      --bg-end: #380b6a;   /* darker purple */
       --surface: #ffffff;
-      --text: #0b1220;
-      --muted: #6b7280;
-      --primary: #2563eb;
-      --primary-600: #1d4ed8;
-      --accent: #22c55e;
+      --text: #1b1330;
+      --muted: #7a6b92;
+      --primary: #ff7a00; /* orange CTA */
+      --primary-600: #ff7300;
+      --accent: #ff7a00;
       --error: #ef4444;
       --warning: #f59e0b;
-      --ring: rgba(37, 99, 235, 0.25);
+      --ring: rgba(255,122,0,0.15);
     }
 
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
       margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      font-family: Poppins, Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
       color: var(--text);
-      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
-      display: grid;
-      place-items: center;
-      padding: 24px;
+      background: linear-gradient(180deg, rgba(91,31,168,0.95) 0%, rgba(56,11,106,0.95) 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 28px 16px; /* tighten outer padding so no large white band shows */
+      min-height: 100vh;
     }
     .app {
-      width: min(780px, 100%);
-      background: var(--surface);
-      border-radius: 16px;
-      box-shadow: 0 20px 40px rgba(0,0,0,.15);
-      overflow: hidden;
+      /* Make the outer wrapper transparent so the background gradient shows;
+         keep layout simple and let the .card provide the white surface. */
+      width: 100%;
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: visible;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 0;
+      max-width: none;
+    }
+    /* two-column layout */
+  /* single-card centered layout (hero removed per user request) */
+  .layout { display: flex; justify-content: center; align-items: center; padding: 28px; }
+  .card { background: var(--surface); border-radius: 18px; padding: 18px; box-shadow: 0 22px 40px rgba(10,8,20,0.20); width: 460px; max-width: calc(100% - 48px); min-height: 560px; overflow: hidden; }
+  .card-header { display:flex; justify-content:flex-start; align-items:center; padding: 12px 16px 6px 16px; }
+    @media (max-width: 880px) {
+      .layout { flex-direction: column; padding: 18px; }
+      .card { margin-top: 18px; width: 100%; max-width: calc(100% - 40px); }
     }
     header.app-header {
-      padding: 22px 24px 14px;
-      border-bottom: 1px solid #eef2f7;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid rgba(20,16,36,0.04);
     }
     .title {
       margin: 0 0 6px;
-      font-size: 22px;
+      font-size: 26px;
       letter-spacing: .2px;
+      font-weight: 700;
+    }
+  .brand-logo { width: 220px; height: 64px; display:block; object-fit: contain; object-position: left center; }
+    /* If the remote image fails to load, show a simple text fallback using CSS background color and hidden alt text shown visually */
+    .brand-logo[alt] { font-size: 0; }
+    .brand-logo.fallback {
+      background: linear-gradient(90deg, var(--bg-start), var(--bg-end));
+      color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight:700;
+      width: 220px; height: 64px; border-radius: 8px; font-size: 18px;
     }
     .subtitle {
       margin: 0;
@@ -52,8 +81,8 @@
       font-size: 14px;
     }
 
-    .content { padding: 22px; }
-    .views { position: relative; min-height: 420px; }
+  .content { padding: 6px 12px 18px 12px; }
+  .views { position: relative; min-height: 440px; padding: 6px 4px; }
     .view {
       position: absolute; inset: 0;
       opacity: 0; transform: translateY(8px);
@@ -62,22 +91,32 @@
     }
     .view.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
-    .grid { display: grid; gap: 14px; }
-    @media (min-width: 700px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+  .grid { display: grid; gap: 14px; }
+  /* Ensure grid children can shrink and don't force overflow */
+  .grid > * { min-width: 0; }
+  @media (min-width: 700px) { .grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+  /* Prevent the right column from overflowing visually by constraining internal elements */
+  .grid.cols-2 > .field { width: 100%; }
+  .actions { justify-content: center; }
 
     label { font-size: 12px; color: var(--muted); display: block; margin: 2px 0 6px; }
     .field { display: flex; flex-direction: column; }
     input[type="text"], input[type="tel"] {
-      padding: 11px 12px;
-      border: 1px solid #e5e7eb;
-      border-radius: 10px;
+      padding: 12px 14px;
+      border: 1px solid rgba(20,16,36,0.06);
+      border-radius: 12px;
       outline: none;
       font-size: 15px;
-      transition: border-color .2s ease, box-shadow .2s ease;
+      transition: border-color .12s ease, box-shadow .12s ease, transform .06s ease;
+      background: rgba(250,250,252,0.9);
+      width: 100%;
+      box-sizing: border-box;
+      min-width: 0; /* allow flex/grid children to shrink */
     }
     input[type="text"]:focus, input[type="tel"]:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 4px var(--ring);
+      box-shadow: 0 6px 18px rgba(88,0,140,0.08), 0 0 0 6px var(--ring);
+      transform: translateY(-0.5px);
     }
     .invalid input { border-color: var(--error); }
     .form-error { color: var(--error); font-size: 13px; min-height: 18px; }
@@ -92,15 +131,16 @@
       transition: transform .05s ease, background-color .2s ease, box-shadow .2s ease;
     }
     .btn:active { transform: translateY(1px); }
-    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 6px 14px rgba(37, 99, 235, .3); }
-    .btn-primary:hover { background: var(--primary-600); }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 10px 30px rgba(255,122,0,0.18); border-radius: 999px; padding: 12px 20px; }
+  .btn-primary:hover { background: var(--primary-600); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
     .btn-ghost { background: #f3f4f6; color: #111827; }
     .btn-ghost:hover { background: #e5e7eb; }
     .btn-success { background: var(--accent); color: #fff; }
     .btn-danger { background: var(--error); color: #fff; }
     .btn[disabled] { opacity: .55; cursor: not-allowed; box-shadow: none; }
 
-    .progress { height: 8px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+  .progress { height: 8px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
     .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #60a5fa); transition: width .25s ease; }
     .progress-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .progress-text { font-size: 12px; color: var(--muted); }
@@ -117,8 +157,8 @@
     .option.selected { border-color: var(--primary); background: #f0f6ff; }
 
     .muted { color: var(--muted); font-size: 13px; }
-    .kpi { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 6px; }
-    .kpi .big { font-size: 32px; font-weight: 800; }
+  .kpi { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 6px; }
+  .kpi .big { font-size: 36px; font-weight: 800; color: var(--primary); }
     .kpi .tag { font-size: 12px; padding: 4px 8px; border-radius: 999px; }
     .tag.success { background: #dcfce7; color: #166534; }
     .tag.warn { background: #fef3c7; color: #92400e; }
@@ -127,7 +167,7 @@
     .save-status { margin-top: 12px; font-size: 14px; }
     .spinner {
       display: inline-block; width: 14px; height: 14px; border-radius: 999px;
-      border: 2px solid #c7d2fe; border-top-color: var(--primary);
+      border: 2px solid rgba(255,122,0,0.18); border-top-color: var(--primary);
       animation: spin .7s linear infinite; vertical-align: text-bottom; margin-right: 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -143,14 +183,16 @@
   </style>
 </head>
 <body>
+  <NLFORM>
   <main class="app" role="main" aria-label="Aplicación de Trivia Interactiva">
-    <header class="app-header">
-      <h1 class="title">Trivia Interactiva</h1>
-      <p class="subtitle">Completá tus datos y poné a prueba tus conocimientos.</p>
-    </header>
+    <div class="layout">
+      <aside class="card">
+        <div class="card-header">
+          <img src="https://7564430-sb1.app.netsuite.com/core/media/media.nl?id=140&c=7564430_SB1&h=giXsmMiQ5bldOX3Prd7fI-4xM8BjyFNkBs72PQ6JyD8Hac0a" alt="en la mano" class="brand-logo" id="brandLogo" />
+        </div>
 
-    <section class="content">
-      <div class="views">
+        <section class="content">
+          <div class="views">
         <!-- 1) Formulario de registro -->
         <div id="view-form" class="view active" aria-labelledby="form-title">
           <h2 id="form-title" class="sr-only" style="position:absolute;left:-9999px;">Formulario de registro</h2>
@@ -158,24 +200,30 @@
             <div class="grid cols-2">
               <div class="field" id="field-nombre">
                 <label for="nombre">Nombre</label>
-                <input type="text" id="nombre" name="nombre" placeholder="Ej.: Ana" required />
+                <!-- <input type="text" id="nombre" name="nombre" placeholder="Ej.: Ana" required /> -->
+                <NLFIRSTNAME></NLFIRSTNAME>
               </div>
               <div class="field" id="field-apellido">
                 <label for="apellido">Apellido</label>
-                <input type="text" id="apellido" name="apellido" placeholder="Ej.: Pérez" required />
+               <!--  <input type="text" id="apellido" name="apellido" placeholder="Ej.: Pérez" required /> -->
+                <NLLASTNAME></NLLASTNAME>
               </div>
               <div class="field" id="field-cedula">
-                <label for="cedula">Cédula</label>
-                <input type="text" id="cedula" name="cedula" placeholder="Ej.: 4.123.456-7" required />
+                <label for="cedula">Cédula (sin puntos, ni guiones)</label>
+                <!-- <input type="text" id="cedula" name="cedula" placeholder="Ej.: 4.123.456-7" required /> -->
+                <NLCUSTENTITY_SDB_NRDOCUMENTO></NLCUSTENTITY_SDB_NRDOCUMENTO>
+                
               </div>
               <div class="field" id="field-telefono">
                 <label for="telefono">Teléfono</label>
-                <input type="tel" id="telefono" name="telefono" placeholder="Ej.: 091234567" inputmode="tel" required />
+                <!-- <input type="tel" id="telefono" name="telefono" placeholder="Ej.: 091234567" inputmode="tel" required /> -->
+                <NLPHONE></NLPHONE>
               </div>
             </div>
             <div id="formError" class="form-error" aria-live="polite"></div>
             <div class="actions">
-              <button type="submit" class="btn btn-primary" id="btnStart">Comenzar</button>
+              <!-- Make this a non-submitting button so NetSuite doesn't interpret it as final submit -->
+              <button type="button" class="btn btn-primary" id="btnStart">Comenzar</button>
             </div>
           </form>
         </div>
@@ -212,12 +260,14 @@
             <button type="button" class="btn btn-success" id="btnRetrySend" style="display:none;">Reintentar envío</button>
             <button type="button" class="btn btn-ghost" id="btnRestart">Volver a empezar</button>
           </div>
-        </div>
-      </div>
-    </section>
+          </div> <!-- .views -->
+        </section> <!-- .content inside card -->
+      </aside> <!-- .card -->
+    </div> <!-- .layout -->
   </main>
 
   <script>
+    console.log('TriviaApp: script loaded');
     // ===== Preguntas (fácil de ampliar) =====
     // Agregue o edite elementos en este arreglo. Cada pregunta tiene 3 opciones y el índice de la correcta.
     const preguntas = [
@@ -248,11 +298,153 @@
       }
     ];
 
-    // ===== Configuración del RESTlet =====
-    // Reemplace XXX por el ID interno del script del RESTlet (y el deploy si corresponde)
-    const RESTLET_SCRIPT_ID = 'XXX';
-    const RESTLET_DEPLOY_ID = '1';
-    const RESTLET_URL = `/app/site/hosting/restlet.nl?script=${RESTLET_SCRIPT_ID}&deploy=${RESTLET_DEPLOY_ID}`;
+  // ===== Configuración del RESTlet =====
+  // Reemplace XXX por el ID interno del script del RESTlet (y el deploy si corresponde)
+  const RESTLET_SCRIPT_ID = '36';
+  const RESTLET_DEPLOY_ID = '1';
+  const RESTLET_ACCOUNT_ID = '7564430_SB1';
+  const RESTLET_BASE_PATH = '/app/site/hosting/restlet.nl';
+  // Si el formulario está hospedado en NetSuite (app/extforms) dejá vacío para que use location.origin
+  // En caso de probar desde otro dominio podés forzar el host, por ejemplo:
+  // Para usar la URL externa provista por NetSuite podés sobrescribir el host como sigue.
+
+  // ===== Opcionales: Credenciales OAuth (CLIENT-SIDE, INSECURE) =====
+  // WARNING: Storing these values in the browser exposes them to anyone who can open
+  // the page. Prefer a server-side proxy. These are provided here because you asked
+  // for an in-HTML example that generates the Authorization header and sends it in
+  // the fetch. Replace the placeholder strings with real values if you accept the risk.
+    const url = 'https://7564430-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl';
+
+    this.credentials = {
+      tokenId: '038083591f7f4251dd01dc03992bcae3be4064be164d0648f3695c999d2835a0',
+      tokenSecret: 'fff3845505005454647320d38115e06e8d191a4367416a4f131242cfe647ad51',  // From Postman collection
+      consumerKey: 'b7335b8ac48924318c704a2e0948d26d9a3d7bf79ee17c79e46031aca97041f4',
+      consumerSecret: 'ed0ed5df6e0aeb850569b5e6b6c5ebd61213345d79baa3ffefe24eb05ca9f901',
+      realm: '7564430_SB1'
+    };
+
+
+  // ===== OAuth 1.0a (HMAC-SHA256) helpers (browser, uses Web Crypto) =====
+  function percentEncode(str) {
+    return encodeURIComponent(str)
+      .replace(/[!*()']/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+  }
+
+  function generateNonce(len = 32) {
+    const arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(n => (n % 36).toString(36)).join('');
+  }
+
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+
+
+
+
+  function buildUrl(baseURL, script, deploy, scriptParams = '') {
+    const u = new URL(baseURL || this.baseURL);
+    u.searchParams.set('script', String(script));
+    u.searchParams.set('deploy', String(deploy));
+
+    if (typeof scriptParams === 'string' && scriptParams.trim()) {
+      for (const pair of scriptParams.replace(/^\?*&*/, '').split('&')) {
+        if (!pair) continue;
+        const [k, v = ''] = pair.split('=');
+        u.searchParams.set(decodeURIComponent(k), decodeURIComponent(v));
+      }
+    }
+    return u.toString();
+  }
+  // Generic HMAC using Web Crypto. algoName is 'SHA-256' or 'SHA-1'
+  async function hmac(key, data, algoName = 'SHA-256') {
+    const enc = new TextEncoder();
+    const cryptoKey = await crypto.subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: algoName }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(data));
+    return arrayBufferToBase64(sig);
+  }
+
+  // Build OAuth 1.0a Authorization header
+  // method: 'POST', url: full URL (may include query), body: string or null
+  /**
+   * Genera el Authorization header OAuth 1.0a HMAC-SHA256 para NetSuite
+   * - Si hay librería oauth-1.0a, la usa.
+   * - Si no, firma manualmente incluyendo los QUERY PARAMS en la base string.
+   */
+  async function buildOAuthHeader({ url, method = 'POST' }) {
+    const { realm, consumerKey, consumerSecret, tokenId, tokenSecret } = this.credentials;
+
+    // Puedes usar timestamp del server para evitar drift (opcional):
+    // const ts = await this.getServerTimestamp();
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const nonce = crypto.randomBytes(10).toString('hex');
+
+    // 1) Con librería (recomendado)
+    if (OAuth) {
+      const oauth = OAuth({
+        consumer: { key: consumerKey, secret: consumerSecret },
+        signature_method: 'HMAC-SHA256',
+        hash_function(baseString, key) {
+          return crypto.createHmac('sha256', key).update(baseString).digest('base64');
+        },
+      });
+      const token = { key: tokenId, secret: tokenSecret };
+      const custom = { oauth_timestamp: ts, oauth_nonce: nonce };
+      const authData = oauth.authorize({ url, method }, token, custom);
+      const { Authorization } = oauth.toHeader(authData);
+      return `${Authorization}, realm="${realm}"`;
+    }
+
+    // 2) Fallback manual (incluye query params en la firma)
+    const u = new URL(url);
+    const oauthData = {
+      oauth_consumer_key: consumerKey,
+      oauth_nonce: nonce,
+      oauth_signature_method: 'HMAC-SHA256',
+      oauth_timestamp: ts,
+      oauth_token: tokenId,
+      oauth_version: '1.0',
+    };
+
+    // Recolectar todos los params: query + oauth (realm NO va)
+    const allParams = [];
+    for (const [k, v] of u.searchParams.entries()) {
+      allParams.push([k, v]);
+    }
+    for (const [k, v] of Object.entries(oauthData)) {
+      allParams.push([k, v]);
+    }
+
+    // Orden lexicográfico por nombre y luego valor
+    allParams.sort((a, b) => (a[0] === b[0] ? String(a[1]).localeCompare(String(b[1])) : a[0].localeCompare(b[0])));
+
+    const paramString = allParams.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+
+    const baseString = [
+      method.toUpperCase(),
+      encodeURIComponent(`${u.origin}${u.pathname}`),
+      encodeURIComponent(paramString),
+    ].join('&');
+
+    const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+    const signature = crypto.createHmac('sha256', signingKey).update(baseString).digest('base64');
+
+    const headerParams = { ...oauthData, oauth_signature: signature };
+    const headerString = Object.keys(headerParams)
+      .sort()
+      .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(headerParams[k])}"`)
+      .join(', ');
+
+    return `OAuth ${headerString}, realm="${realm}"`;
+  }
+
 
     class TriviaApp {
       constructor(preguntas) {
@@ -270,13 +462,43 @@
         this.viewQuiz = document.getElementById('view-quiz');
         this.viewResult = document.getElementById('view-result');
 
-        // Formulario
-        this.form = document.getElementById('registerForm');
-        this.$nombre = document.getElementById('nombre');
-        this.$apellido = document.getElementById('apellido');
-        this.$cedula = document.getElementById('cedula');
-        this.$telefono = document.getElementById('telefono');
-        this.formError = document.getElementById('formError');
+  // Formulario
+  // In some environments (preview/outside NetSuite) the form element may not exist.
+  // Use document as fallback so querySelector still works, and guard later calls that require an actual form.
+  const formContainer = document.getElementById('registerForm') || document;
+  this.form = document.getElementById('registerForm') || null;
+  // Helper: robustly find the actual input/select/textarea for a given field container
+  const findInputForField = (fieldId, nameHints=[]) => {
+    // 1) try explicit id on input
+    const byId = document.getElementById(fieldId);
+    if (byId && (byId.tagName && /input|textarea|select/i.test(byId.tagName))) return byId;
+    // 2) look inside container for input/select/textarea
+    const container = document.getElementById(`field-${fieldId}`) || document.getElementById(`field-${fieldId.toLowerCase()}`) || document.getElementById(fieldId);
+    if (container && container.querySelector) {
+      const first = container.querySelector('input, textarea, select');
+      if (first) return first;
+    }
+    // 3) search by common name patterns inside the whole form container
+    for (const hint of nameHints) {
+      const byName = formContainer.querySelector(`input[name*="${hint}" i], textarea[name*="${hint}" i], select[name*="${hint}" i]`);
+      if (byName) return byName;
+    }
+    // 4) fallback: any input inside the field container id if present
+    if (container && container.querySelector) return container.querySelector('*');
+    return null;
+  };
+
+  // The NL* placeholders may render inputs with different ids. Use the helper to locate the first real input.
+  this.$nombre = findInputForField('nombre', ['firstname','first','nombre']);
+  this.$apellido = findInputForField('apellido', ['lastname','last','apellido']);
+  this.$cedula = findInputForField('cedula', ['documento','nrdocumento','cedula','id']);
+  this.$telefono = findInputForField('telefono', ['phone','telefono','mobile','cel']);
+  this.formError = document.getElementById('formError');
+  // Helpful console warnings for debugging when the expected ids are not present
+  if (!this.$nombre) console.debug('TriviaApp: input for nombre not found');
+  if (!this.$apellido) console.debug('TriviaApp: input for apellido not found');
+  if (!this.$cedula) console.debug('TriviaApp: input for cedula not found');
+  if (!this.$telefono) console.debug('TriviaApp: input for telefono not found');
 
         // Quiz
         this.$progressBar = document.getElementById('progressBar');
@@ -297,10 +519,37 @@
       }
 
       init() {
+        console.log('TriviaApp: init()');
         this.bindForm();
         this.bindQuiz();
         this.bindResult();
+        // Bind the start button to a non-submitting handler so NetSuite doesn't close the form
+        const startBtn = document.getElementById('btnStart');
+        if (startBtn) {
+          console.log('TriviaApp: found #btnStart, attaching click listener');
+          startBtn.addEventListener('click', () => this.handleStart());
+        } else {
+          console.warn('TriviaApp: #btnStart not found. Installing delegated click listener as fallback.');
+          // delegated fallback in case NetSuite wraps or replaces the button
+          document.addEventListener('click', (ev) => {
+            const b = ev.target.closest && ev.target.closest('#btnStart');
+            if (b) {
+              console.log('TriviaApp: delegated click on #btnStart detected');
+              this.handleStart();
+            }
+          });
+        }
         this.showView('form');
+        // Observe DOM mutations to catch NetSuite client-side replacements of NL tags
+        const mo = new MutationObserver((mutations) => {
+          if (document.getElementById('btnStart')) {
+            console.log('TriviaApp: detected #btnStart via MutationObserver, attaching listener');
+            const b = document.getElementById('btnStart');
+            b.addEventListener('click', () => this.handleStart());
+            mo.disconnect();
+          }
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
       }
 
       // ----- Navegación entre vistas -----
@@ -313,39 +562,67 @@
 
       // ----- Formulario -----
       bindForm() {
-        this.form.addEventListener('submit', (e) => {
-          e.preventDefault();
-          const ok = this.validateForm();
-          if (!ok) return;
-          this.state.participante = {
-            nombre: this.$nombre.value.trim(),
-            apellido: this.$apellido.value.trim(),
-            cedula: this.$cedula.value.trim(),
-            telefono: this.$telefono.value.trim(),
-          };
-          this.resetQuiz();
-          this.showView('quiz');
-          this.renderQuestion(0);
-        });
+        // Keep the form submit handler as a fallback but primary flow uses the start button
+        if (this.form && typeof this.form.addEventListener === 'function') {
+          this.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const ok = this.validateForm();
+            if (!ok) return;
+            this.startQuizFromForm();
+          });
+        } else {
+          console.warn('TriviaApp: no #registerForm found; skipping form submit binding.');
+        }
+      }
+
+      // Shared logic to start the quiz after validation
+      startQuizFromForm() {
+        if (!this.$nombre || !this.$apellido || !this.$cedula || !this.$telefono) {
+          console.error('TriviaApp: required form inputs not found. Aborting startQuizFromForm.', {nombre: this.$nombre, apellido: this.$apellido, cedula: this.$cedula, telefono: this.$telefono});
+          this.formError.textContent = 'Error interno: no se encontraron los campos del formulario. Contactá al administrador.';
+          return;
+        }
+        this.state.participante = {
+          nombre: (this.$nombre.value || '').trim(),
+          apellido: (this.$apellido.value || '').trim(),
+          cedula: (this.$cedula.value || '').trim(),
+          telefono: (this.$telefono.value || '').trim(),
+        };
+        this.resetQuiz();
+        this.showView('quiz');
+        this.renderQuestion(0);
+      }
+
+      // Handler for the non-submitting Comenzar button
+      handleStart() {
+        const ok = this.validateForm();
+        if (!ok) return;
+        this.startQuizFromForm();
       }
 
       validateForm() {
         let error = '';
         const trim = v => (v || '').trim();
+        if (!this.$nombre || !this.$apellido || !this.$cedula || !this.$telefono) {
+          console.error('TriviaApp: validateForm called but some inputs are missing', {nombre: this.$nombre, apellido: this.$apellido, cedula: this.$cedula, telefono: this.$telefono});
+          this.formError.textContent = 'Error interno: campos del formulario ausentes.';
+          return false;
+        }
         const nombre = trim(this.$nombre.value);
         const apellido = trim(this.$apellido.value);
         const cedula = trim(this.$cedula.value);
         const telefono = trim(this.$telefono.value);
 
         // Limpia estados
-        ['nombre','apellido','cedula','telefono'].forEach(id => {
-          document.getElementById(`field-${id}`).classList.remove('invalid');
-        });
+          ['nombre','apellido','cedula','telefono'].forEach(id => {
+            const f = document.getElementById(`field-${id}`);
+            if (f && f.classList) f.classList.remove('invalid');
+          });
 
-        if (!nombre) { error = 'Por favor ingresá tu nombre.'; document.getElementById('field-nombre').classList.add('invalid'); }
-        else if (!apellido) { error = 'Por favor ingresá tu apellido.'; document.getElementById('field-apellido').classList.add('invalid'); }
-        else if (!cedula) { error = 'Por favor ingresá tu cédula.'; document.getElementById('field-cedula').classList.add('invalid'); }
-        else if (!telefono) { error = 'Por favor ingresá tu teléfono.'; document.getElementById('field-telefono').classList.add('invalid'); }
+  if (!nombre) { error = 'Por favor ingresá tu nombre.'; const el = document.getElementById('field-nombre'); if (el) el.classList.add('invalid'); }
+  else if (!apellido) { error = 'Por favor ingresá tu apellido.'; const el = document.getElementById('field-apellido'); if (el) el.classList.add('invalid'); }
+  else if (!cedula) { error = 'Por favor ingresá tu cédula.'; const el = document.getElementById('field-cedula'); if (el) el.classList.add('invalid'); }
+  else if (!telefono) { error = 'Por favor ingresá tu teléfono.'; const el = document.getElementById('field-telefono'); if (el) el.classList.add('invalid'); }
         else if (!/^[0-9 .\-]+$/.test(cedula)) { error = 'La cédula debe contener solo números y separadores.'; document.getElementById('field-cedula').classList.add('invalid'); }
         else if (!/^[0-9 +()\-]{7,}$/.test(telefono)) { error = 'El teléfono no parece válido.'; document.getElementById('field-telefono').classList.add('invalid'); }
 
@@ -458,20 +735,80 @@
         const payload = {
           nombre: this.state.participante?.nombre || '',
           apellido: this.state.participante?.apellido || '',
-          cedula: this.state.participante?.cedula || '',
-          telefono: this.state.participante?.telefono || '',
+          docNumber: this.state.participante?.cedula || '',
+          mobilePhone: this.state.participante?.telefono || '',
           puntaje: this.state.puntaje,
+          source: 'TriviaApp',
         };
         this.renderSaving('Guardando datos…');
         this.$btnRetrySend.style.display = 'none';
         try {
-          const res = await fetch(RESTLET_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
+          // Build headers; include OAuth Authorization header if inline credentials were set.
+          const headers = { 'Content-Type': 'application/json' };
+          // if (NS_CONSUMER_KEY && NS_CONSUMER_SECRET && NS_TOKEN_ID && NS_TOKEN_SECRET && !NS_CONSUMER_KEY.includes('INSERT')) {
+            try {
+              console.warn('TriviaApp: Using client-side OAuth signing. THIS EXPOSES SECRETS IN THE BROWSER. Prefer server-side proxy.');
+              // Use absolute URL for signing to ensure the base string contains the NetSuite host
+              // const signedUrl = buildUrl(RESTLET_URL_ABS, RESTLET_SCRIPT_ID, RESTLET_DEPLOY_ID, RESTLET_EXTRA_PARAMS);
 
-          let data = null;
+              const url = this.buildUrl(null, 36, 1); // incluye script/deploy
+              const authHeader = await this.buildOAuthHeader({ url, method: 'POST' });
+
+              console.debug('signing absolute URL:', signedUrl);
+              const response = await this.httpRequest({
+                    method: 'POST',
+                    url,
+                    headers: {
+                      Authorization: authHeader,
+                      'Content-Type': 'application/json',
+                      Accept: 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                  });
+            } catch (hErr) {
+              console.error('TriviaApp: failed to build OAuth header', hErr);
+            }
+          // }
+
+            // Si tenés un proxy server-side (p.ej. en Node) seteá RESTLET_PROXY_PATH con la ruta relativa.
+           /*  // Caso contrario, se usa directamente el host de NetSuite calculado arriba para evitar CORS.
+            const RESTLET_PROXY_PATH = '';
+            const fetchUrl = RESTLET_PROXY_PATH || buildUrl(RESTLET_URL_ABS, RESTLET_SCRIPT_ID, RESTLET_DEPLOY_ID, RESTLET_EXTRA_PARAMS);
+          console.debug('TriviaApp: fetching URL:', fetchUrl);
+          let res = await fetch(fetchUrl, {
+            method: 'POST',
+            // same-origin: send cookies only to our proxy (if any). This is safe for proxy usage.
+            credentials: 'same-origin',
+            headers,
+            body: JSON.stringify(payload),
+          }); */
+
+          // If NetSuite returns 401 and we used HMAC-SHA256, retry once with HMAC-SHA1
+          /* if (res.status === 401 && headers['Authorization'] && headers['Authorization'].includes('HMAC-SHA256')) {
+            console.warn('TriviaApp: received 401 with HMAC-SHA256, retrying once with HMAC-SHA1 for diagnosis');
+            try {
+              const retryUrl = buildUrl(RESTLET_URL_ABS, RESTLET_SCRIPT_ID, RESTLET_DEPLOY_ID, RESTLET_EXTRA_PARAMS);
+              const auth2 = await buildOAuth1Header({
+                method: 'POST',
+                url: retryUrl,
+                consumerKey: NS_CONSUMER_KEY,
+                consumerSecret: NS_CONSUMER_SECRET,
+                token: NS_TOKEN_ID,
+                tokenSecret: NS_TOKEN_SECRET,
+                signatureMethod: 'HMAC-SHA1',
+                realm: RESTLET_REALM
+              });
+              const headers2 = Object.assign({}, headers, { Authorization: auth2 });
+              const res2 = await fetch(retryUrl, { method: 'POST', credentials: 'same-origin', headers: headers2, body: JSON.stringify(payload) });
+              console.debug('TriviaApp: retry response status', res2.status);
+              // prefer the successful response if any
+              if (res2.ok) res = res2;
+            } catch (retryErr) {
+              console.error('TriviaApp: retry with HMAC-SHA1 failed', retryErr);
+            }
+          } */
+
+         /*  let data = null;
           try { data = await res.clone().json(); } catch (_) { data = { raw: await res.text() }; }
 
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -482,22 +819,34 @@
             this.renderSuccess(`Datos guardados correctamente. ID: ${id}`);
           } else {
             throw new Error('Respuesta inesperada del servidor');
-          }
+          } */
         } catch (err) {
+          // Improve error feedback for network/CORS failures
           console.error('Error al guardar en NetSuite:', err);
-          this.renderError('No se pudo guardar en NetSuite. Verificá el script/deploy y los permisos.');
+          if (err instanceof TypeError && err.message === 'Failed to fetch') {
+            this.renderError('Error de red/CORS al comunicarse con NetSuite. Verificá que la página está servida desde NetSuite y que el RESTlet es accesible.');
+          } else {
+            this.renderError(`No se pudo guardar en NetSuite: ${err.message || err}`);
+          }
           this.$btnRetrySend.style.display = '';
         }
       }
 
       bindResult() {
-        this.$btnRetrySend.addEventListener('click', () => this.submitToNetSuite());
-        this.$btnRestart.addEventListener('click', () => {
-          this.form.reset();
-          this.formError.textContent = '';
-          this.resetQuiz();
-          this.showView('form');
-        });
+            this.$btnRetrySend.addEventListener('click', () => this.submitToNetSuite());
+            this.$btnRestart.addEventListener('click', () => {
+              if (this.form && typeof this.form.reset === 'function') this.form.reset();
+              else {
+                // If no real form exists (preview mode), try to clear known inputs
+                if (this.$nombre) this.$nombre.value = '';
+                if (this.$apellido) this.$apellido.value = '';
+                if (this.$cedula) this.$cedula.value = '';
+                if (this.$telefono) this.$telefono.value = '';
+              }
+              this.formError.textContent = '';
+              this.resetQuiz();
+              this.showView('form');
+            });
       }
 
       renderSaving(text) {
@@ -515,8 +864,40 @@
     (function () {
       const app = new TriviaApp(preguntas);
       app.init();
+      // Debug: report which inputs were bound (helps when NL tags render different ids)
+      console.debug('TriviaApp: bound inputs', {
+        nombre: (app.$nombre && (app.$nombre.name || app.$nombre.id || app.$nombre.tagName)) || null,
+        apellido: (app.$apellido && (app.$apellido.name || app.$apellido.id || app.$apellido.tagName)) || null,
+        cedula: (app.$cedula && (app.$cedula.name || app.$cedula.id || app.$cedula.tagName)) || null,
+        telefono: (app.$telefono && (app.$telefono.name || app.$telefono.id || app.$telefono.tagName)) || null,
+      });
+    })();
+
+    // Logo load fallback: if the NetSuite-hosted image cannot be loaded (CSP, 404, etc.),
+    // replace it with a small branded box showing initials.
+    (function handleLogoFallback() {
+      const img = document.getElementById('brandLogo');
+      if (!img) return;
+      // If already loaded successfully, nothing to do
+      if (img.complete && img.naturalWidth > 0) return;
+      img.addEventListener('error', () => {
+        const p = document.createElement('div');
+        p.className = 'brand-logo fallback';
+        p.textContent = 'EN';
+        img.replaceWith(p);
+      });
+      // Also guard a delayed failure where the browser never fires error but image is 0x0
+      setTimeout(() => {
+        if (img && (img.naturalWidth === 0 || img.naturalHeight === 0)) {
+          const p = document.createElement('div');
+          p.className = 'brand-logo fallback';
+          p.textContent = 'EN';
+          img.replaceWith(p);
+        }
+      }, 900);
     })();
   </script>
+  </NLFORM>
 </body>
 </html>
 

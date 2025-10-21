@@ -6,9 +6,62 @@
 define(['N/search', 'N/log'], function (search, log) {
     'use strict';
 
+    function clone(obj) {
+        return JSON.parse(JSON.stringify(obj || {}));
+    }
+
+    const DEFAULT_COEFFS = {
+        banco_binned: 0.0038032,
+        ent_t6_binned: 0.0026394,
+        intercept: 0.211, // IMPORTANTE: Usar exactamente 0.211 como en SDB-Enlamano-score.js (NO 0.2114816)
+        t6_cred_dir_comp_binned: 0.0028341,
+        vig_noauto_t6_coop_binned: 0.0033394,
+        t0_bbva_binned: 0.0045863,
+        cont_t0_fucac_binned: 0.0038189,
+        t0_scotia_binned: 0.0034926,
+        t0_asi_binned: 0.0037215,
+        brou_grupo_binned: 0.0037486,
+        emp_valor_binned: 0.0059208,
+        t0_fnb_binned: 0.0014982,
+        t0_santa_binned: 0.0006744,
+        t6_binned: 0.0005706,
+        cred_dir_binned: 0.0002515,
+        t6_creditel_binned: 0.0003315,
+        t6_oca_binned: 0.0042904,
+        t6_pronto_binned: 0.0016738
+    };
+
+    const DEFAULT_ALIAS_MAP = {
+        creditel: ['SOCUR', 'CREDITEL'],
+        oca: ['OCA'],
+        creditosDirectos: ['CREDITOS DIRECTOS', 'CRED. DIRECTOS'],
+        pronto: ['BAUTZEN', 'PRONTO'],
+        integrales: ['INTEGRALES'],
+        empr: ['EMPRENDIMIENTOS'],
+        fucac: ['FUCAC'],
+        scotia: ['SCOTIABANK', 'SCOTIA', 'SCOTIA BANK'],
+        brou: ['REPUBLICA', 'BROU', 'BANCO REPUBLICA', 'BANCO DE LA REPUBLICA ORIENTAL DEL URUGUAY'],
+        santander: ['SANTANDER'],
+        vizcaya: ['VIZCAYA', 'BBVA', 'BANCO BILBAO', 'BANCO BILBAO VIZCAYA', 'BANCO BILBAO VIZCAYA ARGENTARIA'],
+        bandes: ['BANDES'],
+        itau: ['BANCO ITA', 'BANCO ITAU', 'ITAU'],
+        hsbc: ['HSBC'],
+        coopNoAuto: ['ANDA', 'FUCEREP', 'ACAC'],
+        fnbTargets: ['INTEGRALES', 'BAUTZEN', 'CREDITOS DIRECTOS', 'EMPRENDIMIENTOS', 'MICROFINANZAS', 'OCA', 'PASS CARD', 'PROMOTORA', 'REPUBLICA MICROFINAZAS', 'RETOP', 'CIA', 'SOCUR', 'VERENDY']
+    };
+
+    const DEFAULT_NUMERIC = {
+        eps: 0,
+        rounding: {}
+    };
+
     // Configuración por defecto (fallback si falla carga desde NetSuite)
     // PRE-COMPILADAS para máxima velocidad - NO requiere parsing JSON
     const DEFAULT_RULES = {
+        mode: 'strict',
+        numeric: clone(DEFAULT_NUMERIC),
+        aliases: clone(DEFAULT_ALIAS_MAP),
+        coeffs: clone(DEFAULT_COEFFS),
         // NOTA: La sección 'coefficients' está comentada porque actualmente NO se usa en el scoring principal.
         // El scoring usa exclusivamente los coeficientes 'binned' (WOE) de abajo.
         // Esta sección está reservada para futuras extensiones (scoring híbrido, validaciones adicionales).
@@ -28,26 +81,7 @@ define(['N/search', 'N/log'], function (search, log) {
         */
         // Valores por defecto para coeficientes "binned" (WOE) extraídos del record de Score
         // ESTOS SON LOS COEFICIENTES QUE SE USAN ACTUALMENTE EN EL SCORING
-        binned: {
-            banco_binned: 0.0038032,
-            ent_t6_binned: 0.0026394,
-            intercept: 0.2114816,
-            t6_cred_dir_comp_binned: 0.0028341,
-            vig_noauto_t6_coop_binned: 0.0033394,
-            t0_bbva_binned: 0.0045863,
-            cont_t0_fucac_binned: 0.0038189,
-            t0_scotia_binned: 0.0034926,
-            t0_asi_binned: 0.0037215,
-            brou_grupo_binned: 0.0037486,
-            emp_valor_binned: 0.0059208,
-            t0_fnb_binned: 0.0014982,
-            t0_santa_binned: 0.0006744,
-            t6_binned: 0.0005706,
-            cred_dir_binned: 0.0002515,
-            t6_creditel_binned: 0.0003315,
-            t6_oca_binned: 0.0042904,
-            t6_pronto_binned: 0.0016738
-        },
+        binned: clone(DEFAULT_COEFFS),
         baseScore: 0.7,
         rejectionRules: {
             isDeceased: true,
@@ -66,8 +100,6 @@ define(['N/search', 'N/log'], function (search, log) {
     };
 
     let _cachedRules = null;
-    let _lastCacheTime = null;
-    let CACHE_DURATION_MS = 1800000;   
     let STRICT_MODE = false;    
     const scoreNetsuiteID = 1; // ID fijo del record customrecord_sdb_score
 
@@ -82,33 +114,40 @@ define(['N/search', 'N/log'], function (search, log) {
         try { customRules = loadRulesFromNetSuite(); } catch (e) { loadError = e; }
 
         if (customRules && validateRules(customRules)) {
-            var __vbc = (typeof verifyBinnedCompleteness==='function'? verifyBinnedCompleteness : function(){ return []; });
-            var __lbd = (typeof logBinnedDiff==='function'? logBinnedDiff : function(){});
-            var __sd = (typeof safeDebug==='function'? safeDebug : function(){});
-            var __cre = (typeof createRulesError==='function'? createRulesError : function(c,m){ return new Error(m||c); });
-            var missing = __vbc(customRules.binned);
+            var requiredKeys = Object.keys(DEFAULT_RULES.binned || {});
+            var missing = [];
+            for (var i = 0; i < requiredKeys.length; i++) {
+                var key = requiredKeys[i];
+                if (!customRules.binned || typeof customRules.binned[key] !== 'number' || isNaN(customRules.binned[key])) {
+                    missing.push(key);
+                }
+            }
             if (missing.length) {
                 var msg = 'Missing binned keys: ' + missing.join(', ');
-                if (STRICT_MODE) throw __cre('SCORING_RULES_INCOMPLETE', msg);
-                __sd('Scoring Rules Incomplete', msg);
+                if (STRICT_MODE) {
+                    throw createRulesError('SCORING_RULES_INCOMPLETE', msg);
+                }
+                if (log && log.debug) {
+                    log.debug({ title: 'Scoring Rules Incomplete', details: msg });
+                }
             }
-            __lbd(customRules.binned, DEFAULT_RULES.binned);
             _cachedRules = customRules;
-            _lastCacheTime = Date.now();
             return customRules;
         }
 
         if (STRICT_MODE) {
             var reason = loadError ? (loadError.message || loadError.toString()) : 'Invalid or missing rules';
-            var __cre2 = (typeof createRulesError==='function'? createRulesError : function(c,m){ var e=new Error(m||c); e.code=c; return e; });
-            throw __cre2('SCORING_RULES_STRICT_LOAD_FAILED', reason);
+            throw createRulesError('SCORING_RULES_STRICT_LOAD_FAILED', reason);
         }
 
-        var __sd2 = (typeof safeDebug==='function'? safeDebug : function(){});
-        __sd2('BCU Fast Rules Fallback', 'Using defaults due to: ' + (loadError ? (loadError.message || loadError.toString()) : 'invalid rules'));
-        _cachedRules = DEFAULT_RULES;
-        _lastCacheTime = Date.now();
-        return DEFAULT_RULES;
+        if (log && log.debug) {
+            log.debug({
+                title: 'BCU Fast Rules Fallback',
+                details: 'Using defaults due to: ' + (loadError ? (loadError.message || loadError.toString()) : 'invalid rules')
+            });
+        }
+    _cachedRules = DEFAULT_RULES;
+    return DEFAULT_RULES;
     }
 
     /** 
@@ -166,6 +205,9 @@ define(['N/search', 'N/log'], function (search, log) {
 
             // Construir objeto de reglas desde campos del record
             const customRules = {
+                mode: 'strict',
+                numeric: clone(DEFAULT_NUMERIC),
+                aliases: clone(DEFAULT_ALIAS_MAP),
                 baseScore: parseFloat(getFieldValue('custrecord_sdb_score_base_score')) || DEFAULT_RULES.baseScore,
                 rejectionRules: DEFAULT_RULES.rejectionRules, // parseRejectionRules(getFieldValue('custrecord_sdb_score_rejection_rules')), // COMENTADO: Campo no existe
                 periods: DEFAULT_RULES.periods, // Usar configuración estática
@@ -176,7 +218,7 @@ define(['N/search', 'N/log'], function (search, log) {
             customRules.binned = {
                 banco_binned: parseFloat(getFieldValue('custrecord_sdb_banco_binned')) || DEFAULT_RULES.binned.banco_binned,
                 ent_t6_binned: parseFloat(getFieldValue('custrecord_sdb_ent_t6_binned')) || DEFAULT_RULES.binned.ent_t6_binned,
-                intercept: parseFloat(getFieldValue('custrecord_sdb_intercept')) || DEFAULT_RULES.binned.intercept,
+                intercept: 0.211, // HARDCODED: Usar siempre 0.211 como en SDB-Enlamano-score.js (ignorar NetSuite)
                 t6_cred_dir_comp_binned: parseFloat(getFieldValue('custrecord_sdb_t6_cred_dir_comp_binned')) || DEFAULT_RULES.binned.t6_cred_dir_comp_binned,
                 vig_noauto_t6_coop_binned: parseFloat(getFieldValue('custrecord_sdb_vig_noauto_t6_coop_binned')) || DEFAULT_RULES.binned.vig_noauto_t6_coop_binned,
                 t0_bbva_binned: parseFloat(getFieldValue('custrecord_sdb_woe_cont_t0_bbva_binned')) || DEFAULT_RULES.binned.t0_bbva_binned,
@@ -194,6 +236,8 @@ define(['N/search', 'N/log'], function (search, log) {
                 t6_pronto_binned: parseFloat(getFieldValue('custrecord_sdb_woe_t6_pronto_binned')) || DEFAULT_RULES.binned.t6_pronto_binned
             };
 
+            customRules.coeffs = clone(customRules.binned);
+
             return customRules;
 
         } catch (error) {
@@ -205,34 +249,6 @@ define(['N/search', 'N/log'], function (search, log) {
         }
     }
 
-    function verifyBinnedCompleteness(binned) {
-        var required = Object.keys(DEFAULT_RULES.binned || {});
-        var missing = [];
-        for (var i = 0; i < required.length; i++) {
-            var k = required[i];
-            if (!binned || typeof binned[k] !== 'number' || isNaN(binned[k])) {
-                missing.push(k);
-            }
-        }
-        return missing;
-    }
-
-    function logBinnedDiff(actual, defaults) {
-        try {
-            var diff = {};
-            var keys = Object.keys(defaults || {});
-            for (var i = 0; i < keys.length; i++) {
-                var k = keys[i];
-                var a = (actual && typeof actual[k] === 'number') ? actual[k] : null;
-                var d = defaults[k];
-                if (a === null || a !== d) diff[k] = { actual: a, default: d };
-            }
-            if (log && log.debug) log.debug({ title: 'Scoring Rules Binned Diff', details: JSON.stringify(diff) });
-        } catch (e) {}
-    }
-
-    function safeDebug(title, details) { try { if (log && log.debug) log.debug({ title: title, details: details }); } catch (e) {} }
-
     function createRulesError(code, message) {
         var err = new Error(message || 'Scoring rules error');
         err.name = 'ScoringRulesError';
@@ -241,54 +257,16 @@ define(['N/search', 'N/log'], function (search, log) {
     }
 
     /**
-     * Parsea string JSON de penalizaciones por rating
-     */
-    function parseRatingPenalties(jsonString) {
-        try {
-            if (!jsonString) return DEFAULT_RULES.coefficients.ratingPenalties;
-            
-            var parsed = JSON.parse(jsonString);
-            return Object.assign({}, DEFAULT_RULES.coefficients.ratingPenalties, parsed);
-            
-        } catch (error) {
-            log.error({
-                title: 'Parse Rating Penalties Error', 
-                details: error.toString()
-            });
-            return DEFAULT_RULES.coefficients.ratingPenalties;
-        }
-    }
-
-    /**
-     * Parsea string JSON de reglas de rechazo
-     */
-    function parseRejectionRules(jsonString) {
-        try {
-            if (!jsonString) return DEFAULT_RULES.rejectionRules;
-            
-            var parsed = JSON.parse(jsonString);
-            return Object.assign({}, DEFAULT_RULES.rejectionRules, parsed);
-            
-        } catch (error) {
-            log.error({
-                title: 'Parse Rejection Rules Error',
-                details: error.toString()
-            });
-            return DEFAULT_RULES.rejectionRules;
-        }
-    }
-
-    /**
      * Invalida caché de reglas (fuerza recarga desde NetSuite)
      */
     function invalidateCache() {
         _cachedRules = null;
-        _lastCacheTime = null;
-        
-        log.debug({
-            title: 'Scoring Rules Cache',
-            details: 'Cache invalidated, will reload on next request'
-        });
+        if (log && log.debug) {
+            log.debug({
+                title: 'Scoring Rules Cache',
+                details: 'Cache invalidated, will reload on next request'
+            });
+        }
     }
 
     /**
@@ -345,8 +323,12 @@ define(['N/search', 'N/log'], function (search, log) {
     function setStrictMode(enabled) {
         STRICT_MODE = enabled === true;
         _cachedRules = null;
-        _lastCacheTime = null;
-        safeDebug('Scoring Rules Strict Mode', STRICT_MODE ? 'ENABLED' : 'DISABLED');
+        if (log && log.debug) {
+            log.debug({
+                title: 'Scoring Rules Strict Mode',
+                details: STRICT_MODE ? 'ENABLED' : 'DISABLED'
+            });
+        }
     }
         // Public API
     return {
@@ -360,11 +342,7 @@ define(['N/search', 'N/log'], function (search, log) {
         // Para testing
         _internal: {
             DEFAULT_RULES: DEFAULT_RULES,
-            loadRulesFromNetSuite: loadRulesFromNetSuite,
-            parseRatingPenalties: parseRatingPenalties,
-            parseRejectionRules: parseRejectionRules,
-            verifyBinnedCompleteness: (typeof verifyBinnedCompleteness === 'function' ? verifyBinnedCompleteness : function(){ return []; }),
-            logBinnedDiff: (typeof logBinnedDiff === 'function' ? logBinnedDiff : function(){})
+            loadRulesFromNetSuite: loadRulesFromNetSuite
         }
     };});
 

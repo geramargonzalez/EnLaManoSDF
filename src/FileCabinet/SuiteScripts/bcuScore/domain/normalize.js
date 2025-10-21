@@ -14,11 +14,14 @@ define([], function () {
 
     /**
      * Normaliza respuesta de Equifax IC GCP REPORTE a formato uniforme
+     * Soporta dos formatos:
+     * 1. Formato antiguo: entidadesRubrosValores_t0/t6, rubrosValoresGenerales_t0/t6
+     * 2. Formato nuevo (BOX_FASE0_PER): variablesDeSalida con datos agregados BCU
      * @param {Object} raw - Respuesta cruda de Equifax
      * @returns {NormalizedBCUData}
      */
     function normalizeEquifaxResponse(raw) {
-        const interconnect = (raw && raw.interconnectResponse) || {};
+        const interconnect = (raw && raw?.interconnectResponse) || {};
         const variables = interconnect.variablesDeSalida || {};
         const infoConsulta = interconnect.infoConsulta || {};
 
@@ -31,12 +34,30 @@ define([], function () {
                 periodData: { t0: createEmptyPeriod(), t6: createEmptyPeriod() },
                 flags: { isDeceased: true, hasRejectableRating: false },
                 metadata: { 
-                    nombre: sanitizeString(variables.nombre),
-                    fechaConsulta: infoConsulta.fechaConsulta
+                    nombre: sanitizeString(variables.nombre || infoConsulta.nombre),
+                    fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0]
                 }
             });
         }
 
+        // Detectar formato de respuesta
+        const isNewFormat = variables.hasOwnProperty('vigente') || 
+                           variables.hasOwnProperty('castigado') || 
+                           variables.hasOwnProperty('bcu_calificacion');
+
+        if (isNewFormat) {
+            // Formato nuevo BOX_FASE0_PER
+            return normalizeEquifaxNewFormat(raw, variables, infoConsulta);
+        } else {
+            // Formato antiguo con entidadesRubrosValores
+            return normalizeEquifaxLegacyFormat(raw, variables, infoConsulta);
+        }
+    }
+
+    /**
+     * Normaliza formato antiguo de Equifax (entidadesRubrosValores_t0/t6)
+     */
+    function normalizeEquifaxLegacyFormat(raw, variables, infoConsulta) {
         // Normalizar datos de períodos con parsing de strings "Mn: x Me: y"
         const t0Data = {
             totals: normalizeRubroList(variables.rubrosValoresGenerales_t0),
@@ -73,6 +94,167 @@ define([], function () {
     }
 
     /**
+     * Normaliza formato nuevo BOX_FASE0_PER de Equifax
+     * Respuesta con datos agregados en variablesDeSalida
+     */
+    function normalizeEquifaxNewFormat(raw, variables, infoConsulta) {
+        // Parsear valores de vigente, vencido, castigado (formato "Me: X Mn: Y")
+        const vigente = parseMoneyString(variables.vigente || 'Me: 0 Mn: 0');
+        const vencido = parseMoneyString(variables.vencido || 'Me: 0 Mn: 0');
+        const castigado = parseMoneyString(variables.castigado || 'Me: 0 Mn: 0');
+        const contingencias = parseMoneyString(variables.contingencias || 'Me: 0 Mn: 0');
+        
+        // Extraer calificación BCU
+        const bcu_calificacion = String(variables.bcu_calificacion || '0').toUpperCase();
+        const hasRejectableRating = BAD_RATINGS.includes(bcu_calificacion);
+        
+        // Construir entidad sintética desde los datos agregados
+        const instituciones = String(variables.bcu_instituciones || 'CLEARING BCU').split(',').map(function(s) { return s.trim(); });
+        
+        // Crear entidades sintéticas por cada institución
+        const entities = instituciones.map(function(institucion) {
+            return {
+                entidad: institucion,
+                rating: bcu_calificacion,
+                NombreEntidad: institucion,
+                Calificacion: bcu_calificacion,
+                vigente: vigente.total,
+                vencido: vencido.total,
+                castigado: castigado.total,
+                total: vigente.total + vencido.total + castigado.total,
+                rubros: [
+                    {
+                        rubro: 'VIGENTE',
+                        Rubro: 'VIGENTE',
+                        vigente: vigente.total,
+                        vencido: 0,
+                        castigado: 0,
+                        MnPesos: vigente.mn,
+                        MePesos: vigente.me,
+                        cont: false
+                    },
+                    {
+                        rubro: 'VENCIDO',
+                        Rubro: 'VENCIDO',
+                        vigente: 0,
+                        vencido: vencido.total,
+                        castigado: 0,
+                        MnPesos: vencido.mn,
+                        MePesos: vencido.me,
+                        cont: false
+                    },
+                    {
+                        rubro: 'CASTIGADO',
+                        Rubro: 'CASTIGADO',
+                        vigente: 0,
+                        vencido: 0,
+                        castigado: castigado.total,
+                        MnPesos: castigado.mn,
+                        MePesos: castigado.me,
+                        cont: false
+                    },
+                    {
+                        rubro: 'CONTINGENCIAS',
+                        Rubro: 'CONTINGENCIAS',
+                        vigente: contingencias.total,
+                        vencido: 0,
+                        castigado: 0,
+                        MnPesos: contingencias.mn,
+                        MePesos: contingencias.me,
+                        cont: true
+                    }
+                ]
+            };
+        });
+        
+        // Construir totales agregados
+        const totals = [
+            {
+                rubro: 'VIGENTE',
+                vigente: vigente.total,
+                vencido: 0,
+                castigado: 0,
+                total: vigente.total
+            },
+            {
+                rubro: 'VENCIDO',
+                vigente: 0,
+                vencido: vencido.total,
+                castigado: 0,
+                total: vencido.total
+            },
+            {
+                rubro: 'CASTIGADO',
+                vigente: 0,
+                vencido: 0,
+                castigado: castigado.total,
+                total: castigado.total
+            },
+            {
+                rubro: 'CONTINGENCIAS',
+                vigente: contingencias.total,
+                vencido: 0,
+                castigado: 0,
+                total: contingencias.total
+            }
+        ];
+        
+        // Datos T0 (actual)
+        const t0Data = {
+            totals: totals,
+            entities: entities,
+            aggregates: {
+                vigente: vigente,
+                vencido: vencido,
+                castigado: castigado,
+                sumVigenteU1m: toNumber(variables.bcu_sum_vigente_u1m || 0),
+                sumVencidoU1m: toNumber(variables.bcu_sum_novigente_u1m || 0), // "novigente" = vencido
+                sumCastigadoU1m: toNumber(variables.bcu_sum_castigado_u1m || 0),
+                cantEntidadesVigente: instituciones.length,
+                cantEntidadesVencido: vencido.total > 0 ? 1 : 0,
+                cantEntidadesCastigado: castigado.total > 0 ? 1 : 0
+            },
+            // Preservar rubros para compatibilidad con score.js
+            rubrosValoresGenerales: totals.map(function(t) {
+                return {
+                    Rubro: t.rubro,
+                    MnPesos: t.rubro === 'VIGENTE' ? vigente.mn : 
+                             t.rubro === 'VENCIDO' ? vencido.mn :
+                             t.rubro === 'CASTIGADO' ? castigado.mn : contingencias.mn,
+                    MePesos: t.rubro === 'VIGENTE' ? vigente.me : 
+                             t.rubro === 'VENCIDO' ? vencido.me :
+                             t.rubro === 'CASTIGADO' ? castigado.me : contingencias.me
+                };
+            })
+        };
+        
+        // Para T6 no tenemos datos en este formato, crear vacío
+        const t6Data = createEmptyPeriod();
+        
+        return buildNormalizedData({
+            provider: PROVIDER_EQUIFAX,
+            documento: pickDocument(variables, raw),
+            periodData: { t0: t0Data, t6: t6Data },
+            flags: { 
+                isDeceased: false,
+                hasRejectableRating: hasRejectableRating
+            },
+            metadata: {
+                nombre: sanitizeString(variables.nombre || infoConsulta.nombre),
+                worstRating: bcu_calificacion,
+                fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0],
+                aggregates: t0Data.aggregates,
+                periodo: variables.periodo,
+                codigo_institucion: variables.codigo_institucion
+            },
+            // Preservar datos RAW para debugging
+            rawData: {
+                variablesDeSalida: variables
+            }
+        });
+    }
+
+    /**
      * Normaliza respuesta BCU Direct (pendiente de implementación)
      * @param {Object} raw - Respuesta cruda de BCU
      * @returns {NormalizedBCUData}
@@ -97,33 +279,47 @@ define([], function () {
      */
     function normalizeMymResponse(mymResponse, documento) {
         const datosBcu = mymResponse.datosBcu || {};
-        const datosBcuT6 = mymResponse.datosBcuT6 || {};
+        // Aceptar ambos nombres de propiedad: datosBcuT6 y datosBcu_T6
+        const datosBcuT6 = mymResponse.datosBcuT6 || mymResponse.datosBcu_T6 || {};
         
-        // Extraer data de T0 (datosBcu)
-        const dataT0 = datosBcu.data || {};
-        const nombre = dataT0.Nombre || '';
+        // IMPORTANTE: datosBcu contiene datos de T2 (2 meses atrás), NO T0
+        // Esto está alineado con el score original SDB-Enlamano-score.js
+        const dataT2 = datosBcu.data || {};
+        const nombre = dataT2.Nombre || '';
         
         // Extraer data de T6 (datosBcuT6)
         const dataT6 = datosBcuT6.data || {};
         
-        // Normalizar entidades y rubros de T0
-        const entidadesT0 = dataT0.EntidadesRubrosValores || [];
-        const rubrosT0 = dataT0.RubrosValoresGenerales || [];
+        // Normalizar entidades y rubros de T2 (forzar arrays JS)
+        function ensureJsArray(arr) {
+            if (Array.isArray(arr)) return arr.slice();
+            if (arr && typeof arr === 'object' && typeof arr.length === 'number') {
+                var out = [];
+                for (var i = 0; i < arr.length; i++) out.push(arr[i]);
+                return out;
+            }
+            return [];
+        }
+        const entidadesT2 = ensureJsArray(dataT2.EntidadesRubrosValores || []);
+        const rubrosT2 = ensureJsArray(dataT2.RubrosValoresGenerales || []);
         
         // Normalizar entidades y rubros de T6
-        const entidadesT6 = dataT6.EntidadesRubrosValores || [];
-        const rubrosT6 = dataT6.RubrosValoresGenerales || [];
+        const entidadesT6 = ensureJsArray(dataT6.EntidadesRubrosValores || []);
+        const rubrosT6 = ensureJsArray(dataT6.RubrosValoresGenerales || []);
         
         // Convertir formato MYM a formato normalizado
+        // NOTA: Usamos nombres t0/t6 en la estructura normalizada por compatibilidad con score.js
+        // pero los datos reales son T2 (datosBcu) y T6 (datosBcuT6)
         const t0Data = {
-            totals: normalizeMymRubrosList(rubrosT0),
-            entities: normalizeMymEntitiesList(entidadesT0),
-            aggregates: extractMymAggregates(rubrosT0),
+            totals: normalizeMymRubrosList(rubrosT2),
+            entities: normalizeMymEntitiesList(entidadesT2),
+            aggregates: extractMymAggregates(rubrosT2),
             // Preservar datos RAW para compatibilidad con SDB-Enlamano-score.js
-            metadata: {
-                periodo: dataT0.Periodo || ''
+            rawMirror: {
+                periodo: dataT2.Periodo || '',
+                realPeriod: 'T2' // Indicar que estos son datos de T2
             },
-            rubrosValoresGenerales: rubrosT0 // Acceso directo a rubros originales
+            rubrosValoresGenerales: rubrosT2 // Acceso directo a rubros originales
         };
         
         const t6Data = {
@@ -132,7 +328,8 @@ define([], function () {
             aggregates: extractMymAggregates(rubrosT6),
             // Preservar datos RAW para compatibilidad con SDB-Enlamano-score.js
             metadata: {
-                periodo: dataT6.Periodo || ''
+                periodo: dataT6.Periodo || '',
+                realPeriod: 'T6' // Indicar que estos son datos de T6
             },
             rubrosValoresGenerales: rubrosT6 // Acceso directo a rubros originales
         };
@@ -146,7 +343,7 @@ define([], function () {
             provider: PROVIDER_MYM,
             documento: documento,
             periodData: { t0: t0Data, t6: t6Data },
-            flags: {
+            flags: { 
                 isDeceased: false,
                 hasRejectableRating: hasRejectableRating
             },
@@ -154,8 +351,16 @@ define([], function () {
                 nombre: sanitizeString(nombre),
                 worstRating: worstRating,
                 documento: documento,
-                sectorActividad: dataT0.SectorActividad || '',
-                aggregates: t0Data.aggregates
+                sectorActividad: dataT2.SectorActividad || '',
+                aggregates: t0Data.aggregates,
+                tipoDocumento: 'IDE',
+                // espejo crudo para logging similar a SDB
+                rawMirror: {
+                    tipoDocumento: 'IDE',
+                    documento: documento,
+                    datosBcu: datosBcu,
+                    datosBcu_T6: (mymResponse && (mymResponse.datosBcuT6 === null || mymResponse.datosBcu_T6 === null)) ? null : (datosBcuT6 || null)
+                }
             },
             // Preservar datos RAW completos para logTxt
             rawData: {
@@ -246,6 +451,12 @@ define([], function () {
             const mePesos = toNumber(r.MePesos || 0);
             const total = mnPesos + mePesos;
             const name = String(r.Rubro || '').trim();
+            const nameUpper = name.toUpperCase().trim();
+            
+            // Detectar contingencia por nombre de rubro (con trim extra para eliminar espacios)
+            const isContingencia = nameUpper.indexOf('CONTING') > -1 || 
+                                   nameUpper === 'CONTINGENCIAS' ||
+                                   nameUpper === 'CONTINGENCIA';
             
             return {
                 rubro: name,
@@ -254,7 +465,8 @@ define([], function () {
                 castigado: 0,
                 Rubro: name, // Campo legacy
                 MnPesos: mnPesos,
-                MePesos: mePesos
+                MePesos: mePesos,
+                cont: isContingencia // Preservar flag de contingencia
             };
         });
     }
@@ -334,7 +546,7 @@ define([], function () {
     }
 
     /**
-     * Parsea string "Mn: 123.45 Me: 67.89" y retorna {mn, me, total}
+     * Parsea string "Mn: 123.45 Me: 67.89" o "Me: 67.89 Mn: 123.45" y retorna {mn, me, total}
      */
     function parseMoneyString(str) {
         if (!str || typeof str !== 'string') {
@@ -466,11 +678,18 @@ define([], function () {
         if (!Array.isArray(rubros)) return [];
 
         return rubros.map(function(rubro) {
+            const rubroName = String(rubro.rubro || '');
+            const rubroNameUpper = rubroName.toUpperCase();
+            
+            // Detectar contingencia por nombre de rubro
+            const isContingencia = rubroNameUpper.indexOf('CONTING') > -1 || rubroNameUpper === 'CONTINGENCIAS';
+            
             return {
-                rubro: String(rubro.rubro || ''),
+                rubro: rubroName,
                 vigente: toNumber(rubro.vigente),
                 vencido: toNumber(rubro.vencido),
-                castigado: toNumber(rubro.castigado)
+                castigado: toNumber(rubro.castigado),
+                cont: isContingencia // Preservar flag de contingencia
             };
         });
     }

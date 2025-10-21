@@ -17,7 +17,7 @@ function (https, log, runtime, encode, normalize) {
     // Pre-compilar URLs y headers para evitar string concatenations
     let _config = null;
 
-    /**
+    /** 
      * OPTIMIZADO: Fetch con caché agresivo y timeouts cortos
      */
     function fetch(documento, options) {
@@ -71,7 +71,7 @@ function (https, log, runtime, encode, normalize) {
                 'Authorization': 'Basic ' + _config.basicAuth,
                 'User-Agent': 'NetSuite-ELM/1.0'
             },
-            body: 'grant_type=client_credentials&scope=ic-gcp-reporte',
+            body: 'grant_type=client_credentials&scope=https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations',
             timeout: 10 // TIMEOUT MUY CORTO para token
         });
 
@@ -91,12 +91,39 @@ function (https, log, runtime, encode, normalize) {
 
     /**
      * OPTIMIZADO: Request Equifax con headers pre-compilados
+     * Usa nueva API BOX_FASE0_PER de MANDAZY
      */
     function executeEquifaxRequest(documento, accessToken, options) {
-        // Payload mínimo para velocidad
+        // Obtener fecha actual para anio/mes
+        const now = new Date();
+        const anio = String(now.getFullYear());
+        const mes = String(now.getMonth() + 1).padStart(2, '0');
+        
+        // Formatear documento con guión si no lo tiene (formato: xxxxxxx-x)
+        const docFormatted = formatDocumento(documento);
+        
+        // Payload según documentación BOX_FASE0_PER
         const payload = {
-            cedula: documento,
-            periodo: options.includePeriods !== false ? ['t0', 't6'] : ['t0']
+            applicants: {
+                primaryConsumer: {
+                    personalInformation: {
+                        documento: docFormatted,
+                        tipoDocumento: options.tipoDocumento || 'CI',
+                        paisDocumento: options.paisDocumento || 'UY',
+                        anio: anio,
+                        mes: mes
+                    }
+                }
+            },
+            productData: {
+                billTo: _config.billTo,
+                shipTo: _config.shipTo,
+                productName: _config.productName,
+                productOrch: _config.productOrch,
+                configuration: _config.configuration,
+                customer: _config.customer,
+                model: _config.model
+            }
         };
 
         const response = https.request({
@@ -113,14 +140,36 @@ function (https, log, runtime, encode, normalize) {
 
         return JSON.parse(response.body);
     }
+    
+    /**
+     * Formatea documento al formato requerido por Equifax (xxxxxxx-x)
+     */
+    function formatDocumento(documento) {
+        if (!documento) return '';
+        
+        // Remover caracteres no numéricos
+        const cleaned = String(documento).replace(/[^\d]/g, '');
+        
+        // Si tiene 8 dígitos, agregar guión antes del último
+        if (cleaned.length === 8) {
+            return cleaned.substring(0, 7) + '-' + cleaned.substring(7);
+        }
+        
+        // Si ya tiene el formato correcto, devolverlo
+        if (cleaned.length === 7 || cleaned.length === 6) {
+            return cleaned;
+        }
+        
+        return cleaned;
+    }
 
     /**
      * OPTIMIZADO: Configuración lazy-loaded una sola vez
      */
     function getEquifaxConfig() {
-        const script = runtime.getCurrentScript();
-        const clientId = script.getParameter({ name: 'custscript_equifax_client_id' });
-        const clientSecret = script.getParameter({ name: 'custscript_equifax_client_secret' });
+        
+        const clientId = 'add client id';
+        const clientSecret = 'add client secret';
 
         if (!clientId || !clientSecret) {
             throw createEquifaxError('CONFIG_ERROR', 'Credenciales Equifax no configuradas');
@@ -140,11 +189,26 @@ function (https, log, runtime, encode, normalize) {
             'User-Agent': 'NetSuite-ELM/1.0'
         };
 
+        // Parámetros BOX_FASE0_PER
+        const billTo =  'UY004277B001';
+        const shipTo = 'UY004277B001S3642';
+        const productName = 'UYICBOX';
+        const productOrch = 'boxFase0Per';
+        const customer = 'UYICMANDAZY';
+        const model = 'boxFase0PerMandazy';
+        const configuration = script.getParameter({ name: 'custscript_equifax_configuration' }) || 'Config';
+
         return {
-            tokenUrl: script.getParameter({ name: 'custscript_equifax_token_url' }) || 
-                     'https://api.equifax.com/oauth/token',
-            apiUrl: script.getParameter({ name: 'custscript_equifax_api_url' }) + '/interconnect',
+            tokenUrl:'https://api.latam.equifax.com/v2/oauth/token',
+            apiUrl: 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations' + '/execute',
             basicAuth: basicAuth,
+            billTo: billTo,
+            shipTo: shipTo,
+            productName: productName,
+            productOrch: productOrch,
+            customer: customer,
+            model: model,
+            configuration: configuration,
             requestHeaders: function(token) {
                 // Clone template y añadir auth - más rápido que crear desde cero
                 var headers = Object.assign({}, requestHeadersTemplate);
@@ -205,6 +269,7 @@ function (https, log, runtime, encode, normalize) {
             getValidToken: getValidToken,
             executeEquifaxRequest: executeEquifaxRequest,
             createEquifaxError: createEquifaxError,
+            formatDocumento: formatDocumento,
             TIMEOUT_MS: TIMEOUT_MS
         }
     };

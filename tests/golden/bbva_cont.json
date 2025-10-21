@@ -1,0 +1,29 @@
+{
+  "name": "bbva_cont",
+  "documento": "53350991",
+  "expected": {
+    "score": 691,
+    "calificacionMinima": "1C",
+    "endeudamiento": -0.09090909090909094,
+    "error_reglas": false,
+    "contador": 2,
+    "binned": {
+      "ent_t6_binned_res": 0.0211152,
+      "t6_binned_res": 0.018224964,
+      "t6_creditel_binned_res": 0.013465529999999998,
+      "t6_oca_binned_res": -0.065042464,
+      "t0_fnb_binned_res": 0,
+      "t0_asi_binned_res": -0.01838421,
+      "t0_bbva_binned_res": 0.364106357,
+      "t6_cred_dir_comp_binned_res": -0.012328335,
+      "t6_banco_binned_res": 0.19419139200000002,
+      "vig_noauto_t6_coop_binned_res": -0.078542688,
+      "t0_santa_binned_res": -0.012321288,
+      "cont_t0_fucac_binned_res": 0.283209624,
+      "brou_grupo_binned_res": -0.057878384,
+      "t6_pronto_binned_res": -0.013156068,
+      "t0_scotia_binned_res": -0.014529216,
+      "cred_dir_binned_res": -0.00103618
+    }
+  }
+}

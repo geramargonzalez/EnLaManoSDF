@@ -1,4 +1,4 @@
- define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/https'], function (log, record, search, runtime, render, email, https) {
+ define(['N/log', 'N/record', 'N/search', 'N/runtime', 'N/render', 'N/email', 'N/https', './ELM_Aux_Lib.js'], function (log, record, search, runtime, render, email, https, auxLib) {
 
     
     function scoreFinal(dni) {
@@ -32,6 +32,29 @@
             var t6_creditel_binned = scoreRecord.getValue('custrecord_sdb_woe_t6_creditel_binned')
             var t6_oca_binned = scoreRecord.getValue('custrecord_sdb_woe_t6_oca_binned');
             var t6_pronto_binned = scoreRecord.getValue('custrecord_sdb_woe_t6_pronto_binned');
+            
+            // LOG: Coeficientes cargados desde NetSuite
+            logTxt += '<P>========== COEFICIENTES DESDE NETSUITE (SDB ORIGINAL) ==========</P>';
+            logTxt += '<P>banco_binned: ' + banco_binned + '</P>';
+            logTxt += '<P>ent_t6_binned: ' + ent_t6_binned + '</P>';
+            logTxt += '<P>intercept: ' + intercept + '</P>';
+            logTxt += '<P>t6_cred_dir_comp_binned: ' + t6_cred_dir_comp_binned + '</P>';
+            logTxt += '<P>vig_noauto_t6_coop_binned: ' + vig_noauto_t6_coop_binned + '</P>';
+            logTxt += '<P>t0_bbva_binned: ' + t0_bbva_binned + '</P>';
+            logTxt += '<P>cont_t0_fucac_binned: ' + cont_t0_fucac_binned + '</P>';
+            logTxt += '<P>t0_scotia_binned: ' + t0_scotia_binned + '</P>';
+            logTxt += '<P>t0_asi_binned: ' + t0_asi_binned + '</P>';
+            logTxt += '<P>brou_grupo_binned: ' + brou_grupo_binned + '</P>';
+            logTxt += '<P>emp_valor_binned: ' + emp_valor_binned + '</P>';
+            logTxt += '<P>t0_fnb_binned: ' + t0_fnb_binned + '</P>';
+            logTxt += '<P>t0_santa_binned: ' + t0_santa_binned + '</P>';
+            logTxt += '<P>t6_binned: ' + t6_binned + '</P>';
+            logTxt += '<P>cred_dir_binned: ' + cred_dir_binned + '</P>';
+            logTxt += '<P>t6_creditel_binned: ' + t6_creditel_binned + '</P>';
+            logTxt += '<P>t6_oca_binned: ' + t6_oca_binned + '</P>';
+            logTxt += '<P>t6_pronto_binned: ' + t6_pronto_binned + '</P>';
+            logTxt += '<P>=================================================================</P>';
+            
             var cred_dir_binned_res = 0;
             var ent_t6_binned_res = 0;
             var t6_binned_res = 0;
@@ -71,6 +94,8 @@
             });
 
             var responseBody = JSON.parse(objResponse?.body);
+
+            auxLib.createLogRecord(dni, null, false, 6, "BCU OLD", responseBody);
     
             // Check if response contains errors
             if (responseBody.hasOwnProperty('errores')) {
@@ -468,6 +493,27 @@
 
             }
 
+            // LOG: Valores ANTES de multiplicar por coeficientes
+            logTxt += '<P>========== VALORES ANTES DE MULTIPLICAR (SDB ORIGINAL) ==========</P>';
+            logTxt += '<P>ent_t6_binned_res: ' + ent_t6_binned_res + '</P>';
+            logTxt += '<P>t6_binned_res: ' + t6_binned_res + '</P>';
+            logTxt += '<P>t6_creditel_binned_res: ' + t6_creditel_binned_res + '</P>';
+            logTxt += '<P>t6_oca_binned_res: ' + t6_oca_binned_res + '</P>';
+            logTxt += '<P>t0_fnb_binned_res: ' + t0_fnb_binned_res + '</P>';
+            logTxt += '<P>t0_asi_binned_res: ' + t0_asi_binned_res + '</P>';
+            logTxt += '<P>t0_bbva_binned_res: ' + t0_bbva_binned_res + '</P>';
+            logTxt += '<P>t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res + '</P>';
+            logTxt += '<P>t6_banco_binned_res: ' + t6_banco_binned_res + '</P>';
+            logTxt += '<P>vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res + '</P>';
+            logTxt += '<P>t0_santa_binned_res: ' + t0_santa_binned_res + '</P>';
+            logTxt += '<P>emp_valor_binned_res: ' + emp_valor_binned_res + '</P>';
+            logTxt += '<P>cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res + '</P>';
+            logTxt += '<P>brou_grupo_binned_res: ' + brou_grupo_binned_res + '</P>';
+            logTxt += '<P>t6_pronto_binned_res: ' + t6_pronto_binned_res + '</P>';
+            logTxt += '<P>t0_scotia_binned_res: ' + t0_scotia_binned_res + '</P>';
+            logTxt += '<P>cred_dir_binned_res: ' + cred_dir_binned_res + '</P>';
+            logTxt += '<P>=================================================================</P>';
+
             // calculo final de score
             ent_t6_binned_res = ent_t6_binned_res * ent_t6_binned;
             t6_binned_res = t6_binned_res * t6_binned;
@@ -488,8 +534,39 @@
             cred_dir_binned_res = cred_dir_binned_res * cred_dir_binned
             var test = 1 * 0.211
             var total = test + ent_t6_binned_res + t6_binned_res + t6_creditel_binned_res + t6_oca_binned_res + t0_fnb_binned_res + t0_asi_binned_res + t0_bbva_binned_res + t6_cred_dir_comp_binned_res + t6_banco_binned_res + vig_noauto_t6_coop_binned_res + t0_santa_binned_res + emp_valor_binned_res + cont_t0_fucac_binned_res + brou_grupo_binned_res + t6_pronto_binned_res + t0_scotia_binned_res + cred_dir_binned_res;
+            
+            // LOG: Valores DESPUÉS de multiplicar por coeficientes
+            logTxt += '<P>========== VALORES DESPUES DE MULTIPLICAR (SDB ORIGINAL) ==========</P>';
+            logTxt += '<P>test (intercept): ' + test + '</P>';
+            logTxt += '<P>ent_t6_binned_res: ' + ent_t6_binned_res + '</P>';
+            logTxt += '<P>t6_binned_res: ' + t6_binned_res + '</P>';
+            logTxt += '<P>t6_creditel_binned_res: ' + t6_creditel_binned_res + '</P>';
+            logTxt += '<P>t6_oca_binned_res: ' + t6_oca_binned_res + '</P>';
+            logTxt += '<P>t0_fnb_binned_res: ' + t0_fnb_binned_res + '</P>';
+            logTxt += '<P>t0_asi_binned_res: ' + t0_asi_binned_res + '</P>';
+            logTxt += '<P>t0_bbva_binned_res: ' + t0_bbva_binned_res + '</P>';
+            logTxt += '<P>t6_cred_dir_comp_binned_res: ' + t6_cred_dir_comp_binned_res + '</P>';
+            logTxt += '<P>t6_banco_binned_res: ' + t6_banco_binned_res + '</P>';
+            logTxt += '<P>vig_noauto_t6_coop_binned_res: ' + vig_noauto_t6_coop_binned_res + '</P>';
+            logTxt += '<P>t0_santa_binned_res: ' + t0_santa_binned_res + '</P>';
+            logTxt += '<P>emp_valor_binned_res: ' + emp_valor_binned_res + '</P>';
+            logTxt += '<P>cont_t0_fucac_binned_res: ' + cont_t0_fucac_binned_res + '</P>';
+            logTxt += '<P>brou_grupo_binned_res: ' + brou_grupo_binned_res + '</P>';
+            logTxt += '<P>t6_pronto_binned_res: ' + t6_pronto_binned_res + '</P>';
+            logTxt += '<P>t0_scotia_binned_res: ' + t0_scotia_binned_res + '</P>';
+            logTxt += '<P>cred_dir_binned_res: ' + cred_dir_binned_res + '</P>';
+            logTxt += '<P>TOTAL (logit): ' + total + '</P>';
+            logTxt += '<P>=================================================================</P>';
+            
             score = (Math.exp(total) / (1 + Math.exp(total))) * 1000;
             score = Math.round(score)
+            
+            // LOG: Cálculo final del score
+            logTxt += '<P>========== CALCULO FINAL SCORE (SDB ORIGINAL) ==========</P>';
+            logTxt += '<P>exp(total): ' + Math.exp(total) + '</P>';
+            logTxt += '<P>score (antes de redondear): ' + ((Math.exp(total) / (1 + Math.exp(total))) * 1000) + '</P>';
+            logTxt += '<P>score (redondeado): ' + score + '</P>';
+            logTxt += '<P>=======================================================</P>';
 
             /////////////////////////////////////////////////////////////////////////////////
             logTxt += '<P/> ent_t6_binned_res: ' + ent_t6_binned_res;

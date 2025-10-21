@@ -36,6 +36,21 @@ function (https, log, normalize) {
             
             throw createMymError('MYM_FETCH_ERROR', error.message, error);
         }
+
+        // Fallback adicional: algunos entornos devuelven 'datosBcuT6' (sin guion bajo)
+        if (!datosBcuT6 && responseBody && responseBody.datosBcuT6 &&
+            responseBody.datosBcuT6 !== 'false' && responseBody.datosBcuT6 !== 'null') {
+            try {
+                datosBcuT6 = JSON.parse(responseBody.datosBcuT6);
+                log.debug({ title: 'MYM parsed datosBcuT6 (alias)', details: { documento: documento } });
+            } catch (e) {
+                log.error({
+                    title: 'MYM datosBcuT6 alias parse error - continuando con T6 vacío',
+                    details: { error: e.toString(), documento: documento }
+                });
+                datosBcuT6 = null;
+            }
+        }
     }
 
     /**
@@ -72,6 +87,18 @@ function (https, log, normalize) {
             throw createMymError('MYM_PARSE_ERROR', 'No se pudo parsear respuesta JSON', parseError);
         }
 
+        // DEBUG: Log completo de la estructura de respuesta
+        log.debug({
+            title: 'MYM Response Structure',
+            details: {
+                documento: documento,
+                hasDataosBcu: !!(responseBody && responseBody.datosBcu),
+                hasDatosBcuT6: !!(responseBody && (responseBody.datosBcu_T6 || responseBody.datosBcuT6)),
+                responseKeys: responseBody ? Object.keys(responseBody) : 'NO_RESPONSE',
+                responseBodyPreview: responseBody ? JSON.stringify(responseBody).substring(0, 500) : 'NO_BODY'
+            }
+        });
+
         // CASO 1: Verificar si datosBcu existe y parsearlo
         let datosBcu = null;
         let datosBcuT6 = null;
@@ -99,26 +126,50 @@ function (https, log, normalize) {
             }
         }
 
-        if (responseBody.datosBcu_T6) {
+        // Intentar parsear datosBcu_T6 si existe y no es false/null
+        if (responseBody.datosBcu_T6 && 
+            responseBody.datosBcu_T6 !== 'false' && 
+            responseBody.datosBcu_T6 !== false) {
             try {
                 datosBcuT6 = JSON.parse(responseBody.datosBcu_T6);
             } catch (e) {
-                throw createMymError('MYM_PARSE_BCU_T6_ERROR', 'No se pudo parsear datosBcu_T6', e);
+                log.error({
+                    title: 'MYM datosBcu_T6 parse error - continuando con T6 vacío',
+                    details: {
+                        documento: documento,
+                        error: e.toString(),
+                        datosBcu_T6Type: typeof responseBody.datosBcu_T6,
+                        datosBcu_T6Value: String(responseBody.datosBcu_T6).substring(0, 100)
+                    }
+                });
+                // Continuar con T6 vacío en lugar de fallar
+                datosBcuT6 = null;
             }
 
-            // Verificar errores en datosBcu_T6
-            if (datosBcuT6.errors && Array.isArray(datosBcuT6.errors) && datosBcuT6.errors.length > 0) {
+            // Verificar errores en datosBcu_T6 solo si se parseó exitosamente
+            if (datosBcuT6 && datosBcuT6.errors && Array.isArray(datosBcuT6.errors) && datosBcuT6.errors.length > 0) {
                 const error = datosBcuT6.errors[0];
                 if (error.status === 404) {
                     log.debug({
-                        title: 'MYM datosBcu_T6 404 - usando estructura plana',
+                        title: 'MYM datosBcu_T6 404 - usando T6 vacío',
                         details: 'Documento: ' + documento
                     });
-                    
-                    return adaptFlatStructure(responseBody, documento);
+                    datosBcuT6 = null; // Usar T6 vacío en lugar de fallar
+                } else {
+                    throw createMymError('MYM_BCU_T6_ERROR', 'Error en datosBcu_T6', { errors: datosBcuT6.errors });
                 }
-                throw createMymError('MYM_BCU_T6_ERROR', 'Error en datosBcu_T6', { errors: datosBcuT6.errors });
             }
+        } else {
+            // datosBcu_T6 es false, null, o no existe - usar estructura vacía
+            log.debug({
+                title: 'MYM sin datosBcu_T6 - usando T6 vacío',
+                details: {
+                    documento: documento,
+                    datosBcu_T6Value: responseBody.datosBcu_T6,
+                    datosBcu_T6Type: typeof responseBody.datosBcu_T6
+                }
+            });
+            datosBcuT6 = null;
         }
 
         // Verificar errores de validación en responseBody principal
@@ -142,16 +193,73 @@ function (https, log, normalize) {
             return adaptFlatStructure(responseBody, documento);
         }
 
-        // CASO 4: Estructura normal con datosBcu y datosBcu_T6 parseados
-        if (!datosBcu || !datosBcuT6) {
+        // CASO 4: Si datosBcu es null, es un error crítico (requerido)
+        if (!datosBcu) {
+            log.error({
+                title: 'MYM Missing datosBcu - crítico',
+                details: {
+                    documento: documento,
+                    hasDatosBcu: !!datosBcu,
+                    responseKeys: Object.keys(responseBody),
+                    responsePreview: JSON.stringify(responseBody).substring(0, 1000)
+                }
+            });
+            
             throw createMymError(
                 'MYM_MISSING_DATA',
-                'La respuesta no contiene datosBcu o datosBcu_T6',
-                { response: responseBody }
+                'La respuesta no contiene datosBcu (período T0 requerido)',
+                { 
+                    responseKeys: Object.keys(responseBody),
+                    hasDatosBcu: false
+                }
+            );
+        }
+        
+        // Si datosBcuT6 es null, crear estructura vacía (opcional)
+        if (!datosBcuT6) {
+            log.debug({
+                title: 'MYM creando datosBcuT6 vacío',
+                details: { documento: documento }
+            });
+            
+            datosBcuT6 = {
+                bcuRawData: null,
+                data: {
+                    Nombre: (datosBcu.data && datosBcu.data.Nombre) || '',
+                    Documento: documento,
+                    TipoDocumento: 'IDE',
+                    SectorActividad: '',
+                    Periodo: '',
+                    RubrosValoresGenerales: [],
+                    EntidadesRubrosValores: []
+                },
+                errors: null,
+                responseId: '00000000-0000-0000-0000-000000000000'
+            };
+        }
+        
+        // Verificar que al menos T0 tenga datos válidos
+        const hasValidT0Data = datosBcu && datosBcu.data && 
+                               (datosBcu.data.EntidadesRubrosValores || datosBcu.data.RubrosValoresGenerales);
+        
+        if (!hasValidT0Data) {
+            log.error({
+                title: 'MYM Empty T0 Data - sin información en período actual',
+                details: {
+                    documento: documento,
+                    t0DataKeys: (datosBcu && datosBcu.data) ? Object.keys(datosBcu.data) : 'NO_DATA',
+                    t0Preview: datosBcu ? JSON.stringify(datosBcu).substring(0, 300) : 'NULL'
+                }
+            });
+            
+            throw createMymError(
+                'MYM_EMPTY_DATA',
+                'El período T0 (actual) no contiene entidades ni rubros',
+                { t0HasData: false }
             );
         }
 
-        // Retornar objeto con ambos períodos parseados
+        // Retornar objeto con ambos períodos (T6 puede estar vacío)
         return {
             datosBcu: datosBcu,
             datosBcuT6: datosBcuT6,
