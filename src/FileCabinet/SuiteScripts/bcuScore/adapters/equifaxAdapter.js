@@ -3,16 +3,17 @@
  * @description Adaptador Equifax OPTIMIZADO para máxima velocidad de respuesta
  */
 
-define(['N/https', 'N/log', 'N/runtime', 'N/encode', '../domain/normalize'], 
-function (https, log, runtime, encode, normalize) {
+define(['N/https', 'N/log', 'N/runtime', 'N/encode', 'N/cache', '../domain/normalize'], 
+function (https, log, runtime, encode, cache, normalize) {
     'use strict';
 
     const TIMEOUT_MS = 15000; // REDUCIDO: 15s para respuesta rápida
-    const TOKEN_CACHE_DURATION = 3300; // 55 minutos
+    const TOKEN_CACHE_DURATION_SANDBOX = 3000; // 50 minutos en segundos (3000s = 50min)
+    const TOKEN_CACHE_DURATION_PRODUCTION = 86400; // 24 horas en segundos (86400s = 24hrs)
+    const TOKEN_CACHE_KEY_PREFIX = 'equifax_token';
     
-    // Cache de tokens por ambiente en memoria (sandbox / production)
-    // Estructura: { sandbox: { token, expiry }, production: { token, expiry } }
-    let _tokenCache = {};
+    // Cache de NetSuite para persistencia entre requests
+    let _cacheInstance = null;
     
     // Pre-compilar URLs y headers para evitar string concatenations
     let _config = null;
@@ -70,12 +71,13 @@ function (https, log, runtime, encode, normalize) {
             const isSandbox = determineIsSandbox(options);
 
             // Obtener configuración para el ambiente especificado y forzar generación de token
-            _config = getEquifaxConfig(isSandbox);
+            _config = getEquifaxConfig(true);
+            
             const accessToken = getValidToken(isSandbox, true);
             
             // Request optimizado con timeout corto
             const response = executeEquifaxRequest(documento, accessToken, options);
-
+ 
             // Normalización rápida
             return normalize.normalizeEquifaxResponse(response);
 
@@ -96,21 +98,53 @@ function (https, log, runtime, encode, normalize) {
      * OPTIMIZADO: Token con caché en memoria (sin NetSuite cache I/O)
      */
     /**
-     * Obtiene o genera un token válido para el ambiente solicitado.
-     * forceRefresh=true por defecto en llamadas desde fetch para generar
-     * token fresco en cada invocación (requerimiento UAT/PROD).
+     * Obtiene la instancia del caché de NetSuite (lazy initialization)
+     */
+    function getCacheInstance() {
+        if (!_cacheInstance) {
+            _cacheInstance = cache.getCache({
+                name: 'equifaxTokenCache',
+                scope: cache.Scope.PUBLIC
+            });
+        }
+        return _cacheInstance;
+    }
+
+    /**
+     * Obtiene o genera un token válido para el ambiente solicitado usando N/cache.
+     * El token se almacena en NetSuite Cache con TTL dinámico:
+     * - Sandbox: 50 minutos (3000s)
+     * - Production: 24 horas (86400s)
+     * forceRefresh=true para forzar generación de nuevo token.
      * @param {boolean} isSandbox
      * @param {boolean} forceRefresh
      * @returns {string} accessToken
      */
     function getValidToken(isSandbox, forceRefresh) {
         const envKey = isSandbox ? 'sandbox' : 'production';
-        _tokenCache[envKey] = _tokenCache[envKey] || { token: null, expiry: 0 };
-
-        const now = Date.now();
-        if (!forceRefresh && _tokenCache[envKey].token && now < _tokenCache[envKey].expiry) {
-            return _tokenCache[envKey].token;
+        const cacheKey = TOKEN_CACHE_KEY_PREFIX + '_' + envKey;
+        
+        // TTL dinámico: 50 min para sandbox, 24 hrs para producción
+        const cacheDuration = isSandbox ? TOKEN_CACHE_DURATION_SANDBOX : TOKEN_CACHE_DURATION_PRODUCTION;
+        const cacheDurationLabel = isSandbox ? '50 minutes' : '24 hours';
+        
+        // Si no se fuerza refresh, intentar obtener del caché
+        if (!forceRefresh) {
+            const cachedToken = getCacheInstance().get({ key: cacheKey });
+            if (cachedToken) {
+                log.debug({
+                    title: 'Equifax Token Cache Hit',
+                    details: 'Using cached token for ' + envKey + ' (TTL: ' + cacheDurationLabel + ')'
+                });
+                return cachedToken;
+            }
         }
+
+        // Cache miss o forceRefresh: generar nuevo token
+        log.debug({
+            title: 'Equifax Token Cache Miss',
+            details: (forceRefresh ? 'Forced refresh for ' : 'Fetching new token for ') + envKey
+        });
 
         // Generar nuevo token
         const cfg = getEquifaxConfig(isSandbox);
@@ -122,8 +156,8 @@ function (https, log, runtime, encode, normalize) {
             method: https.Method.POST,
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + cfg.basicAuth,
-                'User-Agent': 'NetSuite-ELM/1.0'
+                'Authorization': 'Basic ' + cfg.basicAuth,/* 
+                'User-Agent': 'NetSuite-ELM/1.0' */
             },
             body: body,
             timeout: 10000
@@ -134,16 +168,23 @@ function (https, log, runtime, encode, normalize) {
         }
 
         const tokenData = JSON.parse(tokenResponse.body);
-        const expiresIn = parseInt(tokenData.expires_in) || 3600;
         const accessToken = tokenData.access_token;
 
-        // Cache en memoria con buffer de seguridad
-        _tokenCache[envKey] = {
-            token: accessToken,
-            expiry: now + ((expiresIn - 300) * 1000) // 5min buffer
-        };
+        // Guardar en caché de NetSuite con TTL según ambiente
+        getCacheInstance().put({
+            key: cacheKey,
+            value: accessToken,
+            ttl: cacheDuration
+        });
 
-        log.audit({ title: 'Equifax Token Generated', details: { env: envKey, expiresIn: expiresIn } });
+        log.audit({
+            title: 'Equifax Token Cached',
+            details: {
+                env: envKey,
+                ttl: cacheDuration + 's (' + cacheDurationLabel + ')',
+                tokenPreview: accessToken.substring(0, 20) + '...'
+            }
+        });
 
         return accessToken;
     }
@@ -233,8 +274,8 @@ function (https, log, runtime, encode, normalize) {
         // Intentar leer credenciales desde Script Parameters (preferido)
         let clientId, clientSecret;
         let configuration = 'Config';
-        let billTo = 'UY004277B001';
-        let shipTo = 'UY004277B001S3642';
+        let billTo = '011314B001';
+        let shipTo = '011314B001S0001';
         let productName = 'UYICBOX';
         let productOrch = 'boxFase0Per';
         let customer = 'UYICMANDAZY';
@@ -248,8 +289,6 @@ function (https, log, runtime, encode, normalize) {
             clientId = '<CLIENT_ID>';
             clientSecret = '<CLIENT_SECRET>';
         }
-
-
         // URLs según ambiente
         const baseUrls = sandbox ? {
             tokenUrl: 'https://api.sandbox.equifax.com/v2/oauth/token',
@@ -346,22 +385,64 @@ function (https, log, runtime, encode, normalize) {
     }
 
     /**
-     * Invalidar caché de token (para troubleshooting)
+     * Invalidar caché de token usando N/cache de NetSuite
+     * @param {boolean} isSandbox - Si se especifica, solo invalida ese ambiente. Si es undefined, invalida ambos.
      */
     function invalidateTokenCache(isSandbox) {
+        const cacheInst = getCacheInstance();
+        
         if (typeof isSandbox === 'boolean') {
-            var key = isSandbox ? 'sandbox' : 'production';
-            if (_tokenCache[key]) delete _tokenCache[key];
+            const key = isSandbox ? 'sandbox' : 'production';
+            const cacheKey = TOKEN_CACHE_KEY_PREFIX + '_' + key;
+            cacheInst.remove({ key: cacheKey });
+            log.audit({
+                title: 'Equifax Token Cache Invalidated',
+                details: 'Cleared token for: ' + key
+            });
         } else {
-            _tokenCache = {};
+            // Invalidar ambos ambientes
+            cacheInst.remove({ key: TOKEN_CACHE_KEY_PREFIX + '_sandbox' });
+            cacheInst.remove({ key: TOKEN_CACHE_KEY_PREFIX + '_production' });
+            log.audit({
+                title: 'Equifax Token Cache Invalidated',
+                details: 'Cleared all tokens (sandbox & production)'
+            });
         }
-        log.audit({ title: 'Equifax Token Cache Invalidated', details: { env: typeof isSandbox === 'boolean' ? (isSandbox ? 'sandbox' : 'production') : 'all' } });
+    }
+
+    /**
+     * Obtener información del caché actual (para monitoreo/debugging)
+     */
+    function getCacheInfo(isSandbox) {
+        const envKey = typeof isSandbox === 'boolean' ? (isSandbox ? 'sandbox' : 'production') : 'unknown';
+        const cacheKey = TOKEN_CACHE_KEY_PREFIX + '_' + envKey;
+        const cacheInst = getCacheInstance();
+        const cachedToken = cacheInst.get({ key: cacheKey });
+        
+        // TTL dinámico según ambiente
+        const cacheDuration = typeof isSandbox === 'boolean' 
+            ? (isSandbox ? TOKEN_CACHE_DURATION_SANDBOX : TOKEN_CACHE_DURATION_PRODUCTION)
+            : 0;
+        const cacheDurationLabel = typeof isSandbox === 'boolean'
+            ? (isSandbox ? '50 minutes' : '24 hours')
+            : 'unknown';
+        
+        return {
+            environment: envKey,
+            cacheKey: cacheKey,
+            hasCachedToken: !!cachedToken,
+            tokenPreview: cachedToken ? cachedToken.substring(0, 20) + '...' : null,
+            cacheDuration: cacheDuration + ' seconds (' + cacheDurationLabel + ')',
+            scope: 'PUBLIC',
+            cacheName: 'equifaxTokenCache'
+        };
     }
 
     // Public API - mínima para performance
     return {
         fetch: fetch,
         invalidateTokenCache: invalidateTokenCache,
+        getCacheInfo: getCacheInfo,
         
         // Solo para debugging cuando sea necesario
         _internal: {
@@ -370,7 +451,10 @@ function (https, log, runtime, encode, normalize) {
             determineIsSandbox: determineIsSandbox,
             createEquifaxError: createEquifaxError,
             formatDocumento: formatDocumento,
-            TIMEOUT_MS: TIMEOUT_MS
+            getCacheInstance: getCacheInstance,
+            TIMEOUT_MS: TIMEOUT_MS,
+            TOKEN_CACHE_DURATION_SANDBOX: TOKEN_CACHE_DURATION_SANDBOX,
+            TOKEN_CACHE_DURATION_PRODUCTION: TOKEN_CACHE_DURATION_PRODUCTION
         }
     };
 });

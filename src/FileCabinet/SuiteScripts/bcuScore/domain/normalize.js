@@ -574,8 +574,8 @@ define([], function () {
         let worstNumeric = 0;
         let worstLabel = '0';
 
-        for (let i = 0; i < entities.length; i++) {
-            const rating = String(entities[i].rating || '').toUpperCase();
+        for (const entity of entities) {
+            const rating = String(entity.rating || '').toUpperCase();
             const numeric = ratingOrder[rating] || 0;
             if (numeric > worstNumeric) {
                 worstNumeric = numeric;
@@ -701,7 +701,7 @@ define([], function () {
         return String(
             variables.cedula || 
             variables.documento || 
-            (raw.interconnectResponse && raw.interconnectResponse.infoConsulta && raw.interconnectResponse.infoConsulta.documento) ||
+            raw?.interconnectResponse?.infoConsulta?.documento ||
             ''
         );
     }
@@ -711,7 +711,7 @@ define([], function () {
      */
     function sanitizeString(str) {
         if (!str) return '';
-        return String(str).trim().replace(/[^\w\s]/gi, '');
+        return String(str).trim().replaceAll(/[^\w\s]/gi, '');
     }
 
     /**
@@ -722,7 +722,7 @@ define([], function () {
         if (typeof value === 'string') {
             // Remover comas y espacios, convertir
             const cleaned = value.replace(/[,\s]/g, '');
-            const parsed = parseFloat(cleaned);
+            const parsed = Number.parseFloat(cleaned);
             return isNaN(parsed) ? 0 : parsed;
         }
         return 0;

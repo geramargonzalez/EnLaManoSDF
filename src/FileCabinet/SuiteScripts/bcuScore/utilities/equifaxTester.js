@@ -75,6 +75,7 @@ function (serverWidget, runtime, equifaxAdapter) {
         });
         actionField.addSelectOption({ value: 'test', text: 'Probar Consulta' });
         actionField.addSelectOption({ value: 'invalidate', text: 'Invalidar Caché de Token' });
+        actionField.addSelectOption({ value: 'cache_info', text: 'Ver Info del Caché' });
         actionField.defaultValue = 'test';
 
         // Resultado (si existe)
@@ -112,6 +113,24 @@ function (serverWidget, runtime, equifaxAdapter) {
                 result = '✅ Caché de token invalidado exitosamente.\n\n';
                 result += 'El próximo request obtendrá un nuevo token.\n';
                 result += 'Esto es útil después de cambiar entre SANDBOX y PRODUCTION.';
+            } else if (action === 'cache_info') {
+                // Mostrar info del caché
+                const script = runtime.getCurrentScript();
+                const isSandbox = script.getParameter({ name: 'custscript_equifax_environment' }) !== 'PRODUCTION';
+                const cacheInfo = equifaxAdapter.getCacheInfo(isSandbox);
+                
+                result = '📊 Información del Caché\n\n';
+                result += '🔧 Cache Name: ' + cacheInfo.cacheName + '\n';
+                result += '🌍 Environment: ' + cacheInfo.environment + '\n';
+                result += '🔑 Cache Key: ' + cacheInfo.cacheKey + '\n';
+                result += '⏱️ Duration: ' + cacheInfo.cacheDuration + '\n';
+                result += '📦 Scope: ' + cacheInfo.scope + '\n';
+                result += '✓ Has Token: ' + (cacheInfo.hasCachedToken ? 'YES' : 'NO') + '\n';
+                if (cacheInfo.tokenPreview) {
+                    result += '🔐 Token Preview: ' + cacheInfo.tokenPreview + '\n';
+                }
+                result += '\n💡 El token se almacena en NetSuite Cache (N/cache)\n';
+                result += '   y persiste entre execution contexts por 50 minutos.';
             } else {
                 // Probar consulta
                 const startTime = Date.now();

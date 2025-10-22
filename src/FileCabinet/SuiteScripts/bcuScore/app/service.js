@@ -94,7 +94,7 @@ define([
             if (!scoreResult || typeof scoreResult !== 'object') {
                 // Log more context before throwing to ease debugging (include normalizedData small preview)
                 try {
-                    var _normPreview = '';
+                    let _normPreview = '';
                     try { _normPreview = JSON.stringify(normalizedData, null, 2); } catch (e) { _normPreview = '[unserializable normalizedData]'; }
                     if (_normPreview && _normPreview.length > 2000) _normPreview = _normPreview.substring(0, 2000) + '... [truncated]';
                     log.error({ title: 'SCORE_COMPUTE_ERROR - invalid scoreResult', details: { scoreType: typeof scoreResult, scorePreview: (typeof scoreResult === 'object' ? '[object]' : String(scoreResult)), normalizedDataPreview: _normPreview } });
