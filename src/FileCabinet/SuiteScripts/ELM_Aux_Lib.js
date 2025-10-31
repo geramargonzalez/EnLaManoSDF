@@ -1761,6 +1761,88 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
     }
 
    
+   /**
+    * Crea un registro en customrecord_elm_gestion_leads
+    * @param {Object} options
+    * @param {number|string} [options.leadId] - Internal id del Lead/Cliente (customer)
+    * @param {string} [options.nroDocumento] - Número de documento
+    * @param {number|string} [options.estado] - Valor de lista para Estado de Gestión
+    * @param {number|string} [options.setBy] - Employee internal id que actualiza
+    * @returns {boolean} true si se creó correctamente, false en caso de error
+    */
+   function createGestionLead(options) {
+      const stLogTitle = 'createGestionLead';
+      options = options || {};
+      try {
+         const rec = record.create({
+            type: 'customrecord_elm_gestion_leads',
+            isDynamic: false
+         });
+
+         if (options.leadId) {
+            rec.setValue({ fieldId: 'custrecord_elm_gestion_lead', value: options.leadId });
+         }
+
+         if (options.nroDocumento) {
+            rec.setValue({ fieldId: 'custrecord_elm_gestion_nro_documento', value: String(options.nroDocumento) });
+         }
+
+         if (options.estado) {
+            rec.setValue({ fieldId: 'custrecord_elm_gestion_estado_', value: options.estado });
+         }
+
+         if (options.setBy) {
+            rec.setValue({ fieldId: 'custrecord_elm_gestion_set_by', value: options.setBy });
+         }
+
+         // Guardar registro
+         const newId = rec.save();
+         log.audit(stLogTitle, 'Gestion Leads created with id: ' + newId);
+         return newId > 0;
+      } catch (error) {
+         log.error(stLogTitle, error);
+         return false;
+      }
+   }
+
+   /**
+    * Crea un registro en customrecord_elm_operador_lead para asociar un operador a un lead/cliente
+    * @param {Object} options
+    * @param {number|string} [options.leadId] - Internal id del Lead/Cliente (custrecord_elm_operador_cliente)
+    * @param {number|string} [options.operadorId] - Internal id del Operador/Employee (custrecord_elm_operador_operador)
+    * @param {number|string} [options.estadoGestion] - Internal id del Estado de Gestión (custrecord_elm_operador_estado_gestion)
+    * @returns {number|boolean} Internal ID del registro creado si éxito, false en caso de error
+    */
+   function operadorByLead(options) {
+      const stLogTitle = 'operadorByLead';
+      options = options || {};
+      try {
+         const rec = record.create({
+            type: 'customrecord_elm_operador_lead',
+            isDynamic: false
+         });
+
+         if (options.leadId) {
+            rec.setValue({ fieldId: 'custrecord_elm_operador_cliente', value: options.leadId });
+         }
+
+         if (options.operadorId) {
+            rec.setValue({ fieldId: 'custrecord_elm_operador_operador', value: options.operadorId });
+         }
+
+         if (options.estadoGestion) {
+            rec.setValue({ fieldId: 'custrecord_elm_operador_estado_gestion', value: options.estadoGestion });
+         }
+
+         // Guardar registro
+         const newId = rec.save();
+         log.audit(stLogTitle, 'Operador Lead record created with id: ' + newId);
+         return newId;
+      } catch (error) {
+         log.error(stLogTitle, error);
+         return false;
+      }
+   }
 
       return {
          calculateYearsSinceDate: calculateYearsSinceDate,
@@ -1786,6 +1868,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          validateAndFormatLastName: validateAndFormatLastName,
          getBcuPeriodInfo: getBcuPeriodInfo,
          extractBcuData: extractBcuData,
+         operadorByLead: operadorByLead,
          extractQualifications: extractQualifications,
          deactivateLeadsByDocumentNumber: deactivateLeadsByDocumentNumber,
          createLogRecord: createLogRecord,
@@ -1793,8 +1876,11 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          updateLogWithResponse: updateLogWithResponse,
          createRecordAuditCambios:createRecordAuditCambios,
          createEtapaSolicitud: createEtapaSolicitud,
+         createGestionLead: createGestionLead,
          snapshotAprobados: snapshotAprobados,
          isClientActive: isClientActive,
+         createGestionLead: createGestionLead,
+         operadorByLead: operadorByLead
       }
    });
 

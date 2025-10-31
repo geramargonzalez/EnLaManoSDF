@@ -95,52 +95,74 @@ define([], function () {
 
     /**
      * Normaliza formato nuevo BOX_FASE0_PER de Equifax
-     * Respuesta con datos agregados en variablesDeSalida
+     * Respuesta con datos agregados en variablesDeSalida con PIPES (|) para múltiples instituciones
      */
     function normalizeEquifaxNewFormat(raw, variables, infoConsulta) {
-        // Parsear valores de vigente, vencido, castigado (formato "Me: X Mn: Y")
-        const vigente = parseMoneyString(variables.vigente || 'Me: 0 Mn: 0');
-        const vencido = parseMoneyString(variables.vencido || 'Me: 0 Mn: 0');
-        const castigado = parseMoneyString(variables.castigado || 'Me: 0 Mn: 0');
-        const contingencias = parseMoneyString(variables.contingencias || 'Me: 0 Mn: 0');
+        // Parsear valores con PIPES - formato "Me: X Mn: Y|Me: X2 Mn: Y2"
+        const vigenteArray = parseMoneyStringArray(variables.vigente || 'Me: 0 Mn: 0');
+        const vencidoArray = parseMoneyStringArray(variables.vencido || 'Me: 0 Mn: 0');
+        const castigadoArray = parseMoneyStringArray(variables.castigado || 'Me: 0 Mn: 0');
+        const contingenciasArray = parseMoneyStringArray(variables.contingencias || 'Me: 0 Mn: 0');
         
-        // Extraer calificación BCU
-        const bcu_calificacion = String(variables.bcu_calificacion || '0').toUpperCase();
-        const hasRejectableRating = BAD_RATINGS.includes(bcu_calificacion);
+        // Extraer arrays de instituciones y calificaciones (separados por PIPE)
+        const institucionesArray = String(variables.bcu_instituciones || 'CLEARING BCU').split('|').map(function(s) { return s.trim(); });
+        const calificacionesArray = String(variables.bcu_calificacion || '0').split('|').map(function(s) { return s.trim().toUpperCase(); });
         
-        // Construir entidad sintética desde los datos agregados
-        const instituciones = String(variables.bcu_instituciones || 'CLEARING BCU').split(',').map(function(s) { return s.trim(); });
+        // Determinar peor calificación para flag de rechazo
+        let worstRating = '0';
+        let worstRatingValue = 0;
+        const RATING_ORDER = { '1A': 1, '1C': 2, '2A': 3, '0': 4, 'N/C': 5, 'N': 6, '2B': 7, '3': 8, '4': 9, '5': 10 };
         
-        // Crear entidades sintéticas por cada institución
-        const entities = instituciones.map(function(institucion) {
-            return {
+        for (let i = 0; i < calificacionesArray.length; i++) {
+            const ratingValue = RATING_ORDER[calificacionesArray[i]] || 0;
+            if (ratingValue > worstRatingValue) {
+                worstRatingValue = ratingValue;
+                worstRating = calificacionesArray[i];
+            }
+        }
+        
+        const hasRejectableRating = BAD_RATINGS.includes(worstRating);
+        
+        // Crear entidades individuales por cada institución con sus datos específicos
+        const entities = [];
+        for (let i = 0; i < institucionesArray.length; i++) {
+            const institucion = institucionesArray[i];
+            const calificacion = calificacionesArray[i] || '0';
+            const vig = vigenteArray[i] || { mn: 0, me: 0, total: 0 };
+            const ven = vencidoArray[i] || { mn: 0, me: 0, total: 0 };
+            const cast = castigadoArray[i] || { mn: 0, me: 0, total: 0 };
+            const cont = contingenciasArray[i] || { mn: 0, me: 0, total: 0 };
+            
+            entities.push({
                 entidad: institucion,
-                rating: bcu_calificacion,
+                rating: calificacion,
                 NombreEntidad: institucion,
-                Calificacion: bcu_calificacion,
-                vigente: vigente.total,
-                vencido: vencido.total,
-                castigado: castigado.total,
-                total: vigente.total + vencido.total + castigado.total,
+                Calificacion: calificacion,
+                CalificacionMinima0: calificacion, // Para compatibilidad con score.js
+                vigente: vig.total,
+                vencido: ven.total,
+                castigado: cast.total,
+                total: vig.total + ven.total + cast.total,
+                Cont: cont.total > 0, // Flag de contingencias
                 rubros: [
                     {
                         rubro: 'VIGENTE',
                         Rubro: 'VIGENTE',
-                        vigente: vigente.total,
+                        vigente: vig.total,
                         vencido: 0,
                         castigado: 0,
-                        MnPesos: vigente.mn,
-                        MePesos: vigente.me,
+                        MnPesos: vig.mn,
+                        MePesos: vig.me,
                         cont: false
                     },
                     {
                         rubro: 'VENCIDO',
                         Rubro: 'VENCIDO',
                         vigente: 0,
-                        vencido: vencido.total,
+                        vencido: ven.total,
                         castigado: 0,
-                        MnPesos: vencido.mn,
-                        MePesos: vencido.me,
+                        MnPesos: ven.mn,
+                        MePesos: ven.me,
                         cont: false
                     },
                     {
@@ -148,54 +170,81 @@ define([], function () {
                         Rubro: 'CASTIGADO',
                         vigente: 0,
                         vencido: 0,
-                        castigado: castigado.total,
-                        MnPesos: castigado.mn,
-                        MePesos: castigado.me,
+                        castigado: cast.total,
+                        MnPesos: cast.mn,
+                        MePesos: cast.me,
                         cont: false
                     },
                     {
                         rubro: 'CONTINGENCIAS',
                         Rubro: 'CONTINGENCIAS',
-                        vigente: contingencias.total,
+                        vigente: cont.total,
                         vencido: 0,
                         castigado: 0,
-                        MnPesos: contingencias.mn,
-                        MePesos: contingencias.me,
+                        MnPesos: cont.mn,
+                        MePesos: cont.me,
                         cont: true
                     }
                 ]
-            };
-        });
+            });
+        }
+        
+        // Calcular totales sumando todas las instituciones
+        let totalVigente = { mn: 0, me: 0, total: 0 };
+        let totalVencido = { mn: 0, me: 0, total: 0 };
+        let totalCastigado = { mn: 0, me: 0, total: 0 };
+        let totalContingencias = { mn: 0, me: 0, total: 0 };
+        
+        for (let i = 0; i < vigenteArray.length; i++) {
+            totalVigente.mn += vigenteArray[i].mn;
+            totalVigente.me += vigenteArray[i].me;
+            totalVigente.total += vigenteArray[i].total;
+        }
+        for (let i = 0; i < vencidoArray.length; i++) {
+            totalVencido.mn += vencidoArray[i].mn;
+            totalVencido.me += vencidoArray[i].me;
+            totalVencido.total += vencidoArray[i].total;
+        }
+        for (let i = 0; i < castigadoArray.length; i++) {
+            totalCastigado.mn += castigadoArray[i].mn;
+            totalCastigado.me += castigadoArray[i].me;
+            totalCastigado.total += castigadoArray[i].total;
+        }
+        for (let i = 0; i < contingenciasArray.length; i++) {
+            totalContingencias.mn += contingenciasArray[i].mn;
+            totalContingencias.me += contingenciasArray[i].me;
+            totalContingencias.total += contingenciasArray[i].total;
+        }
         
         // Construir totales agregados
         const totals = [
             {
                 rubro: 'VIGENTE',
-                vigente: vigente.total,
+                vigente: totalVigente.total,
                 vencido: 0,
                 castigado: 0,
-                total: vigente.total
+                total: totalVigente.total
             },
             {
                 rubro: 'VENCIDO',
                 vigente: 0,
-                vencido: vencido.total,
+                vencido: totalVencido.total,
                 castigado: 0,
-                total: vencido.total
+                total: totalVencido.total
             },
             {
                 rubro: 'CASTIGADO',
                 vigente: 0,
                 vencido: 0,
-                castigado: castigado.total,
-                total: castigado.total
+                castigado: totalCastigado.total,
+                total: totalCastigado.total
             },
             {
                 rubro: 'CONTINGENCIAS',
-                vigente: contingencias.total,
+                vigente: totalContingencias.total,
                 vencido: 0,
                 castigado: 0,
-                total: contingencias.total
+                total: totalContingencias.total
             }
         ];
         
@@ -204,26 +253,26 @@ define([], function () {
             totals: totals,
             entities: entities,
             aggregates: {
-                vigente: vigente,
-                vencido: vencido,
-                castigado: castigado,
+                vigente: totalVigente,
+                vencido: totalVencido,
+                castigado: totalCastigado,
                 sumVigenteU1m: toNumber(variables.bcu_sum_vigente_u1m || 0),
                 sumVencidoU1m: toNumber(variables.bcu_sum_novigente_u1m || 0), // "novigente" = vencido
                 sumCastigadoU1m: toNumber(variables.bcu_sum_castigado_u1m || 0),
-                cantEntidadesVigente: instituciones.length,
-                cantEntidadesVencido: vencido.total > 0 ? 1 : 0,
-                cantEntidadesCastigado: castigado.total > 0 ? 1 : 0
+                cantEntidadesVigente: institucionesArray.length,
+                cantEntidadesVencido: totalVencido.total > 0 ? 1 : 0,
+                cantEntidadesCastigado: totalCastigado.total > 0 ? 1 : 0
             },
             // Preservar rubros para compatibilidad con score.js
             rubrosValoresGenerales: totals.map(function(t) {
                 return {
                     Rubro: t.rubro,
-                    MnPesos: t.rubro === 'VIGENTE' ? vigente.mn : 
-                             t.rubro === 'VENCIDO' ? vencido.mn :
-                             t.rubro === 'CASTIGADO' ? castigado.mn : contingencias.mn,
-                    MePesos: t.rubro === 'VIGENTE' ? vigente.me : 
-                             t.rubro === 'VENCIDO' ? vencido.me :
-                             t.rubro === 'CASTIGADO' ? castigado.me : contingencias.me
+                    MnPesos: t.rubro === 'VIGENTE' ? totalVigente.mn : 
+                             t.rubro === 'VENCIDO' ? totalVencido.mn :
+                             t.rubro === 'CASTIGADO' ? totalCastigado.mn : totalContingencias.mn,
+                    MePesos: t.rubro === 'VIGENTE' ? totalVigente.me : 
+                             t.rubro === 'VENCIDO' ? totalVencido.me :
+                             t.rubro === 'CASTIGADO' ? totalCastigado.me : totalContingencias.me
                 };
             })
         };
@@ -241,7 +290,7 @@ define([], function () {
             },
             metadata: {
                 nombre: sanitizeString(variables.nombre || infoConsulta.nombre),
-                worstRating: bcu_calificacion,
+                worstRating: worstRating,
                 fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0],
                 aggregates: t0Data.aggregates,
                 periodo: variables.periodo,
@@ -561,6 +610,24 @@ define([], function () {
             me: me,
             total: mn + me
         };
+    }
+
+    /**
+     * Parsea string con múltiples valores separados por PIPE (|)
+     * Formato: "Me: X Mn: Y|Me: X2 Mn: Y2|..."
+     * @param {string} str - String con valores separados por pipes
+     * @returns {Array<{mn: number, me: number, total: number}>}
+     */
+    function parseMoneyStringArray(str) {
+        if (!str || typeof str !== 'string') {
+            return [{ mn: 0, me: 0, total: 0 }];
+        }
+        
+        // Separar por PIPE
+        const parts = str.split('|');
+        return parts.map(function(part) {
+            return parseMoneyString(part.trim());
+        });
     }
 
     /**

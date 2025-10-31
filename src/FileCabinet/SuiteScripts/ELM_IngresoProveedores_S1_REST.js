@@ -105,13 +105,21 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           // Usar motor bcuScore optimizado con fallback al SDB cl�sico
           let score;
           try {
-             score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, strictRules: true, debug: true });
-            // score = scoreLib.scoreFinal(docNumber);
+            //  score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, strictRules: true, debug: true });
+             score = scoreLib.scoreFinal(docNumber);
           } catch (e) {
             // Fallback al motor antiguo si algo falla
             score = scoreLib.scoreFinal(docNumber);
           } 
           if (score?.error_reglas) {
+
+   /*           const detailText = String(score.detail || score.details || '').toLowerCase();
+            const isTimeoutDetail = (
+                detailText.indexOf('el host al cual está intentando conectarse') !== -1 && detailText.indexOf('exced') !== -1
+            ) || detailText.indexOf('excedido el tiempo') !== -1 || detailText.indexOf('excedido el tiempo máximo') !== -1;
+            const isBcuFetchError = detailText.indexOf('error al obtener datos del bcu') !== -1; */
+
+
             const approvalStatus =
               score.error_reglas === 500 ? params.estadoErrorBCU :
               score.error_reglas === 404 ? params.NohayInfoBCU :

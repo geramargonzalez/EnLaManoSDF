@@ -99,6 +99,13 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                         value: estadoGestion
                     }) 
 
+                    auxlib.createGestionLead({
+                        leadId: currentRecord.id,
+                        estado: estadoGestion,
+                        nroDocumento: currentRecord.getValue({ fieldId: 'custentity_sdb_nrdocumento' }),
+                        setBy: runtime.getCurrentUser().id
+                    });
+
                 } else {	
                     // If the user selects "Aprobado", set the field to "No Aprobado"
                         dialog.alert({
@@ -116,8 +123,8 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
             if (context.fieldId === "custentity_elm_aprobado" ) {
                 // Enable reject reason field when estado gestion is 1
                 const estadoGestion = currentRecord.getValue({ fieldId: 'custentity_elm_aprobado' });
-                const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
-                const motivoRechazado = currentRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
+                // const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
+                // const motivoRechazado = currentRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
                 
                 if (estadoGestion == rechazado || estadoGestion == rechazadoPorAsesor) {
                     currentRecord.getField({
@@ -162,7 +169,7 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                     }).isMandatory = false;
                 }
 
-                if (solVigente) {
+            /*     if (solVigente) {
                     const id = record.submitFields({
                     type: 'customrecord_elm_solicitud',
                     id: solVigente,
@@ -172,9 +179,18 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                 });
                 console.log('ID de solicitud actualizado:', id);
 
-                 auxlib.createEtapaSolicitud(estadoGestion, runtime.getCurrentUser().id, solVigente);
+                
 
-                 }
+                //auxlib.createEtapaSolicitud(estadoGestion, runtime.getCurrentUser().id, solVigente);
+
+                 } */
+
+                 auxlib.createGestionLead({
+                    leadId: currentRecord.id,
+                    estado: estadoGestion,
+                    nroDocumento: currentRecord.getValue({ fieldId: 'custentity_sdb_nrdocumento' }),
+                    setBy: runtime.getCurrentUser().id
+                });
 
             }
 

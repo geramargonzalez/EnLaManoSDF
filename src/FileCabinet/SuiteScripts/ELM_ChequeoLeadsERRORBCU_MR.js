@@ -24,9 +24,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                        "AND", 
                         [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_elm_aprobado","anyof","15"]],
                         "AND", 
-                       ["custentity_elm_lead_repetido_original","anyof","@NONE@"]
-                       /*  ,"AND",
-                       ["custentity_sdb_nrdocumento","is","48925220"] */
+                       ["custentity_elm_lead_repetido_original","anyof","@NONE@"]/* 
+                         ,"AND",
+                       ["custentity_sdb_nrdocumento","is","49878016"] */
                     ],
                     columns:
                     [
@@ -125,7 +125,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                             }
     
                             if (score && score.score > objScriptParam.scoreMin) {
-                              log.audit('Score Inside');
+                  
                                const status = service == objScriptParam.serviceExternal ? objScriptParam.estadoLatente : objScriptParam.pendienteDeEvaluacion;
                                let leadId = auxLib.convertToLead(preLeadId, score, objScriptParam.leadStatus, status);
                                if (score.error_reglas == null) {
@@ -136,12 +136,11 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                                const ofertaFinal = getOfertaFinal(source, montoCuota);
 
                               let isLatente = true;
-                              log.debug('montoCuotaObj', JSON.stringify(montoCuotaObj));
                               
                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
-                               if (source == 'AlPrestamo' && !ofertaFinal) {
+                               if ((source == 2 || source == 'AlPrestamo') && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
                                   isLatente = false;
                               }
                               if (isLatente) {
@@ -422,18 +421,13 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                  log.audit(logTitle, `Iniciando función de alerta - ${leadCount} leads encontrados`);
                  log.audit(logTitle, `Umbral actual: 30 leads`);
                  
-                /*  if (leadCount <= 40) {
-                     log.audit(logTitle, `No se enviará email - cantidad ${leadCount} no supera umbral de 40`);
-                     return;
-                 }
-                  */
+         
                  log.audit(logTitle, `Enviando alerta por alto volumen de errores BCU: ${leadCount} leads encontrados`);
                  
                  const scriptObj = runtime.getCurrentScript();
                  const currentUser = runtime.getCurrentUser();
                  
                  // Obtener parámetros de email del script
-               //   const emailRecipients = scriptObj.getParameter({ name: 'custscript_elm_email_recipients_bcu' }) || 'admin@empresa.com';
                  const emailCC = scriptObj.getParameter({ name: 'custscript_elm_email_cc_bcu' }) || 'ssilvera@enlamano.com.uy';
                  const emailRecipients = 'mcampodonico@enlamano.com.uy, cshearer@enlamano.com.uy';
                  const author = scriptObj.getParameter({ name: 'custscript_elm_autor_' });
@@ -514,8 +508,6 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                  log.audit(logTitle, `CC: ${emailCC}`);
                  
                  // Enviar email
-
-                
                  const emailResult = email.send({
                      author: author,
                      recipients: emailRecipients,

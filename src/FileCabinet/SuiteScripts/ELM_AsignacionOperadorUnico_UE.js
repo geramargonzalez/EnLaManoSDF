@@ -45,7 +45,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
      * @param {object} scriptContext 
      */
       const afterSubmit = (scriptContext) => {
-        const {newRecord} = scriptContext;
+        const {newRecord, oldRecord} = scriptContext;
         const docNumber = newRecord.getValue({ fieldId: 'custentity_sdb_nrdocumento' });
         const user = runtime.getCurrentUser();
          try {
@@ -61,8 +61,19 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
             const service = newRecord.getValue({ fieldId: 'custentity_elm_service' });
             const inactive = newRecord.getValue({ fieldId: 'isinactive' });
             const motivoRechazo = newRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
+            const operadorOld = oldRecord ? oldRecord.getValue('custentity_elm_operador') : null;
+            const estadoGestion = newRecord.getValue({ fieldId: 'custentity_elm_aprobado' });
 
-            if (!operador && !repetition && (status == objScriptParam.estado || status == objScriptParam.estadoPendiente) && !batchId ) {
+            if (operador != operadorOld && operador) {
+                auxLib.operadorByLead({
+                    leadId: newRecord.id,
+                    operadorId: operador,
+                    estadoGestion: estadoGestion
+                });
+            }
+
+           if (!operador && !repetition && (status == objScriptParam.estado || status == objScriptParam.estadoPendiente) && !batchId ) {
+
 
                 const user = runtime.getCurrentUser();
                 const isActive = auxLib.isEmployeActive(user.id);
@@ -78,7 +89,14 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                             ignoreMandatoryFields: true
                         }
                     });
-                    log.audit('Lead Assigned', 'Lead ' + idLead + ' assigned to current user ' + user.id);
+                    
+                auxLib.operadorByLead({
+                    leadId: newRecord.id,
+                    operadorId: user.id,
+                    estadoGestion: estadoGestion
+                });
+
+                log.audit('Lead Assigned', 'Lead ' + idLead + ' assigned to current user ' + user.id);
 
                 } else {
                 
@@ -110,6 +128,12 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                                     enableSourcing: false,
                                     ignoreMandatoryFields: true
                                 }
+                            });
+
+                           auxLib.operadorByLead({
+                                leadId: newRecord.id,
+                                operadorId: availableSellerID,
+                                estadoGestion: estadoGestion
                             });
 
                             log.audit('Lead Assigned', 'Lead ' + idLead + ' assigned to employee ' + availableSellerID);
@@ -215,6 +239,10 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                         auxLib.createListRepetido(docNumber, nombre)
                     } */
             }
+
+
+
+            
 
          } catch (e) {
             log.error('afterSubmit', e);

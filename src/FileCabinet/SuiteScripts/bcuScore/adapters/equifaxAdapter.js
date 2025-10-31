@@ -61,19 +61,33 @@ function (https, log, runtime, encode, cache, normalize) {
 
     /** 
      * OPTIMIZADO: Fetch con generación de token por ambiente (UAT / PROD)
-     * Por requerimiento, generamos un token fresco en cada llamada al adapter
-     * para garantizar uso de credenciales actualizadas en UAT y Producción.
+     * @param {string} documento - Documento a consultar
+     * @param {Object} options - Opciones de consulta
+     * @param {boolean} options.forceNewToken - Si es true, genera un nuevo token ignorando el cache
+     * @param {boolean} options.isSandbox - Ambiente (true=UAT, false=PROD)
+     * @param {boolean} options.debug - Habilita logs de debugging
      */
     function fetch(documento, options) {
         options = options || {};
         try {
             // Determinar ambiente (options -> script parameter -> default SANDBOX)
-            const isSandbox = determineIsSandbox(options);
+            // const isSandbox = determineIsSandbox(options);
+            const isSandbox = true; // FORZADO A SANDBOX PARA TESTING
 
-            // Obtener configuración para el ambiente especificado y forzar generación de token
-            _config = getEquifaxConfig(true);
+            // Obtener configuración para el ambiente especificado
+            _config = getEquifaxConfig(isSandbox);
             
-            const accessToken = getValidToken(isSandbox, true);
+            // Verificar si se debe forzar generación de nuevo token
+            const forceRefresh = options.forceNewToken === true;
+            
+            if (forceRefresh) {
+                log.audit({
+                    title: 'Equifax Token Force Refresh',
+                    details: 'Generando nuevo token por solicitud explícita (forceNewToken=true)'
+                });
+            }
+            
+            const accessToken = getValidToken(isSandbox, forceRefresh);
             
             // Request optimizado con timeout corto
             const response = executeEquifaxRequest(documento, accessToken, options);
@@ -128,39 +142,61 @@ function (https, log, runtime, encode, cache, normalize) {
         const cacheDuration = isSandbox ? TOKEN_CACHE_DURATION_SANDBOX : TOKEN_CACHE_DURATION_PRODUCTION;
         const cacheDurationLabel = isSandbox ? '50 minutes' : '24 hours';
         
-        // Si no se fuerza refresh, intentar obtener del caché
-        if (!forceRefresh) {
-            const cachedToken = getCacheInstance().get({ key: cacheKey });
-            if (cachedToken) {
-                log.debug({
-                    title: 'Equifax Token Cache Hit',
-                    details: 'Using cached token for ' + envKey + ' (TTL: ' + cacheDurationLabel + ')'
-                });
-                return cachedToken;
-            }
-        }
+        // ⚠️ TESTING MODE: Always generate new token (cache disabled)
+        log.audit({
+            title: 'Equifax Token - TESTING MODE',
+            details: 'Cache DISABLED - Generating fresh token for every request'
+        });
+        
+        // // Si no se fuerza refresh, intentar obtener del caché
+        // if (!forceRefresh) {
+        //     const cachedToken = getCacheInstance().get({ key: cacheKey });
+        //     if (cachedToken) {
+        //         log.debug({
+        //             title: 'Equifax Token Cache Hit',
+        //             details: 'Using cached token for ' + envKey + ' (TTL: ' + cacheDurationLabel + ')'
+        //         });
+        //         return cachedToken;
+        //     }
+        // }
 
         // Cache miss o forceRefresh: generar nuevo token
         log.debug({
-            title: 'Equifax Token Cache Miss',
-            details: (forceRefresh ? 'Forced refresh for ' : 'Fetching new token for ') + envKey
+            title: 'Equifax Token Generation',
+            details: 'Generating new token for ' + envKey
         });
 
         // Generar nuevo token
         const cfg = getEquifaxConfig(isSandbox);
+
+      /*   log.audit({
+            title: 'Equifax Token Request - Full Details',
+            details: JSON.stringify({
+                environment: envKey,
+                tokenUrl: cfg.tokenUrl,
+                basicAuthLength: cfg.basicAuth.length,
+                basicAuthPreview: cfg.basicAuth.substring(0, 20) + '...',
+                scope: cfg.tokenScope
+            })
+        });
+         */
         const scope = cfg.tokenScope || cfg.apiUrl.replace(/\/execute$/, '');
         const body = 'grant_type=client_credentials&scope=' + encodeURIComponent(scope);
-
+        
         const tokenResponse = https.request({
             url: cfg.tokenUrl,
             method: https.Method.POST,
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + cfg.basicAuth,/* 
-                'User-Agent': 'NetSuite-ELM/1.0' */
+                'Authorization': 'Basic ' + cfg.basicAuth
             },
             body: body,
             timeout: 10000
+        });
+
+        log.debug({
+            title: 'Equifax Token Response',
+            details: 'Response Code: ' + tokenResponse.code + ', Body: ' + tokenResponse.body
         });
 
         if (!tokenResponse || tokenResponse.code !== 200) {
@@ -177,14 +213,7 @@ function (https, log, runtime, encode, cache, normalize) {
             ttl: cacheDuration
         });
 
-        log.audit({
-            title: 'Equifax Token Cached',
-            details: {
-                env: envKey,
-                ttl: cacheDuration + 's (' + cacheDurationLabel + ')',
-                tokenPreview: accessToken.substring(0, 20) + '...'
-            }
-        });
+
 
         return accessToken;
     }
@@ -208,8 +237,8 @@ function (https, log, runtime, encode, cache, normalize) {
                 primaryConsumer: {
                     personalInformation: {
                         documento: docFormatted,
-                        tipoDocumento: options.tipoDocumento || 'CI',
-                        paisDocumento: options.paisDocumento || 'UY',
+                        tipoDocumento: 'CI',
+                        paisDocumento: 'UY',
                         anio: anio,
                         mes: mes
                     }
@@ -226,13 +255,58 @@ function (https, log, runtime, encode, cache, normalize) {
             }
         };
 
-        const response = https.request({
+        log.debug({
+            title: 'Equifax Request Payload',
+            details: JSON.stringify(payload)
+        });
+
+        // Log completo del request para enviar a técnicos
+        // const requestHeaders = _config.requestHeaders(accessToken);
+        
+        // Crear representación explícita con comillas para debugging
+
+        const requestOptions = {
             url: _config.apiUrl,
             method: https.Method.POST,
-            headers: _config.requestHeaders(accessToken),
+            headers: {
+                'Content-Type': 'application/vnd.com.equifax.clientconfig.v1+json',
+                'Authorization': 'Bearer ' + accessToken
+            },
             body: JSON.stringify(payload),
             timeout: TIMEOUT_MS
+        };
+
+        
+
+  /*       // Log completo del request (incluye curl reproducible) para enviar a técnicos
+        try {
+            log.audit({
+                title: 'EQUIFAX HTTP REQUEST (RAW)',
+                details: JSON.stringify({
+                    requestOptions: requestOptions,
+                    curl: 'curl -X POST "' + requestOptions.url + '" ' +
+                          '-H "Content-Type: ' + requestOptions.headers['Content-Type'] + '" ' +
+                          '-H "Authorization: ' + requestOptions.headers['Authorization'] + '" ' +
+                          '-d \'"' + requestOptions.body + '"\''
+                }, null, 2)
+            });
+        } catch (e) {
+            // No detener la ejecución por problemas de logging
+            log.debug({ title: 'EQUIFAX Log Error', details: e.message || e.toString() });
+        } */
+
+
+        const response = https.request(requestOptions);
+
+        log.debug('response headers', response.headers);
+
+        log.debug({
+            title: 'Equifax Response',
+            details: 'Code: ' + response.code + ', Body: ' + response.body
         });
+
+ /*        var r = https.get({ url: 'https://api.ipify.org' });
+        log.debug('Egress IP', r.body); */ // IP pública desde la que sale NetSuite
 
         if (response.code !== 200) {
             throw mapEquifaxHttpError(response.code, response.body);
@@ -268,12 +342,12 @@ function (https, log, runtime, encode, cache, normalize) {
      * Soporta Sandbox y Producción mediante Script Parameters
      */
     function getEquifaxConfig(isSandbox) {
-        const sandbox = !!isSandbox;
-        const environment = sandbox ? 'SANDBOX' : 'PRODUCTION';
+        const environment = isSandbox ? 'SANDBOX' : 'PRODUCTION';
 
         // Intentar leer credenciales desde Script Parameters (preferido)
         let clientId, clientSecret;
         let configuration = 'Config';
+        // Valores EXACTOS según Postman Collection UAT
         let billTo = '011314B001';
         let shipTo = '011314B001S0001';
         let productName = 'UYICBOX';
@@ -282,26 +356,29 @@ function (https, log, runtime, encode, cache, normalize) {
         let model = 'boxFase0PerMandazy';
 
 
-        if (sandbox) {
+        if (isSandbox) {
+            // Credenciales Sandbox de Equifax
             clientId = 'KAIXWP3JO4y1lv4pJLoRE2XaD7S3R8bh';
             clientSecret = 'owBkHrSBNJn4jmtm';
         } else {
+            // Credenciales Producción (reemplazar con valores reales)
             clientId = '<CLIENT_ID>';
             clientSecret = '<CLIENT_SECRET>';
         }
         // URLs según ambiente
-        const baseUrls = sandbox ? {
-            tokenUrl: 'https://api.sandbox.equifax.com/v2/oauth/token',
-            apiUrl: 'https://api.sandbox.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
+        // UAT (Sandbox/Testing) usa api.uat.latam.equifax.com
+        // PROD (Production) usa api.latam.equifax.com
+        const baseUrls = isSandbox ? {
+            tokenUrl: 'https://api.uat.latam.equifax.com/v2/oauth/token',
+            apiUrl: 'https://api.uat.latam.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
         } : {
             tokenUrl: 'https://api.latam.equifax.com/v2/oauth/token',
             apiUrl: 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
         };
 
         // tokenScope (scope requerido para grant_type)
-        const tokenScope = sandbox
-            ? 'https://api.sandbox.equifax.com/business/interconnect/v1/decision-orchestrations'
-            : 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations';
+        // El scope es el mismo para UAT y PROD (sin el prefijo .uat)
+        const tokenScope = 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations';
 
         // Crear Basic Auth (NetSuite: use N/encode; Node: use Buffer)
         let basicAuth = '';
@@ -320,18 +397,11 @@ function (https, log, runtime, encode, cache, normalize) {
             basicAuth = '';
         }
 
-        // Pre-compilar headers function para evitar object creation repetido
-        const requestHeadersTemplate = {
-            'Content-Type': 'application/vnd.com.equifax.clientconfig.v1+json',
-            'Accept': 'application/json',
-            'User-Agent': 'NetSuite-ELM/1.0'
-        };
-
         log.audit({ title: 'Equifax Config Initialized', details: 'Environment: ' + environment });
 
         return {
             environment: environment,
-            isSandbox: sandbox,
+            isSandbox: isSandbox,
             tokenUrl: baseUrls.tokenUrl,
             apiUrl: baseUrls.apiUrl,
             basicAuth: basicAuth,
@@ -342,12 +412,7 @@ function (https, log, runtime, encode, cache, normalize) {
             productOrch: productOrch,
             customer: customer,
             model: model,
-            configuration: configuration,
-            requestHeaders: function(token) {
-                let headers = Object.assign({}, requestHeadersTemplate);
-                headers['Authorization'] = 'Bearer ' + token;
-                return headers;
-            }
+            configuration: configuration
         };
     }
 
@@ -359,6 +424,7 @@ function (https, log, runtime, encode, cache, normalize) {
         401: ['EQUIFAX_UNAUTHORIZED', 'Token inválido'],
         403: ['EQUIFAX_FORBIDDEN', 'Sin permisos'],
         404: ['EQUIFAX_NOT_FOUND', 'Documento no encontrado'],
+        418: ['EQUIFAX_REJECTED', 'Solicitud rechazada por Equifax (418) - verificar datos o rate limit'],
         429: ['EQUIFAX_RATE_LIMIT', 'Límite de requests excedido'],
         500: ['EQUIFAX_SERVER_ERROR', 'Error interno Equifax'],
         503: ['EQUIFAX_UNAVAILABLE', 'Servicio no disponible']

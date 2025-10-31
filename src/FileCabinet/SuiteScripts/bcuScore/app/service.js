@@ -30,6 +30,7 @@ define([
     function calculateScore(documento, options) {
         options = options || {};
         options.forceRefresh = true;
+        options.forceNewToken = true;
 
         const isDebugMode = options.debug === true;
         const requestId = isDebugMode ? generateRequestId() : null;
@@ -58,7 +59,7 @@ define([
             }
 
             const __tScore0 = Date.now();
-            var scoreResult;
+            let scoreResult;
             try {
                 scoreResult = scoreEngine.computeScore(normalizedData, rules);
                 log.debug({ title: 'computeScore result', details: { idLog, scoreResult } });
@@ -159,7 +160,7 @@ define([
      * Obtiene datos del proveedor especificado o usa fallback
      */
     function fetchProviderData(documento, options) {
-        var provider = options.provider || PROVIDER_EQUIFAX; // Default a Equifax
+        const provider = options.provider || PROVIDER_EQUIFAX; // Default a Equifax
         
         try {
             switch (provider.toLowerCase()) {

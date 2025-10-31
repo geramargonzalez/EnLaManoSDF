@@ -25,6 +25,11 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
             result: 'Consulte nuevamente más tarde'
          };
          try {
+
+          /*   if(source == 'AlPrestamo'){
+               return response;
+            } */
+
             const isValid = auxLib.validateCI(docNumber);
             if (!isValid) {
                log.audit('Error', 'El documento ' + docNumber + ' no es válido.');
@@ -53,7 +58,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
 
                   if (!mocasist) {
                     
-                     if (!infoRepetido3?.id) {
+                     if (!infoRepetido?.id) {
 
                          const score = scoreLib.scoreFinal(docNumber);
                            // const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'mym', forceRefresh: true, debug: true, strictRules: true });
@@ -72,18 +77,27 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            // Manejo de rechazo BCU con calificación visible
                            if (score?.error_reglas) {
                               let approvalStatus = objScriptParam.estadoRechazado;
-                              if (score.error_reglas == 500 || score.error_reglas == 400) {
-                                 approvalStatus = objScriptParam.estadoErrorBCU;
+
+                              // Normalizar texto de detail(s) para búsqueda de frases conocidas
+                              const detailText = String(score.detail || score.details || '').toLowerCase();
+                              const isTimeoutDetail = (
+                                 detailText.indexOf('el host al cual está intentando conectarse') !== -1 && detailText.indexOf('exced') !== -1
+                              ) || detailText.indexOf('excedido el tiempo') !== -1 || detailText.indexOf('excedido el tiempo máximo') !== -1;
+                              const isBcuFetchError = detailText.indexOf('error al obtener datos del bcu') !== -1;
+
+                              if (score.error_reglas == 500 || score.error_reglas == 400 || isTimeoutDetail || isBcuFetchError || detailText) {
+                                 approvalStatus = objScriptParam.estadoErrorBCU || 15;
                               }
 
                               if (score.error_reglas == 404) {
                                  approvalStatus = objScriptParam.NohayInfoBCU;
-                              } 
+                              }
+
                               log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
                               response.success = false;
                               response.result = 'BCU';
             
-                              auxLib.submitFieldsEntity(preLeadId, approvalStatus, objScriptParam.rechazoBCU, null, null, null, null, null, {
+                              auxLib.submitFieldsEntity(preLeadId, approvalStatus || 1, objScriptParam.rechazoBCU, null, null, null, null, null, {
                                  score: 0,
                                  calificacionMinima: score?.calificacionMinima,
                                  detail: score?.detail,
@@ -111,14 +125,18 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                               } 
                               const montoCuotaObj = auxLib.getPonderador(score?.score, score?.calificacionMinima, score?.endeudamiento, salary, activity, age, source);
                               const montoCuota = parseFloat(salary) * parseFloat(montoCuotaObj?.ponderador);
-                              const ofertaFinal = getOfertaFinal(source, montoCuota);
+                       /*        let ofertaFinal
+                              if (montoCuota > 0) { */
+                                const ofertaFinal = getOfertaFinal(source, montoCuota);
+                              //  }
+                              
                               let isLatente = true;
                               
                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END') && source != 'AlPrestamo') {
                                  isLatente = false;
                               }
 
-                              if (source == 'AlPrestamo' && !ofertaFinal) {
+                              if (source == 'AlPrestamo' && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
                                   isLatente = false;
                               }
                                
@@ -320,7 +338,10 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                         if(isPendienteEvaluacion) {
                            const montoCuotaObj = auxLib.getPonderador(infoRepetido.score, infoRepetido.calificacion, infoRepetido.endeudamiento, salary, activity, age, "6");
                            const montoCuota = parseFloat(salary) * parseFloat(montoCuotaObj?.ponderador);
+
+                        
                            const ofertaFinal = auxLib.getOfertaFinal(montoCuota);
+
                            let approvalStatus = objScriptParam.estadoRechazado;
                            if (ofertaFinal?.internalid) {
                               log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal.oferta + ' - Cuota Final: ' + parseFloat(ofertaFinal.cuotaFinal));

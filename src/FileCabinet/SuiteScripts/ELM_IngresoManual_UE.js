@@ -21,7 +21,11 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          montoOfrecido: 'custentity_sdb_montoofrecido',
          canal: 'custentity_elm_channel',
       };
-
+      /**
+     * @author Gerardo Gonzalez
+     * @desc beforeSubmit - This function does pre-processing before saving a lead record
+     * @param {object} scriptContext - The context of the script
+     */
       const beforeSubmit = (scriptContext) => {
          const { oldRecord, newRecord, type, UserEventType } = scriptContext;
          let idLog = null;
@@ -240,7 +244,8 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   }
                }
             }
-            
+
+
          } catch (e) {
             log.error('beforeSubmit', e);
             response.success = false;
@@ -260,7 +265,11 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
            }
 
       }
-
+   /**
+     * @author Gerardo Gonzalez
+     * @desc getScriptParameters - This function gets script parameters
+     * @param {object} scriptContext - The context of the script
+     */
       const getScriptParameters = () => {
          const scriptObj = runtime.getCurrentScript();
          return {
@@ -283,16 +292,48 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          };
       };
 
-      
+      /**
+     * @author Gerardo Gonzalez
+     * @desc afterSubmit - This function creates a snapshot record when a lead is approved
+     * @param {object} scriptContext - 
+     */
       const afterSubmit = (scriptContext) => {
          try {
             
-            const { newRecord } = scriptContext;
+            const { newRecord, oldRecord, type } = scriptContext;
             const objScriptParam = getScriptParameters();
             const docNumber = newRecord.getValue(FIELDS.docNumber);
             const estadoGestion = newRecord.getValue(FIELDS.aprobado);
+            const estadoGestionOld = oldRecord ? oldRecord.getValue(FIELDS.aprobado) : null;
             const leadId = newRecord.id;
+            const inactive = newRecord.getValue('isinactive');
+            const operador = newRecord.getValue('custentity_elm_operador');
          
+
+            // Only create gestion lead when event is create or edit AND approval state changed AND execution context is UI
+            if (type === 'create' || type === 'edit') {
+               if (estadoGestion !== estadoGestionOld) {
+                  try {
+                     const execContext = runtime.executionContext;
+                     // runtime.ContextType.USER_INTERFACE is the UI context
+                     if (execContext === runtime.ContextType.USER_INTERFACE && runtime.getCurrentUser().id != -4) {
+                        auxLib.createGestionLead({
+                           leadId: inactive ? null : leadId,
+                           estado: estadoGestion,
+                           nroDocumento: docNumber,
+                           setBy: runtime.getCurrentUser().id
+                        });
+                     } else {
+                        log.debug('afterSubmit', 'Skipping createGestionLead because executionContext is ' + execContext + ' or user is system');
+                     }
+                  } catch (e_ctx) {
+                     log.error('afterSubmit-context-check', e_ctx);
+                  }
+               }
+            }
+
+           
+
             // Buscar snapshot existente por combinación (doc, estado)
             let existingRecords = [];
             search.create({
@@ -319,11 +360,15 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   auxLib.snapshotAprobados(docNumber, leadId, estadoGestion);
                   log.debug('Snapshot Create', `Creado nuevo snapshot para documento: ${docNumber}`);
                }
-            } 
+            }
+
+
+            
          } catch (e) {
             log.error('afterSubmit', e);
          }
       };
+
 
       return { beforeSubmit, afterSubmit };
    });

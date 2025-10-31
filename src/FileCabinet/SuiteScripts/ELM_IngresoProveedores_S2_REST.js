@@ -42,12 +42,17 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
 
            if (lead?.id) {
                
-               let approvalStatus = lead.status;
+               let approvalStatus = lead.status
+
+               let channel = '';
                if (lead.status === objScriptParam.leadStatusLat) {
                   approvalStatus = objScriptParam.leadStatusApr;
                   response.success = true;
                   const canal = auxLib.getProveedorId(source)
                   auxLib.snapshotAprobados(docNumber, lead.id, approvalStatus, canal || '');
+                  if (source) {
+                   channel = auxLib.getProveedorId(source);
+                }
                }
                
                const values = {
@@ -56,8 +61,8 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
                   custentity_elm_aprobado: approvalStatus,
                };
 
-                if (source && approvalStatus == objScriptParam.leadStatusApr) {
-                   values.custentity_elm_channel = auxLib.getProveedorId(source);
+               if (channel) {
+                  values.custentity_elm_channel = channel;
                }
 
                log.debug('Updating Lead', 'ID: ' + lead.id + ' - Values: ' + JSON.stringify(values));
