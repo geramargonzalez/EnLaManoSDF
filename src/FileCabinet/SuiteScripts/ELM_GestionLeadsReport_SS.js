@@ -2,12 +2,20 @@
 /**
  * @NApiVersion 2.1
  * @NScriptType ScheduledScript
- * @description Script programado para asignar leads a operadores disponibles
+ * @description Este script genera y envía un reporte HTML de gestión de leads por operador.
  */
 
 define(['N/search','N/email','N/runtime','N/log','N/format','N/file'],
 function(search, email, runtime, log, format, file) {
 
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc buildFullReportHtml - This function builds the full HTML report for lead management by operators.
+     * @param {Array} summaryArray - Array of summary data per operator
+     * @param {Array} timeOffArray - Array of time off data per operator
+     * @param {string} periodLabel - Label for the reporting period
+     * @return {string} - HTML string of the full report
+     */
     function buildFullReportHtml(summaryArray, timeOffArray, periodLabel) {
         // summaryArray: [{ setBy, setByNombre, total, uniqueLeads, gestionado, pendienteDoc, enValidacion, sinRespuesta, rechazadoAsesor, daysActive, avg, dailyAvg, median, percentile25, percentile75, pctGestionado, pctPendienteDoc, pctEnValidacion, pctSinRespuesta, pctRechazadoAsesor }]
         const css = 'body{font-family: Arial, Helvetica, sans-serif; color:#333;} .report-title{text-align:center; font-size:18px; margin-bottom:12px;} table.report{width:100%; border-collapse:collapse; margin-bottom:6px;} table.report th{background:#f0f0f0; padding:6px; text-align:left; border:1px solid #ddd;} table.report td{padding:6px; border:1px solid #eee;}';
@@ -91,7 +99,7 @@ function(search, email, runtime, log, format, file) {
             // Resumen del equipo
             const totalGestiones = summaryArray.reduce(function(sum, s) { return sum + (s.total || 0); }, 0);
             const totalLeadsUnicos = summaryArray.reduce(function(sum, s) { return sum + (s.uniqueLeads || 0); }, 0);
-            const avgPerOperator = summaryArray.length > 0 ? (totalGestiones / summaryArray.length).toFixed(2) : '0.00';
+            const avgUniqueLeadsPerOperator = summaryArray.length > 0 ? (totalLeadsUnicos / summaryArray.length).toFixed(2) : '0.00';
             const totalOperators = summaryArray.length;
             
             html += '<div style="margin-top:20px; padding:10px; background:#f5f5f5; border-left:4px solid #2f6f9f;">';
@@ -99,7 +107,7 @@ function(search, email, runtime, log, format, file) {
             html += 'Total Gestiones: <strong>' + totalGestiones + '</strong><br/>';
             html += 'Total Leads Únicos Gestionados: <strong>' + totalLeadsUnicos + '</strong><br/>';
             html += 'Total Operadores Activos: <strong>' + totalOperators + '</strong><br/>';
-            html += 'Promedio Gestiones por Operador: <strong>' + avgPerOperator + '</strong>';
+            html += 'Promedio Leads Únicos por Operador: <strong>' + avgUniqueLeadsPerOperator + '</strong>';
             html += '</div>';
             
             // Tercera tabla: Tiempo Off por Operador
@@ -152,7 +160,7 @@ function(search, email, runtime, log, format, file) {
                 const totalTimeOffHours = (totalTimeOffMinutes / 60).toFixed(2);
                 
                 html += '<div style="margin-top:10px; padding:10px; background:#fff3e0; border-left:4px solid #ff9800;">';
-                html += '<strong>Total Tiempo Off del Equipo:</strong> ' + totalTimeOffHours + ' horas (' + totalTimeOffMinutes.toFixed(0) + ' minutos)';
+                html += '<strong>Total de Tiempo no productivo:</strong> ' + totalTimeOffHours + ' horas (' + totalTimeOffMinutes.toFixed(0) + ' minutos)';
                 html += '</div>';
             }
 
@@ -164,7 +172,15 @@ function(search, email, runtime, log, format, file) {
         html += '</body></html>';
         return html;
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc getPeriodDates - This function retrieves date filters for lead management actions by advisors.
+     * @param {string} subject - Date period
+     * @param {string} body - Email body
+     * @param {string} recipients - Email recipients
+     * @param {Array} attachments - Email attachments
+     * @return {Array} - Array of date filters
+     */
     function sendReport(subject, body, recipients, attachments) {
         try {
             const currentScript = runtime.getCurrentScript();
@@ -193,7 +209,12 @@ function(search, email, runtime, log, format, file) {
             return false;
         }
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc getPeriodDates - This function retrieves date filters for lead management actions by advisors. 
+     * @param {string} period - Date period
+     * @return {Array} - Array of date filters
+     */
     function getPeriodDates(period) {
         // returns { startDate: Date, endDate: Date, label: string }
         const now = new Date();
@@ -228,7 +249,12 @@ function(search, email, runtime, log, format, file) {
         // default daily
         return { startDate: today, endDate: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23,59,59), label: format.format({ value: today, type: format.Type.DATE }) };
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc getDateFiltersForPeriod - This function retrieves date filters for lead management actions by advisors.
+     * @param {string} period - Date period
+     * @return {Array} - Array of date filters
+     */
     function getDateFiltersForPeriod(period) {
         try {
             if (!period) period = 'daily';
@@ -243,7 +269,7 @@ function(search, email, runtime, log, format, file) {
             if (period === 'weekly') {
                 log.debug('getDateFiltersForPeriod', 'Using filter: last 7 days');
                 // Use "within" with relative keyword for last 7 days
-                return [ ['created', 'within', 'thisweek'] ];
+                return [ ['created', 'within', 'lastbusinessweek'] ];
             }
             
             if (period === 'monthly') {
@@ -259,7 +285,12 @@ function(search, email, runtime, log, format, file) {
             return null;
         }
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc getAdvisorDailyCounts - This function retrieves daily counts of lead management actions by advisors. 
+     * @param {string} period - Daily counts data
+     * @return {Array} - Array of advisor daily counts data
+     */
     function getAdvisorDailyCounts(period) {
         // Returns array of { setBy, setByNombre, dateStr, count, enValidacion, allCounts }
         // Gets individual records and aggregates by operator for better statistics
@@ -273,7 +304,7 @@ function(search, email, runtime, log, format, file) {
                 return [];
             }
             
-            // Add role filter: 1010 (Asesor Ventas), 1006 (Supervisor Ventas), 1012 (Gerente Comercial)
+            // Add role filter: 1010 (Asesor Ventas Externo), 1006 (Asesor Ventas), 1012 (Backoffice Ventas)
             const filters = [
                 dateFilters,
                 'AND',
@@ -445,7 +476,12 @@ function(search, email, runtime, log, format, file) {
             return [];
         }
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc getOperatorTimeOff - This function retrieves operator time off data.
+     * @param {string} period - Daily counts data
+     * @return {Array} - Array of operator time off data
+     */
     function getOperatorTimeOff(period) {
         // Returns array of { operatorId, operatorName, totalMinutes, motivoBreakdown: { motivoId: { nombre, minutos } } }
         try {
@@ -559,7 +595,13 @@ function(search, email, runtime, log, format, file) {
             return [];
         }
     }
-
+    /**
+     * @author  Gerardo Gonzalez
+     * @desc computeMetricsFromDailyCounts - This function computes metrics from daily counts data.
+     * @param {string} dailyCounts - Daily counts data
+     * @param {string} period - Period string (daily, weekly, monthly)
+     * @returns {Object} - Computed metrics
+     */
     function computeMetricsFromDailyCounts(dailyCounts, period) {
         // dailyCounts: [{ setBy, setByNombre, dateStr, count, uniqueLeadsCount, gestionado, pendienteDoc, enValidacion, sinRespuesta, rechazadoAsesor }]
         const p = getPeriodDates(period);
@@ -657,7 +699,11 @@ function(search, email, runtime, log, format, file) {
         metrics.sort(function(a,b){ return (b.total || 0) - (a.total || 0); });
         return { metrics: metrics, daysInPeriod: daysInPeriod };
     }
-
+     /**
+     * @author  Gerardo Gonzalez
+     * @desc execute - This function is the main entry point for the scheduled script.
+     * @param {string} context - Purpose name
+     */
     function execute(context) {
          log.audit('ELM_GestionLeadsReport', 'Start');
         // 1. Determinar periodo (parametro del script en cada deployment): daily|weekly|monthly
