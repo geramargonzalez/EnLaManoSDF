@@ -7,7 +7,7 @@
 define(['N/currentRecord', "./ELM_Aux_Lib.js", 'N/runtime', 'N/search'],
     function (currentRecord, auxLib, runtime, search) {
 
-            /**
+        /**
          * @author  Gerardo Gonzalez
          * @desc pageInit - This function is triggered when the page is initialized. 
          * @param {object} scriptContext 
@@ -54,31 +54,6 @@ define(['N/currentRecord', "./ELM_Aux_Lib.js", 'N/runtime', 'N/search'],
             }
         }
 
-
-        function isEmployeActive(employeeId) {
-            try {
-                const employeeSearchObj = search.create({
-                    type: "employee",
-                    filters:
-                    [
-                        ["internalid","anyof",employeeId], 
-                        "AND", 
-                        ["custentity_elm_activo","is","T"]
-                    ],
-                    columns:
-                    [
-                        search.createColumn({name: "internalid", label: "Inernal ID"}),
-                    ]
-                    });
-                    const searchResultCount = employeeSearchObj.runPaged().count;
-
-                    return searchResultCount > 0;
-
-            } catch (error) {
-                console.error('Error checking employee status:', error);
-                return false;
-            }
-        }
 
         return {
             pageInit: pageInit

@@ -13,10 +13,11 @@ function(search, email, runtime, log, format, file) {
      * @desc buildFullReportHtml - This function builds the full HTML report for lead management by operators.
      * @param {Array} summaryArray - Array of summary data per operator
      * @param {Array} timeOffArray - Array of time off data per operator
+     * @param {Array} leadsAssignedArray - Array of leads assigned per operator
      * @param {string} periodLabel - Label for the reporting period
      * @return {string} - HTML string of the full report
      */
-    function buildFullReportHtml(summaryArray, timeOffArray, periodLabel) {
+    function buildFullReportHtml(summaryArray, timeOffArray, leadsAssignedArray, periodLabel) {
         // summaryArray: [{ setBy, setByNombre, total, uniqueLeads, gestionado, pendienteDoc, enValidacion, sinRespuesta, rechazadoAsesor, daysActive, avg, dailyAvg, median, percentile25, percentile75, pctGestionado, pctPendienteDoc, pctEnValidacion, pctSinRespuesta, pctRechazadoAsesor }]
         const css = 'body{font-family: Arial, Helvetica, sans-serif; color:#333;} .report-title{text-align:center; font-size:18px; margin-bottom:12px;} table.report{width:100%; border-collapse:collapse; margin-bottom:6px;} table.report th{background:#f0f0f0; padding:6px; text-align:left; border:1px solid #ddd;} table.report td{padding:6px; border:1px solid #eee;}';
 
@@ -32,8 +33,8 @@ function(search, email, runtime, log, format, file) {
             }
             
             // Primera tabla: Métricas principales
-            html += '<h3 style="margin-top:10px; text-align:center; color:#2f6f9f;">Resumen de Gestiones por Operador</h3>';
-            html += '<table class="report" style="margin-top:10px;"><thead><tr><th>Operador</th><th style="text-align:right;">Total Gestiones</th><th style="text-align:right;">Leads Únicos</th><th style="text-align:right;">Gestionado</th><th style="text-align:right;">Pendiente Doc</th><th style="text-align:right;">En Validación</th><th style="text-align:right;">Sin Respuesta</th><th style="text-align:right;">Rechazado</th><th style="text-align:right;">Mediana</th><th style="text-align:right;">P25</th><th style="text-align:right;">P75</th><th style="text-align:right;">Promedio</th></tr></thead><tbody>';
+            html += '<h3 style="margin-top:10px; text-align:center; color:#2f6f9f;"> Resumen de Gestiones por Operador </h3>';
+            html += '<table class="report" style="margin-top:10px;"><thead><tr><th>Operador</th><th style="text-align:right;"> Total Gestiones </th><th style="text-align:right;">Leads Únicos</th><th style="text-align:right;">Gestionado</th><th style="text-align:right;">Pendiente Doc</th><th style="text-align:right;">En Validación</th><th style="text-align:right;">Sin Respuesta</th><th style="text-align:right;">Rechazado</th><th style="text-align:right;">Mediana</th><th style="text-align:right;">Cuartil Inferior</th><th style="text-align:right;">Máximo Típico</th><th style="text-align:right;">Promedio</th></tr></thead><tbody>';
             
             summaryArray.forEach(function(s) {
                 const operatorName = s.setByNombre || s.setBy || 'Sin Operador';
@@ -126,7 +127,7 @@ function(search, email, runtime, log, format, file) {
                 });
                 
                 // Construir encabezados dinámicamente
-                html += '<table class="report" style="margin-top:10px;"><thead><tr><th>Operador</th><th style="text-align:right;">Total Horas</th>';
+                html += '<table class="report" style="margin-top:10px;"><thead><tr><th>Operador</th><th style="text-align:right;">Total Tiempo</th>';
                 Object.keys(allMotivos).forEach(function(motivoKey) {
                     html += '<th style="text-align:right;">% ' + allMotivos[motivoKey] + '</th>';
                 });
@@ -135,12 +136,20 @@ function(search, email, runtime, log, format, file) {
                 // Datos por operador
                 timeOffArray.forEach(function(t) {
                     const operatorName = t.operatorName || t.operatorId || 'Sin Operador';
-                    const totalHours = t.totalHours || '0.00';
                     const totalMinutes = t.totalMinutes || 0;
+                    
+                    // Mostrar minutos si es menos de 60, sino mostrar horas
+                    let displayTime = '';
+                    if (totalMinutes < 60) {
+                        displayTime = totalMinutes.toFixed(0) + ' min';
+                    } else {
+                        const hours = (totalMinutes / 60).toFixed(2);
+                        displayTime = hours + ' hrs';
+                    }
                     
                     html += '<tr>';
                     html += '<td style="text-align:left; font-weight:bold; background:#f7fbff;">' + operatorName + '</td>';
-                    html += '<td style="text-align:right; background:#fff3e0; font-weight:bold;">' + totalHours + '</td>';
+                    html += '<td style="text-align:right; background:#fff3e0; font-weight:bold;">' + displayTime + '</td>';
                     
                     // Calcular porcentajes por motivo
                     Object.keys(allMotivos).forEach(function(motivoKey) {
@@ -157,10 +166,48 @@ function(search, email, runtime, log, format, file) {
                 
                 // Resumen de tiempo off
                 const totalTimeOffMinutes = timeOffArray.reduce(function(sum, t) { return sum + (t.totalMinutes || 0); }, 0);
-                const totalTimeOffHours = (totalTimeOffMinutes / 60).toFixed(2);
+                let totalTimeDisplay = '';
+                if (totalTimeOffMinutes < 60) {
+                    totalTimeDisplay = totalTimeOffMinutes.toFixed(0) + ' minutos';
+                } else {
+                    const totalHours = (totalTimeOffMinutes / 60).toFixed(2);
+                    totalTimeDisplay = totalHours + ' horas (' + totalTimeOffMinutes.toFixed(0) + ' minutos)';
+                }
                 
                 html += '<div style="margin-top:10px; padding:10px; background:#fff3e0; border-left:4px solid #ff9800;">';
-                html += '<strong>Total de Tiempo no productivo:</strong> ' + totalTimeOffHours + ' horas (' + totalTimeOffMinutes.toFixed(0) + ' minutos)';
+                html += '<strong>Total de Tiempo no productivo:</strong> ' + totalTimeDisplay;
+                html += '</div>';
+            }
+            
+            // Cuarta tabla: Leads Asignados por Operador
+            if (leadsAssignedArray && leadsAssignedArray.length > 0) {
+                html += '<h3 style="margin-top:20px; text-align:center; color:#2f6f9f;">Leads Asignados por Operador</h3>';
+                html += '<table class="report" style="margin-top:10px;"><thead><tr><th>Operador</th><th style="text-align:right;">Leads Asignados</th></tr></thead><tbody>';
+                
+                // Ordenar por cantidad de leads asignados (descendente)
+                const sortedLeads = leadsAssignedArray.slice().sort(function(a, b) {
+                    return (b.leadsAssigned || 0) - (a.leadsAssigned || 0);
+                });
+                
+                sortedLeads.forEach(function(l) {
+                    const operatorName = l.operatorName || l.operatorId || 'Sin Operador';
+                    const leadsAssigned = l.leadsAssigned || 0;
+                    
+                    html += '<tr>';
+                    html += '<td style="text-align:left; font-weight:bold; background:#f7fbff;">' + operatorName + '</td>';
+                    html += '<td style="text-align:right; background:#e3f2fd; font-weight:bold;">' + leadsAssigned + '</td>';
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                
+                // Resumen de leads asignados
+                const totalLeadsAssigned = leadsAssignedArray.reduce(function(sum, l) { return sum + (l.leadsAssigned || 0); }, 0);
+                const avgLeadsPerOperator = leadsAssignedArray.length > 0 ? (totalLeadsAssigned / leadsAssignedArray.length).toFixed(2) : '0.00';
+                
+                html += '<div style="margin-top:10px; padding:10px; background:#e3f2fd; border-left:4px solid #2196f3;">';
+                html += '<strong>Total Leads Asignados:</strong> ' + totalLeadsAssigned + '<br/>';
+                html += '<strong>Promedio por Operador:</strong> ' + avgLeadsPerOperator;
                 html += '</div>';
             }
 
@@ -235,10 +282,9 @@ function(search, email, runtime, log, format, file) {
         }
 
         if (period === 'monthly') {
-            // 30 días atrás desde hoy
+            // Desde el primer día del mes actual hasta hoy
             const endDate = new Date(today); // Hoy
-            const startDate = new Date(today);
-            startDate.setDate(today.getDate() - 30); // 30 días atrás
+            const startDate = new Date(today.getFullYear(), today.getMonth(), 1); // Primer día del mes
             return { 
                 startDate: new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0), 
                 endDate: new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59), 
@@ -259,22 +305,20 @@ function(search, email, runtime, log, format, file) {
         try {
             if (!period) period = 'daily';
             period = String(period).toLowerCase();
-            
             // Use relative date filters - most reliable in NetSuite
             if (period === 'daily') {
                 log.debug('getDateFiltersForPeriod', 'Using filter: today');
                 return [ ['created', 'within', 'today'] ];
             }
-            
             if (period === 'weekly') {
                 log.debug('getDateFiltersForPeriod', 'Using filter: last 7 days');
                 // Use "within" with relative keyword for last 7 days
                 return [ ['created', 'within', 'lastbusinessweek'] ];
             }
-            
             if (period === 'monthly') {
-                log.debug('getDateFiltersForPeriod', 'Using filter: this month');
-                return [ ['created', 'within', 'thismonth'] ];
+                log.debug('getDateFiltersForPeriod', 'Using filter: from first day of month to today');
+                // Use "onorafter" first day of current month
+                return [ ["created","within","thismonth"] ];
             }
             
             // Default to today
@@ -311,7 +355,9 @@ function(search, email, runtime, log, format, file) {
                 ['custrecord_elm_gestion_set_by.role', 'anyof', '1010', '1006', '1012']
             ];
             
-            log.debug('getAdvisorDailyCounts', 'Filters: ' + JSON.stringify(filters));
+            log.debug('getAdvisorDailyCounts', 'Date filter being used: ' + JSON.stringify(dateFilters));
+            log.debug('getAdvisorDailyCounts', 'Period parameter: ' + period);
+            log.debug('getAdvisorDailyCounts', 'Full filters: ' + JSON.stringify(filters));
             
             // Get individual records (no GROUP BY)
             const cols = [
@@ -328,7 +374,8 @@ function(search, email, runtime, log, format, file) {
             let searchCount = 0;
             try {
                 searchCount = s.runPaged().count;
-                log.debug('getAdvisorDailyCounts', 'Total search results: ' + searchCount);
+                log.audit('getAdvisorDailyCounts', '*** TOTAL SEARCH RESULTS WITH FILTERS: ' + searchCount + ' ***');
+                log.audit('getAdvisorDailyCounts', 'Expected ~2662 records without role filter, got: ' + searchCount);
             } catch (countErr) {
                 log.error('getAdvisorDailyCounts_count', countErr);
             }
@@ -336,6 +383,20 @@ function(search, email, runtime, log, format, file) {
             if (searchCount === 0) {
                 log.audit('getAdvisorDailyCounts', 'No records found for period: ' + period);
                 return [];
+            }
+            
+            // Test search WITHOUT role filter to see total
+            try {
+                const testSearch = search.create({ 
+                    type: 'customrecord_elm_gestion_leads', 
+                    filters: dateFilters, 
+                    columns: [search.createColumn({ name: 'internalid' })] 
+                });
+                const testCount = testSearch.runPaged().count;
+                log.audit('getAdvisorDailyCounts', '*** TOTAL WITHOUT ROLE FILTER: ' + testCount + ' ***');
+                log.audit('getAdvisorDailyCounts', 'Difference (filtered by role): ' + (testCount - searchCount) + ' records excluded');
+            } catch (testErr) {
+                log.error('getAdvisorDailyCounts_testCount', testErr);
             }
             
             // Map to aggregate by operator AND day: key = "operatorId|YYYY-MM-DD"
@@ -441,8 +502,10 @@ function(search, email, runtime, log, format, file) {
                     if (searchResults.length < 1000) hasMoreResults = false;
                 }
                 
-                log.debug('getAdvisorDailyCounts', 'Processed ' + totalRecords + ' individual records');
-                log.debug('getAdvisorDailyCounts', 'Daily map keys count: ' + Object.keys(dailyMap).length);
+                log.audit('getAdvisorDailyCounts', '*** TOTAL RECORDS PROCESSED: ' + totalRecords + ' ***');
+                log.audit('getAdvisorDailyCounts', '*** UNIQUE OPERATORS FOUND: ' + Object.keys(operatorNames).length + ' ***');
+                log.audit('getAdvisorDailyCounts', 'Operator names: ' + JSON.stringify(operatorNames));
+                log.debug('getAdvisorDailyCounts', 'Daily map keys count (operator-day combinations): ' + Object.keys(dailyMap).length);
             } catch (searchErr) {
                 log.error('getAdvisorDailyCounts_search', searchErr);
             }
@@ -460,7 +523,7 @@ function(search, email, runtime, log, format, file) {
                     setByNombre: operatorNames[operatorKey] || '',
                     dateStr: dateStr,
                     count: data.count,
-                    uniqueLeadsCount: data.uniqueLeads.size, // Cantidad de leads únicos
+                    uniqueLeadsSet: data.uniqueLeads, // Pasar el Set completo con los IDs
                     gestionado: data.gestionado,
                     pendienteDoc: data.pendienteDoc,
                     enValidacion: data.enValidacion,
@@ -597,6 +660,77 @@ function(search, email, runtime, log, format, file) {
     }
     /**
      * @author  Gerardo Gonzalez
+     * @desc getLeadsAssigned - This function retrieves leads assigned to operators.
+     * @param {string} period - Period parameter (daily, weekly, monthly)
+     * @return {Array} - Array of { operatorId, operatorName, leadsAssigned }
+     */
+    function getLeadsAssigned(period) {
+        try {
+            log.debug('getLeadsAssigned', 'Period: ' + period);
+            
+            const dateFilters = getDateFiltersForPeriod(period);
+            if (!dateFilters) {
+                log.error('getLeadsAssigned', 'No filters returned for period: ' + period);
+                return [];
+            }
+            
+            const cols = [
+                search.createColumn({
+                    name: 'custrecord_elm_operador_operador',
+                    summary: 'GROUP',
+                    label: 'Operador'
+                }),
+                search.createColumn({
+                    name: 'custrecord_elm_operador_cliente',
+                    summary: 'COUNT',
+                    label: 'Lead/Cliente'
+                })
+            ];
+            
+            const s = search.create({ 
+                type: 'customrecord_elm_operador_lead', 
+                filters: dateFilters, 
+                columns: cols 
+            });
+            
+            let searchCount = 0;
+            try {
+                searchCount = s.runPaged().count;
+                log.debug('getLeadsAssigned', 'Total search results: ' + searchCount);
+            } catch (countErr) {
+                log.error('getLeadsAssigned_count', countErr);
+            }
+            
+            if (searchCount === 0) {
+                log.audit('getLeadsAssigned', 'No leads assigned found for period: ' + period);
+                return [];
+            }
+            
+            const results = [];
+            
+            s.run().each(function(result) {
+                const operatorId = result.getValue({ name: 'custrecord_elm_operador_operador', summary: 'GROUP' }) || '';
+                const operatorName = result.getText({ name: 'custrecord_elm_operador_operador', summary: 'GROUP' }) || '';
+                const leadsCount = parseInt(result.getValue({ name: 'custrecord_elm_operador_cliente', summary: 'COUNT' })) || 0;
+                
+                results.push({
+                    operatorId: operatorId,
+                    operatorName: operatorName,
+                    leadsAssigned: leadsCount
+                });
+                
+                return true;
+            });
+            
+            log.debug('getLeadsAssigned', 'Processed ' + results.length + ' operators with leads assigned');
+            return results;
+        } catch (e) {
+            log.error('getLeadsAssigned', e);
+            return [];
+        }
+    }
+    /**
+     * @author  Gerardo Gonzalez
      * @desc computeMetricsFromDailyCounts - This function computes metrics from daily counts data.
      * @param {string} dailyCounts - Daily counts data
      * @param {string} period - Period string (daily, weekly, monthly)
@@ -614,7 +748,7 @@ function(search, email, runtime, log, format, file) {
                     setBy: r.setBy, 
                     setByNombre: r.setByNombre || '', 
                     totals: 0,
-                    uniqueLeadsTotal: 0,
+                    uniqueLeadsSet: new Set(), // Set global para contar leads únicos por operador
                     gestionado: 0,
                     pendienteDoc: 0,
                     enValidacion: 0,
@@ -625,7 +759,14 @@ function(search, email, runtime, log, format, file) {
                 };
             }
             map[key].totals += (r.count || 0);
-            map[key].uniqueLeadsTotal += (r.uniqueLeadsCount || 0);
+            
+            // Agregar leads únicos del día al Set global del operador
+            if (r.uniqueLeadsSet && r.uniqueLeadsSet.size > 0) {
+                r.uniqueLeadsSet.forEach(function(leadId) {
+                    map[key].uniqueLeadsSet.add(leadId);
+                });
+            }
+            
             map[key].gestionado += (r.gestionado || 0);
             map[key].pendienteDoc += (r.pendienteDoc || 0);
             map[key].enValidacion += (r.enValidacion || 0);
@@ -650,7 +791,7 @@ function(search, email, runtime, log, format, file) {
         const metrics = Object.keys(map).map(function(k){
             const item = map[k];
             const total = item.totals;
-            const uniqueLeads = item.uniqueLeadsTotal;
+            const uniqueLeads = item.uniqueLeadsSet.size; // Contar leads únicos del Set global
             const gestionado = item.gestionado;
             const pendienteDoc = item.pendienteDoc;
             const enValidacion = item.enValidacion;
@@ -699,13 +840,13 @@ function(search, email, runtime, log, format, file) {
         metrics.sort(function(a,b){ return (b.total || 0) - (a.total || 0); });
         return { metrics: metrics, daysInPeriod: daysInPeriod };
     }
+
      /**
      * @author  Gerardo Gonzalez
      * @desc execute - This function is the main entry point for the scheduled script.
-     * @param {string} context - Purpose name
      */
-    function execute(context) {
-         log.audit('ELM_GestionLeadsReport', 'Start');
+    function execute() {
+        log.audit('ELM_GestionLeadsReport', 'Start');
         // 1. Determinar periodo (parametro del script en cada deployment): daily|weekly|monthly
         const currentScript = runtime.getCurrentScript();
         const periodParam = currentScript.getParameter({ name: 'custscript_gestion_report_period' });
@@ -720,9 +861,12 @@ function(search, email, runtime, log, format, file) {
 
         // 2b. Obtener tiempo off por operador
         const timeOffArray = getOperatorTimeOff(period);
+        
+        // 2c. Obtener leads asignados por operador
+        const leadsAssignedArray = getLeadsAssigned(period);
 
         // 3. Construir HTML del reporte agrupado por operador usando las métricas
-        const html = buildFullReportHtml(metricsArray, timeOffArray, periodInfo && periodInfo.label ? periodInfo.label : null);
+        const html = buildFullReportHtml(metricsArray, timeOffArray, leadsAssignedArray, periodInfo && periodInfo.label ? periodInfo.label : null);
         
         // 4. Enviar email
         const recipients =  currentScript.getParameter({ name: 'custscript_elm_recipients' }) ;
@@ -735,7 +879,7 @@ function(search, email, runtime, log, format, file) {
             const attachCsv = attachCsvParam === true || String(attachCsvParam) === 'T' || String(attachCsvParam) === 'true' || String(attachCsvParam) === '1';
             if (attachCsv && Array.isArray(metricsArray) && metricsArray.length) {
                 // Build CSV: Todas las columnas incluyendo métricas adicionales
-                const headers = ['Operador','Total Gestiones','Leads Únicos','Gestionado','Pendiente Doc','En Validación','Sin Respuesta','Rechazado Asesor','Mediana','P25','P75','Promedio','Días Activos','Prom/Día Activo','%Gestionado','%Pendiente Doc','%En Validación','%Sin Respuesta','%Rechazado'];
+                const headers = ['Operador','Total Gestiones','Leads Únicos','Gestionado','Pendiente Doc','En Validación','Sin Respuesta','Rechazado Asesor','Mediana','Cuartil Inferior','Cuartil Superior','Promedio','Días Activos','Prom/Día Activo','%Gestionado','%Pendiente Doc','%En Validación','%Sin Respuesta','%Rechazado'];
                 const rows = [headers.join(',')];
                 metricsArray.forEach(function(m){
                     const name = '"' + String(m.setByNombre || m.setBy || '').replace(/"/g,'""') + '"';

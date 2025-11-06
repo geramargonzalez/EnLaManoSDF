@@ -12,7 +12,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
   // ---------- Handler principal ----------
   function post(body) {
-    const startTs = Date.now();
     const params = getScriptParametersCached();
     const userId = runtime.getCurrentUser().id;
 
@@ -105,8 +104,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           // Usar motor bcuScore optimizado con fallback al SDB cl�sico
           let score;
           try {
-            //  score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, strictRules: true, debug: true });
-             score = scoreLib.scoreFinal(docNumber);
+            score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, strictRules: true, debug: true });
+          //   score = scoreLib.scoreFinal(docNumber);
           } catch (e) {
             // Fallback al motor antiguo si algo falla
             score = scoreLib.scoreFinal(docNumber);

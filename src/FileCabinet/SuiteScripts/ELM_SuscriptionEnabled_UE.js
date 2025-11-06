@@ -18,7 +18,7 @@ define(['N/record', 'N/error'], (record, error) => {
             if (type != scriptContext.UserEventType.CREATE) {
                return;
             }
-
+ 
             const rec = record.load({
                type: record.Type.LEAD,
                id: newRecord.id,
