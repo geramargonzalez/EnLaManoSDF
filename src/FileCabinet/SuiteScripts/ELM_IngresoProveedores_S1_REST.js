@@ -14,10 +14,10 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
   function post(body) {
     const params = getScriptParametersCached();
     const userId = runtime.getCurrentUser().id;
-
+    
     const {
       docNumber, firstName, lastName, activityType,
-      salary, dateOfBirth, workStartDate, source
+      salary, dateOfBirth, workStartDate, source, trackingId
     } = body || {};
 
     const idLog = auxLib.createLogRecord(docNumber, null, false, 1, source, body);
@@ -51,7 +51,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
         preLeadId = auxLib.createPreLead(
           params.externalService, docNumber, null, firstName, lastName,
           activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
-          params?.estadoRechazado, null, source, activityType
+          params?.estadoRechazado, null, source, activityType, trackingId
         );
       }
 
@@ -105,7 +105,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           let score;
           try {
             score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, strictRules: true, debug: true });
-          //   score = scoreLib.scoreFinal(docNumber);
+            // score = scoreLib.scoreFinal(docNumber);
           } catch (e) {
             // Fallback al motor antiguo si algo falla
             score = scoreLib.scoreFinal(docNumber);

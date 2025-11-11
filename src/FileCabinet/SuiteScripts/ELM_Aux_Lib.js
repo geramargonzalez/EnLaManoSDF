@@ -81,7 +81,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
        * @param {string} ingresoPor - The source of income for the pre-lead.
        * @returns {number|null} The ID of the provider if found, otherwise null.
        */
-      function createPreLead(service, docNumber, mobilePhone, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, estadoGestion, ingresoPor, source, activityName) { 
+      function createPreLead(service, docNumber, mobilePhone, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, estadoGestion, ingresoPor, source, activityName, trackingId) { 
          const stLogTitle = 'createPreLead';
          try {
             var preLead = record.create({
@@ -162,6 +162,13 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                preLead.setValue({
                   fieldId: 'custentity_elm_sub_estado',
                   value: ingresoPor
+               });
+            }
+
+            if (trackingId) {
+               preLead.setValue({
+                  fieldId: 'custentity_track_id_al_prestamo',
+                  value: trackingId
                });
             }
             const preLeadId = preLead.save();
@@ -1155,12 +1162,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             // Handle new structure with t2/t6 objects
             if (bcuData && (bcuData.t2 || bcuData.t6)) {
                const periodData = period === 't6' ? bcuData.t6 : bcuData.t2;
-               
                if (!periodData?.data) {
                   log.debug(stLogTitle, `No data found for period ${period}`);
                   return null;
                }
-
                const data = periodData.data;
                return {
                   nombre: data?.nombre,

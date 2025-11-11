@@ -276,34 +276,22 @@ function (https, log, runtime, encode, cache, normalize) {
             timeout: TIMEOUT_MS
         };
 
-        
-
-  /*       // Log completo del request (incluye curl reproducible) para enviar a técnicos
-        try {
-            log.audit({
-                title: 'EQUIFAX HTTP REQUEST (RAW)',
-                details: JSON.stringify({
-                    requestOptions: requestOptions,
-                    curl: 'curl -X POST "' + requestOptions.url + '" ' +
-                          '-H "Content-Type: ' + requestOptions.headers['Content-Type'] + '" ' +
-                          '-H "Authorization: ' + requestOptions.headers['Authorization'] + '" ' +
-                          '-d \'"' + requestOptions.body + '"\''
-                }, null, 2)
-            });
-        } catch (e) {
-            // No detener la ejecución por problemas de logging
-            log.debug({ title: 'EQUIFAX Log Error', details: e.message || e.toString() });
-        } */
 
 
         const response = https.request(requestOptions);
 
-        log.debug('response headers', response.headers);
+        // Extraer correlationId de los headers de la respuesta
+        const correlationId = response.headers['x-correlation-id'] || 
+                             response.headers['X-Correlation-Id'] ||
+                             response.headers['correlationid'] ||
+                             null;
 
         log.debug({
             title: 'Equifax Response',
-            details: 'Code: ' + response.code + ', Body: ' + response.body
+            details: 'Code: ' + response.code + ', CorrelationId: ' + correlationId + ', Body: ' + response.body
         });
+
+        log.debug('response headers', response.headers);
 
  /*        var r = https.get({ url: 'https://api.ipify.org' });
         log.debug('Egress IP', r.body); */ // IP pública desde la que sale NetSuite
@@ -312,7 +300,14 @@ function (https, log, runtime, encode, cache, normalize) {
             throw mapEquifaxHttpError(response.code, response.body);
         }
 
-        return JSON.parse(response.body);
+        const responseBody = JSON.parse(response.body);
+        
+        // Agregar correlationId al objeto de respuesta para que esté disponible en normalize
+        if (correlationId) {
+            responseBody._equifaxCorrelationId = correlationId;
+        }
+
+        return responseBody;
     }
     
     /**

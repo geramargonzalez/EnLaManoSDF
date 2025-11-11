@@ -18,6 +18,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
          let dateOfBirth = requestBody.dateOfBirth;
          let workStartDate = requestBody.workStartDate;
          let source = requestBody.source;
+         const trackingId = requestBody?.trackingId || null;
          const idLog = auxLib.createLogRecord(docNumber, null, false, 1, source, requestBody);
          const response = {
             docNumber: docNumber,
@@ -25,10 +26,6 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
             result: 'Consulte nuevamente más tarde'
          };
          try {
-
-          /*   if(source == 'AlPrestamo'){
-               return response;
-            } */
 
             const isValid = auxLib.validateCI(docNumber);
             if (!isValid) {
@@ -49,7 +46,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
             log.debug('infoRepetido S1', infoRepetido);
             if (infoRepetido?.approvalStatus != objScriptParam?.estadoLatente) {
                
-               let preLeadId = auxLib.createPreLead(objScriptParam.externalService, docNumber, null, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, objScriptParam?.estadoRechazado,null, source, activityType);
+               let preLeadId = auxLib.createPreLead(objScriptParam.externalService, docNumber, null, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, objScriptParam?.estadoRechazado,null, source, activityType, trackingId);
                let blackList = auxLib.checkBlacklist(docNumber);
                
                if (!blackList) {

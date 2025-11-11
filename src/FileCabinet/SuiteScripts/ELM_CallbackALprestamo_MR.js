@@ -74,20 +74,21 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
             log.debug(logTitle, '========== INICIO POSTBACK ALPRESTAMO ==========');
             
             // Script parameters para configuración dinámica
-            const scriptObj = runtime.getCurrentScript();
-            const daysToProcess = scriptObj.getParameter({ name: 'custscript_elm_postback_days' }) || 7;
-            
-            log.debug(logTitle, `Procesando leads de los últimos ${daysToProcess} días`);
+            // const scriptObj = runtime.getCurrentScript();
 
+            log.debug(logTitle, `TRACKING_ID`, CONFIG.FIELDS.TRACKING_ID);
+            log.debug(logTitle, `ESTADO_GESTION`, CONFIG.FIELDS.ESTADO_GESTION);
             const leadSearchObj = search.create({
                 type: search.Type.CUSTOMER,
                 filters:
                     [
                         [CONFIG.FIELDS.TRACKING_ID,"isnotempty",""], 
                         "AND", 
-                        ["custentity_elm_lead_repetido_original","anyof","@NONE@"], 
+                        ["custentity_elm_lead_repetido_original","anyof","@NONE@"] , 
                         "AND", 
-                        ["datecreated","within","today"]
+                        ["datecreated","within","thismonth"], 
+                        "AND", 
+                        ["custentity_elm_aprobado","noneof","1","4","27","26","3","16","15","23","25"]
                     ],
                 columns: [
                     search.createColumn({ name: 'internalid', label: 'ID' }),
@@ -136,12 +137,15 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
             const leadData = JSON.parse(context.value);
             leadId = leadData.id;
             
-            log.debug(logTitle, `Procesando Lead ID: ${leadId}`);
+            log.debug(logTitle, JSON.stringify(leadData));
             
             // Extraer valores del search result - Solo los obligatorios
             trackingId = leadData.values[CONFIG.FIELDS.TRACKING_ID];
-            const postbackStatus =  statusNormalize(leadData.values[CONFIG.FIELDS.ESTADO_GESTION]);
-            
+            log.debug(logTitle, `TRACKING_ID: ${trackingId}`);
+            const estadoGestion = leadData.values[CONFIG.FIELDS.ESTADO_GESTION].value;
+            log.debug(logTitle, `ESTADO_GESTION: ${JSON.stringify(estadoGestion)}`);
+            const postbackStatus =  statusNormalize(estadoGestion);
+             log.debug(logTitle, `postbackStatus ID: ${postbackStatus}`);
             // Valores opcionales - Comentados por ahora, no se enviarán
             // const amount = leadData.values[CONFIG.FIELDS.AMOUNT];
             // const installments = leadData.values[CONFIG.FIELDS.INSTALLMENTS];
@@ -168,7 +172,7 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
             const postbackUrl = buildPostbackUrl({
                 endpoint: endpoint,
                 trackingId: trackingId,
-                status: getStatusText(postbackStatus)
+                status: postbackStatus  // Ya viene normalizado por statusNormalize()
                 
             });
             
@@ -303,43 +307,104 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
         return url;
     }
 
-    /**
-     * @author  Gerardo Gonzalez
-     * @desc Convierte el valor del campo status a texto esperado por Alprestamo
-     * @param {string} statusValue - Valor del campo en NetSuite
-     * @returns {string} Estado en formato Alprestamo
-     */
-    function getStatusText(statusValue) {
-        // Si el valor ya viene como texto, retornarlo
-        if (typeof statusValue === 'string' && 
-            Object.values(CONFIG.STATUS).includes(statusValue.toLowerCase())) {
-            return statusValue.toLowerCase();
-        }
-        
-        // Si viene como ID de lista, mapear según tu configuración
-        // Ajustar según tus IDs de custom list
-        const statusMap = {
-            '1': CONFIG.STATUS.DENIED,
-            '2': CONFIG.STATUS.VALIDATED,
-            '3': CONFIG.STATUS.OFFERED,
-            '4': CONFIG.STATUS.GRANTED
-        };
-        
-        return statusMap[statusValue] || CONFIG.STATUS.DENIED;
-    }
-
      /**
      * @author  Gerardo Gonzalez
-     * @desc Convierte el valor del campo status a texto esperado por Alprestamo
-     * @param {string} statusValue - Valor del campo en NetSuite
-     * @returns {string} Estado en formato Alprestamo
+     * @desc Normaliza el estado de NetSuite al formato esperado por Alprestamo
+     * 
+     * Mapeo de Estados según tabla de Alprestamo:
+     * 
+     * DENIED (denied):
+     * - Rechazado
+     * - No cumple Requisitos (ID: 21)
+     * - Rechazado por Asesor (ID: 24)
+     * 
+     * GRANTED (granted):
+     * - Gestionado (ID: 5)
+     * 
+     * VALIDATED (validated):
+     * - En validación (ID: 7)
+     * - Sin Respuesta (ID: 8)
+     * - Revisión (ID: 10)
+     * - Desiste (ID: 9)
+     * 
+     * OFFERED (offered):
+     * - Convertido (ID: 11)
+     * 
+     * @param {string|number} value - Valor del campo estado en NetSuite (puede ser ID o texto)
+     * @returns {string} Estado en formato Alprestamo (denied, validated, offered, granted)
      */
     function statusNormalize(value) {
-        if (value === true || value === 'T' || value === 'true') {
-            return CONFIG.STATUS.GRANTED;
-        } else {
+        try {
+            // Si viene como objeto con [0].value (search result format)
+        if (value && typeof value === 'object' && value[0] && value[0].value) {
+            value = value[0].value;
+        }
+        
+        // Convertir a string para comparación
+        const valueStr = String(value);
+        
+        // Mapeo: Internal ID de Estados -> Status Alprestamo
+        const estadoMap = {
+            // DENIED - Rechazados
+            '21': CONFIG.STATUS.DENIED,       // No cumple Requisitos
+            '24': CONFIG.STATUS.DENIED,       // Rechazado por Asesor
+            
+            // VALIDATED GRANTED - Aprobados
+            '5': CONFIG.STATUS.VALIDATED,       // Gestionado
+            '8': CONFIG.STATUS.VALIDATED,     // Sin Respuesta
+            
+            // OFFERED - En proceso de validación
+            '7': CONFIG.STATUS.OFFERED,     // En validación
+            '6': CONFIG.STATUS.OFFERED,     // Pendiente de Documentacion
+            '9': CONFIG.STATUS.OFFERED,     // Desiste
+            '10': CONFIG.STATUS.OFFERED,    // Revisión
+            
+            // GRANTED - Oferta presentada
+            '11': CONFIG.STATUS.GRANTED       // Convertido
+        };
+        
+        // Buscar por ID
+        if (estadoMap[valueStr]) {
+            log.debug('statusNormalize', `Estado mapeado por ID: ${valueStr} -> ${estadoMap[valueStr]}`);
+            return estadoMap[valueStr];
+        }
+        
+        // Buscar por nombre del estado (case insensitive) - Fallback
+        const valueUpper = valueStr.toUpperCase();
+        
+        // DENIED
+        if (valueUpper.includes('RECHAZADO') || 
+            valueUpper.includes('NO CUMPLE') ||
+            valueUpper.includes('REQUISITOS')) {
             return CONFIG.STATUS.DENIED;
-        }   
+        }
+        
+        // GRANTED
+        if (valueUpper.includes('GESTIONADO')) {
+            return CONFIG.STATUS.GRANTED;
+        }
+        
+        // VALIDATED
+        if (valueUpper.includes('VALIDACION') || 
+            valueUpper.includes('VALIDACIÓN') ||
+            valueUpper.includes('SIN RESPUESTA') ||
+            valueUpper.includes('REVISION') ||
+            valueUpper.includes('REVISIÓN') ||
+            valueUpper.includes('DESISTE')) {
+            return CONFIG.STATUS.VALIDATED;
+        }
+        
+        // OFFERED
+        if (valueUpper.includes('CONVERTIDO')) {
+            return CONFIG.STATUS.OFFERED;
+        }
+        
+        // Por defecto, si no se encuentra, retornar denied
+        log.debug('statusNormalize', `Estado no reconocido: ${value}, usando default: denied`);
+        return CONFIG.STATUS.DENIED;
+        } catch (error) {
+            log.error('statusNormalize', `Error normalizando estado: ${error}`);
+        }
     }
 
     return {

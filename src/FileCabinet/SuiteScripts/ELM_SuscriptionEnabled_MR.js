@@ -22,7 +22,7 @@ define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
                         "AND", 
                         ["custentity_elm_lead_repetido_original","anyof","@NONE@"], 
                         "AND", 
-                        ["datecreated","within","today"]
+                        ["datecreated","within","yesterday"]
                     ],
                     columns:
                     [
@@ -59,7 +59,7 @@ define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
             const globalsubscriptionstatus = rec.getValue({ fieldId: 'globalsubscriptionstatus' });
             log.debug('globalsubscriptionstatus', globalsubscriptionstatus);
             if (globalsubscriptionstatus == '2') {
-                log.audit('Omitido', `Lead ${newRecord.id} está UNSUBSCRIBED globalmente`);
+                log.audit('Omitido', `Lead ${rec.id} está UNSUBSCRIBED globalmente`);
                 rec.setValue({
                     fieldId: 'globalsubscriptionstatus',
                     value: 1
@@ -102,7 +102,8 @@ define(['N/record', 'N/search', 'N/error'], function (record, search, error) {
         function summarize(summary) {
             const logTitle = 'Summarize';
             try {
-                log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
+                log.audit(logTitle, 'Usage Consumed ' + summary.usage +
+                     ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
             } catch (e) {
                 log.error(logTitle, e.message);
             }
