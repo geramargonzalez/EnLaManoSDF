@@ -104,8 +104,9 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           // Usar motor bcuScore optimizado con fallback al SDB cl�sico
           let score;
           try {
-            score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, strictRules: true, debug: true });
-            // score = scoreLib.scoreFinal(docNumber);
+            log.debug(`${LOG_PREFIX} Usando bcuScoreLib para doc ${docNumber} con provider ${params.providerBCU }`);
+            score = bcuScoreLib.scoreFinal(docNumber, { provider: params.providerBCU, forceRefresh: true, strictRules: true, debug: true });
+          // score = scoreLib.scoreFinal(docNumber);
           } catch (e) {
             // Fallback al motor antiguo si algo falla
             score = scoreLib.scoreFinal(docNumber);
@@ -409,6 +410,9 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       }),
       estadoBlacklist: s.getParameter({
          name: 'custscript_elm_est_blacklist'
+        }),
+        providerBCU: s.getParameter({
+         name: 'custscript_elm_provider_election'
         })
     };
   }

@@ -15,8 +15,8 @@ define(['N/task', 'N/ui/serverWidget', 'N/redirect'], function(task, serverWidge
         } else {
             var scriptTask = task.create({
                 taskType: task.TaskType.MAP_REDUCE,
-                scriptId: 'customscript_elm_borrado_mocasist',
-                deploymentId: 'customdeploy_elm_borrado_mocasist'
+                scriptId: '',
+                deploymentId: ''
             });
 
             var taskId = scriptTask.submit();

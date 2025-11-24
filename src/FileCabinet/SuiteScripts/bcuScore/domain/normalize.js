@@ -34,11 +34,11 @@ define([], function () {
                 periodData: { t0: createEmptyPeriod(), t6: createEmptyPeriod() },
                 flags: { isDeceased: true, hasRejectableRating: false },
                 metadata: { 
-                    nombre: sanitizeString(variables.nombre || infoConsulta.nombre),
+                    nombre: normalizeNameFormat(variables.nombre || infoConsulta.nombre),
                     fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0]
                 }
             });
-        }
+        } 
 
         // Detectar formato de respuesta
         const isNewFormat = variables.hasOwnProperty('vigente') || 
@@ -85,7 +85,7 @@ define([], function () {
                 hasRejectableRating: hasRejectableRating
             },
             metadata: {
-                nombre: sanitizeString(variables.nombre),
+                nombre: normalizeNameFormat(variables.nombre),
                 worstRating: worstRating,
                 fechaConsulta: infoConsulta.fechaConsulta,
                 aggregates: t0Data.aggregates
@@ -132,6 +132,20 @@ define([], function () {
             const ven = vencidoArray[i] || { mn: 0, me: 0, total: 0 };
             const cast = castigadoArray[i] || { mn: 0, me: 0, total: 0 };
             const cont = contingenciasArray[i] || { mn: 0, me: 0, total: 0 };
+            
+            // DEBUG: Log contingencias para detectar problema
+            if (institucion && institucion.toUpperCase().indexOf('FUCAC') > -1) {
+                log.debug({
+                    title: 'FUCAC Contingencias Debug',
+                    details: {
+                        institucion: institucion,
+                        cont_mn: cont.mn,
+                        cont_me: cont.me,
+                        cont_total: cont.total,
+                        hasCont: cont.total > 0
+                    }
+                });
+            }
             
             entities.push({
                 entidad: institucion,
@@ -183,7 +197,7 @@ define([], function () {
                         castigado: 0,
                         MnPesos: cont.mn,
                         MePesos: cont.me,
-                        cont: true
+                        cont: cont.total > 0 // Solo true si realmente hay contingencias
                     }
                 ]
             });
@@ -263,18 +277,38 @@ define([], function () {
                 cantEntidadesVencido: totalVencido.total > 0 ? 1 : 0,
                 cantEntidadesCastigado: totalCastigado.total > 0 ? 1 : 0
             },
-            // Preservar rubros para compatibilidad con score.js
-            rubrosValoresGenerales: totals.map(function(t) {
-                return {
-                    Rubro: t.rubro,
-                    MnPesos: t.rubro === 'VIGENTE' ? totalVigente.mn : 
-                             t.rubro === 'VENCIDO' ? totalVencido.mn :
-                             t.rubro === 'CASTIGADO' ? totalCastigado.mn : totalContingencias.mn,
-                    MePesos: t.rubro === 'VIGENTE' ? totalVigente.me : 
-                             t.rubro === 'VENCIDO' ? totalVencido.me :
-                             t.rubro === 'CASTIGADO' ? totalCastigado.me : totalContingencias.me
-                };
-            })
+            // CRITICAL FIX: score.js lee rubrosValoresGenerales[0].MnPesos/MePesos
+            // Debe usar los totales acumulados en lugar de los valores individuales de cada rubro
+            rubrosValoresGenerales: [
+                {
+                    Rubro: 'VIGENTE',
+                    MnPesos: totalVigente.mn,
+                    MePesos: totalVigente.me,
+                    MnDolares: 0,
+                    MeDolares: 0
+                },
+                {
+                    Rubro: 'VENCIDO',
+                    MnPesos: totalVencido.mn,
+                    MePesos: totalVencido.me,
+                    MnDolares: 0,
+                    MeDolares: 0
+                },
+                {
+                    Rubro: 'CASTIGADO',
+                    MnPesos: totalCastigado.mn,
+                    MePesos: totalCastigado.me,
+                    MnDolares: 0,
+                    MeDolares: 0
+                },
+                {
+                    Rubro: 'CONTINGENCIAS',
+                    MnPesos: totalContingencias.mn,
+                    MePesos: totalContingencias.me,
+                    MnDolares: 0,
+                    MeDolares: 0
+                }
+            ]
         };
         
         // Para T6 no tenemos datos en este formato, crear vacío
@@ -289,7 +323,7 @@ define([], function () {
                 hasRejectableRating: hasRejectableRating
             },
             metadata: {
-                nombre: sanitizeString(variables.nombre || infoConsulta.nombre),
+                nombre: normalizeNameFormat(variables.nombre || infoConsulta.nombre),
                 worstRating: worstRating,
                 fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0],
                 aggregates: t0Data.aggregates,
@@ -397,7 +431,7 @@ define([], function () {
                 hasRejectableRating: hasRejectableRating
             },
             metadata: {
-                nombre: sanitizeString(nombre),
+                nombre: normalizeNameFormat(nombre),
                 worstRating: worstRating,
                 documento: documento,
                 sectorActividad: dataT2.SectorActividad || '',
@@ -709,7 +743,7 @@ define([], function () {
             };
         });
     }
-
+ 
     /**
      * Normaliza lista de entidades con rubros
      */
@@ -778,7 +812,35 @@ define([], function () {
      */
     function sanitizeString(str) {
         if (!str) return '';
-        return String(str).trim().replaceAll(/[^\w\s]/gi, '');
+        return String(str).trim().replaceAll(/[^\w\s,|]/gi, '');
+    }
+
+    /**
+     * Normaliza nombres para formato consistente: "APELLIDO, NOMBRE"
+     * Maneja formatos:
+     * - "APELLIDO, NOMBRE" (MYM) -> mantiene tal cual
+     * - "NOMBRE|APELLIDO" (Equifax) -> convierte a "APELLIDO, NOMBRE"
+     * @param {string} str - Nombre a normalizar
+     * @returns {string} Nombre en formato "APELLIDO, NOMBRE"
+     */
+    function normalizeNameFormat(str) {
+        if (!str) return '';
+        
+        // Limpiar caracteres especiales excepto pipe y coma
+        var cleaned = String(str).trim().replaceAll(/[^\w\s,|]/gi, '');
+        
+        // Detectar formato por separador
+        if (cleaned.indexOf('|') > -1) {
+            // Formato Equifax: "NOMBRE|APELLIDO" -> convertir a "APELLIDO, NOMBRE"
+            var parts = cleaned.split('|');
+            if (parts.length >= 2) {
+                return parts[1].trim() + ', ' + parts[0].trim();
+            }
+            return cleaned.replace('|', ', ');
+        }
+        
+        // Ya está en formato "APELLIDO, NOMBRE" o no tiene separador
+        return cleaned;
     }
 
     /**
@@ -812,7 +874,8 @@ define([], function () {
             PROVIDER_BCU: PROVIDER_BCU,
             PROVIDER_MYM: PROVIDER_MYM,
             toNumber: toNumber,
-            sanitizeString: sanitizeString
+            sanitizeString: sanitizeString,
+            normalizeNameFormat: normalizeNameFormat
         }
     };
 });

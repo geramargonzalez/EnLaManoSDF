@@ -86,7 +86,7 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
             const aprobado = scriptObj.getParameter({name: 'custscript_elm_est_ap_pm' });
             const rechazado = scriptObj.getParameter({name: 'custscript_elm_est_rech_pm' });
             const sinRepuesta = scriptObj.getParameter({name: 'custscript_elm_sin_respuesta_pm' });
-            const rechazadoPorAsesor = 17;
+            const rechazadoPorAsesor = 24;
             
             const currentRecord = context.currentRecord;
           

@@ -25,13 +25,27 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
  
         try {
             // Mapear options a nuevo formato optimizado
+            let provider = 'equifax';
+            if (options.provider == '1') {
+                provider = 'mym';
+            }
+
+            if (options.provider == '3') {
+                provider = 'bcu';
+            }
+
             const newOptions = {
-                provider: (options && options.provider) || 'equifax',
+                provider: provider,
                 strictRules: options && options.strictRules,
                 forceRefresh: options && options.forceRefresh,
                 debug: options && options.debug,
                 timeout: 15000 // Timeout agresivo
             };
+
+            log.debug({
+                title: 'ELM Score Fast Request',
+                details: dni.substr(-4) + ': ' + JSON.stringify(newOptions)
+            });
 
             // Llamada optimizada al servicio
             const result = scoreService.calculateScore(dni, newOptions);

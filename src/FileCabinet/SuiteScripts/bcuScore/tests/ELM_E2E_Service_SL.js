@@ -656,10 +656,13 @@ define([
         html += '.time-badge.fast { background-color: #d4edda; color: #155724; }';
         html += '.time-badge.medium { background-color: #fff3cd; color: #856404; }';
         html += '.time-badge.slow { background-color: #f8d7da; color: #721c24; }';
-        html += '.detail-section { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; }';
+        html += '.detail-section { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 15px 0; border: 2px solid #007bff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }';
         html += '.chart-bar { background-color: #007bff; height: 20px; border-radius: 3px; margin: 5px 0; }';
-        html += '.expand-btn { cursor: pointer; color: #007bff; text-decoration: underline; margin: 10px 0; display: inline-block; }';
+        html += '.expand-btn { cursor: pointer; color: #007bff; text-decoration: underline; margin: 10px 0; display: inline-block; font-weight: bold; }';
+        html += '.expand-btn:hover { color: #0056b3; text-decoration: none; }';
         html += '.hidden { display: none; }';
+        html += 'tr.detail-row { background-color: #ffffff; }';
+        html += 'tr.detail-row td { padding: 20px !important; }';
         html += '</style>';
 
         // Global Summary
@@ -759,14 +762,17 @@ define([
             html += '<td>' + (fromCache ? '🚀 Yes' : '📡 No') + '</td>';
 
             // Details link
-            html += '<td><span class="expand-btn" onclick="toggleDetail(' + i + ')">Ver detalles</span></td>';
+            html += '<td><span class="expand-btn" onclick="toggleDetail(' + i + ')" id="btn_' + i + '">▶ Ver detalles</span></td>';
             html += '</tr>';
 
             // Hidden detail row
-            html += '<tr id="detail_' + i + '" class="hidden">';
+            html += '<tr id="detail_' + i + '" class="hidden detail-row">';
             html += '<td colspan="7">';
             html += '<div class="detail-section">';
+            html += '<div style="background: white; padding: 15px; border-radius: 8px;">';
+            html += '<h3 style="margin-top: 0; color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px;">📊 Detalles Completos - Documento ' + result.documento + '</h3>';
             html += generateHTML(result); // Usar la función existente para mostrar detalles
+            html += '</div>';
             html += '</div>';
             html += '</td>';
             html += '</tr>';
@@ -843,10 +849,13 @@ define([
         html += '<script>';
         html += 'function toggleDetail(index) {';
         html += '  var row = document.getElementById("detail_" + index);';
+        html += '  var btn = document.getElementById("btn_" + index);';
         html += '  if (row.classList.contains("hidden")) {';
         html += '    row.classList.remove("hidden");';
+        html += '    if (btn) btn.innerHTML = "▼ Ocultar detalles";';
         html += '  } else {';
         html += '    row.classList.add("hidden");';
+        html += '    if (btn) btn.innerHTML = "▶ Ver detalles";';
         html += '  }';
         html += '}';
         html += '</script>';
@@ -1351,9 +1360,10 @@ define([
      */
     function generateScoreAnalysis(score) {
         let html = '';
-        let contributions = score.contributions || {};
-        let rawData = score.rawData || {};
-        let validation = score.validation || {};
+        // Try to get contributions and rawData from multiple possible locations
+        let contributions = score.contributions || (score.metadata && score.metadata.contributions) || {};
+        let rawData = score.rawData || (score.metadata && score.metadata.rawData) || {};
+        let validation = score.validation || (score.metadata && score.metadata.validation) || {};
 
         html += '<div class="summary">';
         html += '<h2>📊 Análisis de Score - Variables Importantes</h2>';
@@ -1544,27 +1554,36 @@ define([
     html += '</tbody></table>';
 
     // Modal container and JavaScript for viewing full variable JSON
-    html += '<div id="varModal" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;">';
+    html += '<div id="varModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:9999;">';
     html += '<div style="background:#fff;padding:20px;border-radius:6px;max-width:90%;max-height:90%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,0.3);">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
     html += '<h3 id="varModalTitle" style="margin:0;font-size:18px;">Variable</h3>';
     html += '<button onclick="closeVarModal()" style="padding:6px 10px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;">Cerrar</button>';
     html += '</div>';
-    html += '<pre id="varModalContent" style="background:#f8f9fa;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;">JSON</pre>';
+    html += '<pre id="varModalContent" style="background:#f8f9fa;padding:10px;border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:500px;overflow-y:auto;">Cargando...</pre>';
     html += '</div>';
     html += '</div>';
 
     html += '<script>';
     html += 'function openVarModal(id) {';
     html += '  try {';
-    html += '    var holder = document.getElementById(id); if (!holder) return;';
-    html += '    var content = holder.innerHTML || holder.textContent || "";';
-    html += '    document.getElementById("varModalContent").innerText = content;';
-    html += '    document.getElementById("varModalTitle").innerText = id;';
-    html += '    document.getElementById("varModal").classList.remove("hidden");';
-    html += '  } catch (e) { console && console.error && console.error(e); }';
+    html += '    var holder = document.getElementById(id);';
+    html += '    if (!holder) { alert("No se encontró el elemento: " + id); return; }';
+    html += '    var content = holder.textContent || holder.innerText || "";';
+    html += '    if (!content || content.trim() === "") { content = "No hay datos disponibles"; }';
+    html += '    document.getElementById("varModalContent").textContent = content;';
+    html += '    document.getElementById("varModalTitle").textContent = id;';
+    html += '    var modal = document.getElementById("varModal");';
+    html += '    modal.style.display = "flex";';
+    html += '  } catch (e) {';
+    html += '    alert("Error al abrir modal: " + (e.message || e));';
+    html += '    console && console.error && console.error(e);';
+    html += '  }';
     html += '}';
-    html += 'function closeVarModal() { document.getElementById("varModal").classList.add("hidden"); }';
+    html += 'function closeVarModal() {';
+    html += '  var modal = document.getElementById("varModal");';
+    html += '  if (modal) modal.style.display = "none";';
+    html += '}';
     html += '</script>';
 
         // Top Positive / Negative Contributions
@@ -1759,13 +1778,60 @@ define([
 
             if (step.result && step.success) {
                 html += '<div class="detail">';
-                html += '<strong>Result:</strong><br>';
-                html += '<div class="json-viewer">' + escapeHtml(JSON.stringify(step.result, null, 2)) + '</div>';
+                html += '<strong>Result Summary:</strong><br>';
+                
+                // Try to provide a more readable summary based on step type
+                var stepResult = step.result;
+                var resultStr = '';
+                
+                try {
+                    // Check if it's a scoring result
+                    if (stepResult.score !== undefined || stepResult.finalScore !== undefined) {
+                        html += '<div style="padding: 10px; background: #e7f3ff; border-radius: 4px; margin: 10px 0;">';
+                        html += '<p><strong>Score:</strong> ' + (stepResult.score || Math.round((stepResult.finalScore || 0) * 1000)) + '</p>';
+                        if (stepResult.metadata) {
+                            html += '<p><strong>Provider:</strong> ' + (stepResult.metadata.provider || 'N/A') + '</p>';
+                            html += '<p><strong>Is Good:</strong> ' + (stepResult.metadata.isGood ? '✅ Yes' : '❌ No') + '</p>';
+                            html += '<p><strong>Is Rejected:</strong> ' + (stepResult.metadata.isRejected ? '⚠️ Yes - ' + (stepResult.metadata.rejectionReason || '') : '✅ No') + '</p>';
+                        }
+                        html += '</div>';
+                    }
+                    
+                    // Create a collapsible JSON viewer for full details
+                    var stepId = 'step_' + i + '_json';
+                    resultStr = JSON.stringify(stepResult, null, 2);
+                    var resultPreview = resultStr.length > 500 ? resultStr.substring(0, 500) + '...' : resultStr;
+                    
+                    html += '<button onclick="toggleStepJson(\'' + stepId + '\')" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px 0;">▶ Show Full JSON (' + Math.round(resultStr.length / 1024) + ' KB)</button>';
+                    html += '<div id="' + stepId + '" class="json-viewer" style="display: none;">' + escapeHtml(resultStr) + '</div>';
+                    
+                } catch (e) {
+                    // Fallback to string representation
+                    html += '<div class="json-viewer">' + escapeHtml(String(stepResult)) + '</div>';
+                }
+                
                 html += '</div>';
             }
 
             html += '</div>';
         }
+        
+        // Add JavaScript for toggling JSON views
+        html += '<script>';
+        html += 'function toggleStepJson(id) {';
+        html += '  event.preventDefault();';
+        html += '  var elem = document.getElementById(id);';
+        html += '  var btn = event.target;';
+        html += '  if (elem.style.display === "none") {';
+        html += '    elem.style.display = "block";';
+        html += '    btn.innerHTML = "▼ Hide Full JSON";';
+        html += '  } else {';
+        html += '    elem.style.display = "none";';
+        html += '    btn.innerHTML = "▶ Show Full JSON (" + Math.round(elem.textContent.length / 1024) + " KB)";';
+        html += '  }';
+        html += '  return false;';
+        html += '}';
+        html += '</script>';
 
         // Error global (si existe)
         if (results.error) {
@@ -1779,9 +1845,13 @@ define([
 
         // Raw Result (full JSON)
         if (results.scoreResult) {
+            var fullJsonStr = JSON.stringify(results.scoreResult, null, 2);
+            var fullJsonSize = Math.round(fullJsonStr.length / 1024);
+            
             html += '<div class="summary">';
             html += '<h2>📄 Full Score Result (JSON)</h2>';
-            html += '<div class="json-viewer">' + escapeHtml(JSON.stringify(results.scoreResult, null, 2)) + '</div>';
+            html += '<button onclick="toggleStepJson(\'fullScoreJson\')" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px 0;">▶ Show Full JSON (' + fullJsonSize + ' KB)</button>';
+            html += '<div id="fullScoreJson" class="json-viewer" style="display: none;">' + escapeHtml(fullJsonStr) + '</div>';
             html += '</div>';
         }
 

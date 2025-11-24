@@ -3,8 +3,8 @@
  *@NScriptType UserEventScript
  */
 
-define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', 'N/search', 'N/record'],
-   (scoreLib, auxLib, runtime, error, search, record) => {
+define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', 'N/search', 'N/record', './ELM_SCORE_BCU_LIB.js'],
+   (scoreLib, auxLib, runtime, error, search, record, bcuScoreLib) => {
       // Field constants for cleaner access
       const FIELDS = {
          salary: 'custentity_sdb_infolab_importe',
@@ -137,7 +137,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
 
               const shouldScore = !infoRepetido.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
                if (shouldScore) {
-                  const score = scoreLib.scoreFinal(docNumber);
+                  //const score = scoreLib.scoreFinal(docNumber);
+                  const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, debug: true, strictRules: true });
+
                   const bcuData = auxLib.extractBcuData(score);
                   const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
                   const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
@@ -145,7 +147,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
                   const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
                   const cantEntidadesT6 = t6Info?.entidades.length || 0;
-                  
+                   
                   const peroCalifT2 = JSON.stringify(bcuData?.t2Qualifications?.map(q => q.calificacion));
                   // Get all qualification values from T6
                   const peroCalifT6 = JSON.stringify(bcuData?.t6Qualifications?.map(q => q.calificacion));

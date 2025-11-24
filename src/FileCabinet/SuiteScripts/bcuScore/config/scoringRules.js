@@ -98,7 +98,7 @@ define(['N/search', 'N/log'], function (search, log) {
             thresholdPercentage: 0.1
         }
     };
-
+ 
     let _cachedRules = null;
     let STRICT_MODE = false;    
     const scoreNetsuiteID = 1; // ID fijo del record customrecord_sdb_score

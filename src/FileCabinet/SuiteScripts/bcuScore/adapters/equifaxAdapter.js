@@ -66,13 +66,14 @@ function (https, log, runtime, encode, cache, normalize) {
      * @param {boolean} options.forceNewToken - Si es true, genera un nuevo token ignorando el cache
      * @param {boolean} options.isSandbox - Ambiente (true=UAT, false=PROD)
      * @param {boolean} options.debug - Habilita logs de debugging
+     * @param {number} periodMonths - Periodo en meses (no usado en Equifax)
      */
-    function fetch(documento, options) {
+    function fetch(documento, options, periodMonths) {
         options = options || {};
         try {
             // Determinar ambiente (options -> script parameter -> default SANDBOX)
             // const isSandbox = determineIsSandbox(options);
-            const isSandbox = true; // FORZADO A SANDBOX PARA TESTING
+            const isSandbox = true; // FORZADO A PRODUCCION PARA TESTING
 
             // Obtener configuración para el ambiente especificado
             _config = getEquifaxConfig(isSandbox);
@@ -90,7 +91,7 @@ function (https, log, runtime, encode, cache, normalize) {
             const accessToken = getValidToken(isSandbox, forceRefresh);
             
             // Request optimizado con timeout corto
-            const response = executeEquifaxRequest(documento, accessToken, options);
+            const response = executeEquifaxRequest(documento, accessToken, options, periodMonths);
  
             // Normalización rápida
             return normalize.normalizeEquifaxResponse(response);
@@ -148,17 +149,17 @@ function (https, log, runtime, encode, cache, normalize) {
             details: 'Cache DISABLED - Generating fresh token for every request'
         });
         
-        // // Si no se fuerza refresh, intentar obtener del caché
-        // if (!forceRefresh) {
-        //     const cachedToken = getCacheInstance().get({ key: cacheKey });
-        //     if (cachedToken) {
-        //         log.debug({
-        //             title: 'Equifax Token Cache Hit',
-        //             details: 'Using cached token for ' + envKey + ' (TTL: ' + cacheDurationLabel + ')'
-        //         });
-        //         return cachedToken;
-        //     }
-        // }
+         // Si no se fuerza refresh, intentar obtener del caché
+         if (!forceRefresh) {
+             const cachedToken = getCacheInstance().get({ key: cacheKey });
+             if (cachedToken) {
+                 log.debug({
+                     title: 'Equifax Token Cache Hit',
+                     details: 'Using cached token for ' + envKey + ' (TTL: ' + cacheDurationLabel + ')'
+                 });
+                 return cachedToken;
+             }
+         }
 
         // Cache miss o forceRefresh: generar nuevo token
         log.debug({
@@ -222,11 +223,12 @@ function (https, log, runtime, encode, cache, normalize) {
      * OPTIMIZADO: Request Equifax con headers pre-compilados
      * Usa nueva API BOX_FASE0_PER de MANDAZY
      */
-    function executeEquifaxRequest(documento, accessToken, options) {
-        // Obtener fecha actual para anio/mes
+    function executeEquifaxRequest(documento, accessToken, options, periodMonths) {
+        // Calcular período restando meses correctamente (considerando cambio de año)
         const now = new Date();
-        const anio = String(now.getFullYear());
-        const mes = String(now.getMonth() + 1).padStart(2, '0');
+        const targetDate = new Date(now.getFullYear(), now.getMonth() - (periodMonths || 0), 1);
+        const anio = String(targetDate.getFullYear());
+        const mes = String(targetDate.getMonth() + 1).padStart(2, '0');
         
         // Formatear documento con guión si no lo tiene (formato: xxxxxxx-x)
         const docFormatted = formatDocumento(documento);
@@ -270,7 +272,8 @@ function (https, log, runtime, encode, cache, normalize) {
             method: https.Method.POST,
             headers: {
                 'Content-Type': 'application/vnd.com.equifax.clientconfig.v1+json',
-                'Authorization': 'Bearer ' + accessToken
+                'Authorization': 'Bearer ' + accessToken,
+                'Accept': '*/*'
             },
             body: JSON.stringify(payload),
             timeout: TIMEOUT_MS
@@ -279,22 +282,11 @@ function (https, log, runtime, encode, cache, normalize) {
 
 
         const response = https.request(requestOptions);
-
-        // Extraer correlationId de los headers de la respuesta
-        const correlationId = response.headers['x-correlation-id'] || 
-                             response.headers['X-Correlation-Id'] ||
-                             response.headers['correlationid'] ||
-                             null;
-
+        
         log.debug({
             title: 'Equifax Response',
-            details: 'Code: ' + response.code + ', CorrelationId: ' + correlationId + ', Body: ' + response.body
+            details: 'Code: ' + response.code + ', Body: ' + response.body
         });
-
-        log.debug('response headers', response.headers);
-
- /*        var r = https.get({ url: 'https://api.ipify.org' });
-        log.debug('Egress IP', r.body); */ // IP pública desde la que sale NetSuite
 
         if (response.code !== 200) {
             throw mapEquifaxHttpError(response.code, response.body);
@@ -303,10 +295,10 @@ function (https, log, runtime, encode, cache, normalize) {
         const responseBody = JSON.parse(response.body);
         
         // Agregar correlationId al objeto de respuesta para que esté disponible en normalize
-        if (correlationId) {
+      /*   if (correlationId) {
             responseBody._equifaxCorrelationId = correlationId;
         }
-
+ */
         return responseBody;
     }
     

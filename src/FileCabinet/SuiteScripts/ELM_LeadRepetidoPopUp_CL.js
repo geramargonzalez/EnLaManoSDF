@@ -102,10 +102,6 @@ define(['N/ui/dialog', 'N/search', 'N/log', './ELM_Aux_Lib.js'], function(dialog
                 // If no repetitive lead, proceed with saving the record
                 return true;
             }
-
-
-
-           
         } catch (e) {
             console.error('Error in saveRecord: ' + e.message);
         }

@@ -462,6 +462,8 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
                            'custentity_elm_plazo': ofertaFinal?.plazo ? ofertaFinal?.plazo : '',
                            'custentity_sdb_edad': age,
+                           'custentity_sdb_infolab_importe': salary,
+                           'custentity_sdb_actividad': activity
 
                         }
                      }); 

@@ -1,7 +1,10 @@
 define(['N/query', 'N/record', 'N/search', 'N/error'],
    function (query, record, search, errorModule) {
       
-      
+      /**  
+       * formatDate - formate date 
+       * @param {date} date -  The date of birth of the pre-lead.
+       */
       function calculateYearsSinceDate(date) {
          var stLogTitle = 'calculateYearsSinceDate';
          try {
@@ -32,7 +35,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
- 
+        /**  
+       * formatDate - formate date 
+       * @param {date} activityType -  The date of birth of the pre-lead.
+       */
       function getActivityType(activityType) {
          var stLogTitle = 'getActivityType';
          try {
@@ -197,7 +203,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
 
          }
       }
-
+        /**  
+       * formatDate - formate date 
+       * @param {date} dateOfBirth -  The date of birth of the pre-lead.
+       */
       function formatDate(dateOfBirth) {
          var stLogTitle = 'formatDate';
          try {
@@ -215,7 +224,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
-
+         /**  
+       * checkBlacklist - check if the lead is in the blacklist 
+       * @param {object} docNumber -  The document number of the pre-lead.
+       */
       function checkBlacklist(docNumber) {
          var stLogTitle = 'checkBlacklist';
          try {
@@ -236,7 +248,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
-
+       /**  
+       * isClientActive - check if the lead is client active
+       * @param {object} docNumber -  The document number of the pre-lead.
+       */
       function isClientActive(docNumber) {
          const stLogTitle = 'isClientActive';
          try {
@@ -275,6 +290,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
       }
 
+      /**  
+       * checkMocasist -  Updates an entity with various fields.
+       * @param {object} docNumber -  The document number of the pre-lead.
+       */
       function checkMocasist(docNumber) {
          var stLogTitle = 'checkMocasist';
          try {
@@ -296,6 +315,13 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
       }
 
+        /**  
+       * getInfoRepetido -  Updates an entity with various fields.
+       * @param {object} docNumber -  The document number of the pre-lead.
+       * @param {integer} preLeadId - The ID of the pre-lead to exclude from the search.
+       * @param {string} special - Special flag for additional filtering.
+       * @param {string} canal - The source identifier to search for the provider.
+       */
       function getInfoRepetido(docNumber, preLeadId, special, canal) {
          try {
 
@@ -406,7 +432,24 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
-
+       /**  
+       * convertToLead -  Converts a pre-lead to a lead with various fields.
+       * @param {integer} preLeadId - The ID of the pre-lead to convert.
+       * @param {object} score - The score object containing scoring information.
+       * @param {string} leadStatus - The status to set for the lead.
+       * @param {string} approvalStatus - The approval status to set for the lead.
+       * @param {string} firstName - The first name of the lead.
+       * @param {string} lastName - The last name of the lead.
+       * @param {number} activity - The activity type of the lead.
+       * @param {number} salary - The salary of the lead.
+       * @param {string} dateOfBirth - The date of birth of the lead in 'DD/MM/YYYY' format.
+       * @param {number} yearsOfWork - The years of work experience of the lead.
+       * @param {string} email - The email address of the lead.
+       * @param {number} age - The age of the lead.
+       * @param {number} sourceId - The source ID of the lead.
+       * @param {string} workStartDate - The work start date of the lead in 'DD/MM/YYYY' format.
+       * @returns {number} The ID of the converted lead.
+       */
       function convertToLead(preLeadId, score, leadStatus, approvalStatus, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, email, age, sourceId, workStartDate) {
          var stLogTitle = 'convertToLead';
          try {
@@ -465,6 +508,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
       }
 
+       /**  
+       * updateEntity -  Updates an entity with various fields.
+       * @param {object} options - Options object containing parameters for updating the entity.
+       */
       function updateEntity(options) {
          const {
             entity,
@@ -556,17 +603,31 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
- 
+      /**
+       * submitFieldsEntity -  Submits fields for a given entity.
+       * @param {string} entity - The internal ID of the entity to update.
+       * @param {string} approvalStatus - The approval status to set.
+       * @param {string} rejectReason - The rejection reason to set.
+       * @param {string} newEntityStatus - The new entity status to set.
+       * @param {Object} infoRepetido - Information about repeated lead, if any.
+       * @param {number} montoCuota - The quota amount to set.
+       * @param {number} ofertaFinal - The final offer amount to set.
+       * @param {string} montoCuotaName - The name of the quota amount to set.
+       * @param {Object} score - The score object containing score details.
+       * @param {number} plazo - The term to set.
+       * @param {number} endeudamientoT2 - The T2 indebtedness to set.
+       * @param {number} endeudamientoT6 - The T6 indebtedness to set.
+       */
       function submitFieldsEntity(entity, approvalStatus, rejectReason, newEntityStatus, infoRepetido, montoCuota, ofertaFinal, montoCuotaName, score, plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
          cantEntidadesT6, peroCalifT2, peroCalifT6, canal) {
-         var stLogTitle = 'submitFieldsEntity';
+         let stLogTitle = 'submitFieldsEntity';
          try {
-            var firstName;
-            var lastName;
+            let firstName;
+            let lastName;
             if (score) {
-               var name = score.nombre;
+               let name = score.nombre;
                if (name) {
-                  var split = name.split(',');
+                  let split = name.split(',');
                   firstName = split[1] ? split[1].trim() : 'Default';
                   lastName = split[0] ? validateAndFormatLastName(split[0].trim()) : 'Default';
                }
@@ -581,7 +642,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             }
 
 
-            var valuesToUpdate = {
+            const valuesToUpdate = {
                custentity_elm_aprobado: approvalStatus,
                custentity_elm_reject_reason: rejectReason,
                custentity_sdb_valor_cuota: montoCuota,
@@ -634,12 +695,16 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
 
       }
-
+      /**
+       * findEntity -  Finds an entity with the given document number and status, returning its ID.
+       * @param {string} docNumber - The source identifier to search for the provider.
+       * @param {string} status - The source identifier to search for the provider.  
+       */
       function findEntity(docNumber, status) {
-         var stLogTitle = 'findLead';
+         const stLogTitle = 'findLead';
          try {
-            var lead;
-            var leadSearch = search.create({
+            let lead;
+            let leadSearch = search.create({
                type: "customer",
                filters:
                   [
@@ -663,7 +728,11 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
-
+      /**
+       * findEntityWithState -  Finds an entity with the given document number and canal, returning its ID and approval status.
+       * @param {string} docNumber - The source identifier to search for the provider.
+       * @param {string} canal - The source identifier to search for the provider.  
+       */
       function findEntityWithState(docNumber, canal) { 
          const stLogTitle = 'findEntityWithState';
          try {
@@ -709,7 +778,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
-
+       /**
+       * getOfertaFinal -  gets the oferta final record that matches the given monto_cuota.
+       * @param {string} monto_cuota - The source identifier to search for the provider.
+       */
       function getOfertaFinal(monto_cuota) {
          const stLogTitle = 'getOfertaFinal';
          try {
@@ -751,8 +823,14 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          }
       }
        /**
-       * checkSourceOfertaFinalDataExists - Checks if there is any record in the custom record type "Oferta Final" that matches the given source.
-       * @param {string} proveedorId - The source identifier to search for the provider.
+       * getPonderador - Gets the ponderador record that matches the given filters.
+       * @param {string} score - The source identifier to search for the provider.
+       * @param {string} peor_calif_bcu - The source identifier to search for the provider.
+       * @param {string} endeudamiento - The source identifier to search for the provider.
+       * @param {string} salario - The source identifier to search for the provider.
+       * @param {string} actividad - The source identifier to search for the provider.
+       * @param {string} edad - The source identifier to search for the provider.
+       * @param {string} canal - The source identifier to search for the provider.
        * @returns {boolean} True if records exist, otherwise false.
        */
       function getPonderador(score, peor_calif_bcu, endeudamiento, salario, actividad, edad, canal) {

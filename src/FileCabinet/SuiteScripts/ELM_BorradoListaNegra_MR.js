@@ -7,11 +7,10 @@ define(['N/record', 'N/search', 'N/runtime'],
   function (record, search, runtime) {
 
       function getInputData() {
-          var logTitle = 'Get Input Data';
-
+          const logTitle = 'Get Input Data';
           try {
               log.debug(logTitle, '**** START *****');
-              var searchId = runtime.getCurrentScript().getParameter('custscript_lista_negra_delete');
+              const searchId = runtime.getCurrentScript().getParameter('custscript_lista_negra_delete');
               return search.load({ id: searchId });
           } catch (e) {
               log.error(logTitle, e.message);
@@ -19,13 +18,12 @@ define(['N/record', 'N/search', 'N/runtime'],
       }
 
       function map(context) {
-          var logTitle = 'Map';
-
+          const logTitle = 'Map';
           try {
               log.debug(logTitle, 'MAP context: ' + JSON.stringify(context));
-              var mapResult = JSON.parse(context.value);
-              var stRecordId = mapResult.id;
-              var stRecordType = mapResult.recordType;
+              const mapResult = JSON.parse(context.value);
+              const stRecordId = mapResult.id;
+              const stRecordType = mapResult.recordType;
               context.write(stRecordId, stRecordType);
           } catch (e) {
               log.error(logTitle, e.message);
@@ -33,11 +31,11 @@ define(['N/record', 'N/search', 'N/runtime'],
       }
 
       function reduce(context) {
-          var logTitle = 'Reduce';
+          const logTitle = 'Reduce';
 
           log.debug(logTitle, 'REDUCE context: ' + JSON.stringify(context));
-          var stRecordId = context.key;
-          var stRecordType = context.values[0];
+          const stRecordId = context.key;
+          const stRecordType = context.values[0];
           try {
               record.delete({
                   type: stRecordType,
@@ -50,9 +48,17 @@ define(['N/record', 'N/search', 'N/runtime'],
       }
 
       function summarize(summary) {
-          var logTitle = 'Summarize';
+          const logTitle = 'Summarize';
           log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
-      }
+            const scriptTask = task.create({
+                taskType: task.TaskType.MAP_REDUCE,
+                scriptId: '',
+                deploymentId: ''
+            });
+            const taskId = scriptTask.submit();
+            log.audit(logTitle, 'Mocasist Creation submitted new Map/Reduce task with ID: ' + taskId);
+      
+        }
 
       return {
           getInputData: getInputData,

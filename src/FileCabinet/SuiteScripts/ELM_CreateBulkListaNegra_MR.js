@@ -1,5 +1,5 @@
 /**
- * @NApiVersion 2.1
+ * @NApiVersion 2.x
  * @NScriptType MapReduceScript
  */
 
@@ -8,7 +8,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
         
     /**
      * @author  Gerardo Gonzalez
-     * @desc getInputData - This function loads the CSV file containing MOCASIST data.
+     * @desc getInputData - This function loads the CSV file containing Lista Negra data.
      * @param {object} scriptContext 
      */
       function getInputData() {
@@ -17,8 +17,8 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
           try {
               log.debug(logTitle, '**** START *****');
               // Retrieve the file ID from script parameter or use a default/hardcoded one
-              const fileId = runtime.getCurrentScript().getParameter({ name: 'custscript_elm_mocasist_file' }) || 15;
-           //   var csvFile = file.load({ id: '../Mocasist - Documento/Mocasist.csv' });
+              const fileId = runtime.getCurrentScript().getParameter({ name: 'customscript_elm_crea_lista_negra' });
+              // var csvFile = file.load({ id: '../Mocasist - Documento/Mocasist.csv' });
 
               
               if (!fileId) {
@@ -32,18 +32,12 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
               log.debug('csvFile', 'Loaded file: ' + csvFile.name);
               
               // Iterate over the lines of the file
-               const lines = [];
-                csvFile.lines.iterator().each(function (line) {
-                    lines.push(line.value);
-                    return true;
-                });
-
-              return lines;
+              return csvFile.lines.iterator();
           } catch (e) {
               log.error(logTitle, e.message);
               throw error.create({
                   name: 'GET_INPUT_DATA_ERROR_MOCASIST',
-                  message: 'ERROR - getInputData: ' + e.message
+                  message: 'Error in getInputData: ' + e.message
               });
           }
       }
@@ -51,27 +45,27 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
 
         /**
      * @author  Gerardo Gonzalez
-     * @desc map - This function processes each line of the CSV file containing MOCASIST data.
+     * @desc map - This function processes each line of the CSV file containing Lista Negra data.
      * @param {object} scriptContext 
      */
       function map(context) {
           const logTitle = 'Map';
 
           try {
+              const line = context.value;
+              if (!line) return;
+
               // Assuming CSV format: Documento,Nombre
               // Adjust the separator if needed (e.g., ';')
-               const line = context.value;
-                 if (!line) return;
-               const fields = line.split(';');
+              const columns = line.split(','); 
               
               // Basic validation to skip empty lines or headers
               // You might want to add a check for headers here, e.g.:
               // if (columns[0] === 'Documento') return;
+              if (columns.length < 2) return;
 
-              if (fields.length < 2) return;
-
-              const docNumber = fields[0];
-              const name = fields[1];
+              const docNumber = columns[0].trim();
+              const name = columns[1].trim();
 
               if (!docNumber) return;
 
@@ -79,9 +73,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
 
               // Check if record already exists
               const existingSearch = search.create({
-                  type: 'customrecord_elm_mocasist',
+                  type: 'customrecord_sdb_lista_negra',
                   filters: [
-                      ['custrecord_elm_mocasist_doc', 'equalto', docNumber]
+                      ['custrecord_sdb_nrodoc', 'equalto', docNumber]
                   ]
               });
 
@@ -94,16 +88,16 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
 
               // Create new MOCASIST record
               const newRecord = record.create({
-                  type: 'customrecord_elm_mocasist'
+                  type: 'customrecord_sdb_lista_negra'
               });
 
               newRecord.setValue({
-                  fieldId: 'custrecord_elm_mocasist_doc',
+                  fieldId: 'custrecord_sdb_nrodoc',
                   value: docNumber
               });
 
               newRecord.setValue({
-                  fieldId: 'custrecord_elm_mocasist_name',
+                  fieldId: 'custrecord_sdb_nombre',
                   value: name
               });
 
@@ -125,51 +119,50 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
      * @param {object} summary 
      */
       function summarize(summary) {
-          const logTitle = 'Summarize';
-            try {
-                  const fileSearch = search.create({
-                    type: search.Type.FOLDER,
-                    filters: [
-                        ['internalid', 'is', 17]
-                    ],
-                    columns: [
-                        search.createColumn({
-                        name: "internalid",
-                        join: "file"
-                     })
-                    ]
-                });
+        const logTitle = 'Summarize';
+       try {
+             const fileIdFindIT = runtime.getCurrentScript().getParameter({ name: 'customscript_elm_crea_lista_negra' });
+            /*  const fileSearch = search.create({
+                type: search.Type.FOLDER,
+                filters: [
+                    ['internalid', 'is', fileIdFindIT]
+                ],
+                columns: [
+                    search.createColumn({
+                    name: "internalid",
+                    join: "file"
+                    })
+                ]
+            });
                 
-                var fileId = null;
-                fileSearch.run().each(function(result) {
-                    fileId = result.getValue({
-                        name: 'internalid',
-                        join: 'file'
-                    });
-                    log.debug('fileId', fileId);
-                    return false;
+            let fileId = null;
+            fileSearch.run().each(function(result) {
+                fileId = result.getValue({
+                    name: 'internalid',
+                    join: 'file'
                 });
-                
-                if (fileId) {
-                    file.delete({
-                        id: fileId
-                    });
-                    log.debug('Success', 'File deleted successfully. File ID: ' + fileId);
-                }
-         
-          
-                log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
-      
-              } catch (e) {
-
-                log.error(logTitle, 'Error in summarize: ' + e.message);
-                throw error.create({
-                    name: 'SUMMARIZE_ERROR_MOCASIST',
-                    message: 'Error in summarize function: ' + e.message
+                log.debug('fileId', fileId);
+                return false;
+            });
+            
+            if (fileId) {
+                file.delete({
+                    id: fileId
                 });
-              }
-      
+                log.debug('Success', 'File deleted successfully. File ID: ' + fileId);
             }
+              */
+          
+          log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
+         } catch (e) {
+            log.error(logTitle, 'Error in summarize: ' + e.message);
+            throw error.create({
+                name: 'SUMMARIZE_ERROR_LISTA_NEGRA',
+                message: 'Error in summarize function: ' + e.message
+            }); 
+         }
+     
+        }
 
       return {
           getInputData: getInputData,

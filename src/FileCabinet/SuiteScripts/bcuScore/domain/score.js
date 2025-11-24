@@ -34,17 +34,17 @@ define(['N/log'], function (log) {
     
     // Helpers para analizar rubros (conservativos y seguros)
 
-    // Versión optimizada: chequea flag booleano antes de normalizar cadenas
+    // Versión optimizada: chequea flag booleano (más confiable que el nombre del rubro)
     function containsContingencyFast(rubros) {
         if (!Array.isArray(rubros)) return false;
         for (let i = 0, n = rubros.length; i < n; i++) {
             const r = rubros[i] || {};
-            if (r.cont === true) return true;
-            const rubro = safeUpper((r.rubro || r.Rubro || r.tipo || r.Tipo || '').toString()).trim();
-            if (rubro.indexOf('CONTING') > -1 || rubro === 'CONTINGENCIAS') return true;
+            // Solo confiar en el flag cont, que se establece en base a montos > 0
+            if (r.cont === true) {
+                return true;
+            }
         }
-    
-        return false;
+        return false; 
     }
 
     function containsVigenciaRubro(rubros) {
@@ -79,31 +79,33 @@ define(['N/log'], function (log) {
     /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
      */
-    function computeScoreStrict(normalizedData, scoringRules) {
+    function computeScoreStrict(normalizedData, scoringRules, normalizedDataT6) {
         // Validación mínima
         if (!normalizedData || !scoringRules) {
-            return createRejectedScore('INVALID_INPUT', 'Datos inválidos');
+            return createRejectedScore('INVALID_INPUT', 'Datos inválidos', null, normalizedData);
         }
-        // DEBUG: Log structure preview to diagnose malformed data
+
+        // Extraer y formatear periodo de consulta (año-mes) al inicio
+        let periodoConsulta = '';
         try {
-            log.debug('computeScore called - structure check', {
-                hasProvider: !!(normalizedData && normalizedData.provider),
-                provider: (normalizedData && normalizedData.provider) || 'MISSING',
-                hasPeriodData: !!(normalizedData && normalizedData.periodData),
-                hasT0: !!(normalizedData && normalizedData.periodData && normalizedData.periodData.t0),
-                hasT6: !!(normalizedData && normalizedData.periodData && normalizedData.periodData.t6),
-                t0EntitiesCount: (normalizedData && normalizedData.periodData && normalizedData.periodData.t0 && normalizedData.periodData.t0.entities) ? normalizedData.periodData.t0.entities.length : 'MISSING',
-                t6EntitiesCount: (normalizedData && normalizedData.periodData && normalizedData.periodData.t6 && normalizedData.periodData.t6.entities) ? normalizedData.periodData.t6.entities.length : 'MISSING',
-                typeofNormalizedData: typeof normalizedData
-            });
-        } catch (logErr) {
-            log.error('computeScore - failed to log structure', logErr.toString());
+            const fechaConsulta = (normalizedData.metadata && normalizedData.metadata.fechaConsulta) || '';
+            if (fechaConsulta) {
+                const fecha = new Date(fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    periodoConsulta = year + '-' + month;
+                }
+            }
+        } catch (e) {
+            log.error('Error al formatear periodo de consulta', e);
         }
 
         // Inicializar log para compatibilidad con el script original
         let logTxt = '<P>============= INICIO SCORING =============</P>';
         logTxt += '<P>Provider: ' + (normalizedData.provider || 'UNKNOWN') + '</P>';
         logTxt += '<P>Documento: ' + ((normalizedData.metadata && normalizedData.metadata.documento) || 'UNKNOWN') + '</P>';
+        logTxt += '<P>Periodo Consulta: ' + (periodoConsulta || 'N/A') + '</P>';
         logTxt += '<P>Timestamp: ' + new Date().toISOString() + '</P>';
         logTxt += '<P>==========================================</P>';
         
@@ -113,7 +115,6 @@ define(['N/log'], function (log) {
         const rejectionRules = scoringRules.rejectionRules;
         const flags = normalizedData.flags || {};
 
-ñ
 
         const t0Data = normalizedData.periodData && normalizedData.periodData.t0;
         if (!t0Data || !t0Data.entities) {
@@ -123,7 +124,7 @@ define(['N/log'], function (log) {
                 isArray: !!(t0Data && t0Data.entities && Array.isArray(t0Data.entities)),
                 t0Keys: t0Data ? Object.keys(t0Data) : 'NO_T0'
             });
-            return createRejectedScore('NO_DATA', 'Sin datos para scoring');
+            return createRejectedScore('NO_DATA', 'Sin datos para scoring', null, normalizedData);
         }
 
         // CRITICAL FIX: Convert Java array to JavaScript array if needed
@@ -148,16 +149,16 @@ define(['N/log'], function (log) {
                         typeof_entities: typeof entities,
                         hasLength: !!(entities && entities.length !== undefined)
                     });
-                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables');
+                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables', null, normalizedData);
                 }
             } catch (convErr) {
                 log.error('computeScore - failed to convert t0 entities', convErr.toString());
-                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0');
+                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0', null, normalizedData);
             }
         }
 
         if (!entities || entities.length === 0) {
-            return createRejectedScore('NO_DATA', 'Sin entidades en t0');
+            return createRejectedScore('NO_DATA', 'Sin entidades en t0', null, normalizedData);
         }
 
         const entityCount = entities.length;
@@ -184,10 +185,10 @@ define(['N/log'], function (log) {
 
         // Early exit: límites de deuda
          if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
-            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva');
+            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva', null, normalizedData);
         }
         if (rejectionRules && rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
-            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva');
+            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva', null, normalizedData);
         }
 
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
@@ -250,7 +251,20 @@ define(['N/log'], function (log) {
         // NOTA IMPORTANTE: Para MYM, t0 contiene datos de T2 (2 meses) y t6 contiene T6 (6 meses)
         // Esto es consistente con el score original SDB-Enlamano-score.js
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
+        
+        // CRITICAL FIX: Si t6 existe pero está vacío (sin entidades), usar normalizedDataT6.periodData.t0 como fallback
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
+        if ((!t6.entities || t6.entities.length === 0) && normalizedDataT6 && normalizedDataT6.periodData && normalizedDataT6.periodData.t0) {
+            t6 = normalizedDataT6.periodData.t0;
+            log.debug('computeScore - using normalizedDataT6.periodData.t0 as t6', {
+                t6EntitiesLength: t6.entities ? t6.entities.length : 0
+            });
+        }
+
+        log.debug('computeScore - before array conversions', { 
+            t6EntitiesLength: t6.entities ? t6.entities.length : 0,
+            t6HasRubros: !!(t6.rubrosValoresGenerales && t6.rubrosValoresGenerales.length)
+        });
 
         // CRITICAL FIX: Convert t6 entities from Java array if needed
         if (t6.entities && !Array.isArray(t6.entities)) {
@@ -297,22 +311,38 @@ define(['N/log'], function (log) {
             } catch (e) { t6.rubrosValoresGenerales = []; }
         }
 
+        // Extraer periodos de T2 (t0) y T6 para análisis
+        // NOTA: El periodo viene en normalizedData.metadata.periodo para el periodo principal (T2)
+        // Para T6, si normalizedDataT6 existe, viene en normalizedDataT6.metadata.periodo
+        let periodoT2 = (normalizedData && normalizedData.metadata && normalizedData.metadata.periodo) || 
+                        (t0 && t0.metadata && t0.metadata.periodo) || '';
+        let periodoT6 = (normalizedDataT6 && normalizedDataT6.metadata && normalizedDataT6.metadata.periodo) || 
+                        (t6 && t6.metadata && t6.metadata.periodo) || '';
+        
+        // Agregar periodos al log
+        if (periodoT2) {
+            logTxt += '<P>Periodo T2: ' + periodoT2 + '</P>';
+        }
+        if (periodoT6) {
+            logTxt += '<P>Periodo T6: ' + periodoT6 + '</P>';
+        }
+
         // Extraer Mn/Me usando la misma lógica que SDB-Enlamano-score.js (múltiples try-catch)
         let t2_mnPesos = -1;
         let t2_mePesos = -1;
         let t6_mnPesos = -1;
         let t6_mePesos = -1;
-
+ 
         // DEBUG: Log array conversion results
         // NOTA: t0 contiene datos de T2 para MYM (ver normalize.js)
-        log.debug('computeScore - after array conversions', {
+/*         log.debug('computeScore - after array conversions', {
             t2EntitiesLength: (t0 && t0.entities) ? t0.entities.length : 'NO_T2_ENTITIES',
             t2RubrosLength: (t0 && t0.rubrosValoresGenerales) ? t0.rubrosValoresGenerales.length : 'NO_T2_RUBROS',
             t6EntitiesLength: (t6 && t6.entities) ? t6.entities.length : 'NO_T6_ENTITIES',
             t6RubrosLength: (t6 && t6.rubrosValoresGenerales) ? t6.rubrosValoresGenerales.length : 'NO_T6_RUBROS',
             t2FirstRubro: (t0 && t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) ? JSON.stringify(t0.rubrosValoresGenerales[0]) : 'NO_FIRST_RUBRO',
             realPeriod: (t0 && t0.metadata && t0.metadata.realPeriod) || 'T0'
-        });
+        }); */
 
         // Intentar desde rubrosValoresGenerales directamente (igual que producción)
         try {
@@ -405,7 +435,19 @@ define(['N/log'], function (log) {
         // Calcular endeudamiento igual que producción
         let endeudamiento = -314;
         try {
-            endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
+            // CRITICAL FIX: Si T6 está vacío o tiene valores negativos (datos no disponibles),
+            // no podemos calcular endeudamiento histórico. En ese caso, usar endeudamiento = 0 
+            // (sin cambio) para no penalizar injustamente el score.
+            if (t6_mnPesos <= 0 && t6_mePesos <= 0) {
+                // T6 no disponible - asumir sin cambio (endeudamiento = 0)
+                endeudamiento = 0;
+                log.debug('computeScore - T6 data not available, setting endeudamiento to 0 (no change)', {
+                    t6_mnPesos: t6_mnPesos,
+                    t6_mePesos: t6_mePesos
+                });
+            } else {
+                endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
+            }
         } catch (E) {
             // Mantener -314 en caso de error
             log.error('computeScore - endeudamiento calculation error', E.toString());
@@ -483,19 +525,73 @@ define(['N/log'], function (log) {
             // Agregar entidad al logTxt
             logTxt += '<P>T2 Entity[' + i + ']: ' + nombreEntidad + ' | Calif: ' + calif + ' | Cont: ' + hasCont + ' | Rubros: ' + rubrosArray.length + '</P>';
             
-            // Actualizar calificacionMinima igual que producción
-            if (calif && calificacionMinima === '0') {
-                calificacionMinima = calif;
+            // FIXED: Actualizar calificacionMinima usando RATING_ORDER (siempre mantener la PEOR calificación)
+            if (calif) {
+                if (calificacionMinima === '0') {
+                    // Primera calificación encontrada
+                    calificacionMinima = calif;
+                } else {
+                    // Comparar usando RATING_ORDER: mayor número = peor calificación
+                    const currentRatingValue = RATING_ORDER[calificacionMinima] || 0;
+                    const newRatingValue = RATING_ORDER[calif] || 0;
+                    
+                    // Si la nueva calificación es PEOR (mayor valor numérico), actualizar
+                    if (newRatingValue > currentRatingValue) {
+                        calificacionMinima = calif;
+                    }
+                }
             }
-            
-            if (calificacionMinima === '1A' && calif === '1C') calificacionMinima = '1C';
-            if (calificacionMinima === '1C' && calif === '2A') calificacionMinima = '2A';
         }
         
         logTxt += '<P>========== T2 TOTALES ==========</P>';
         logTxt += '<P>Total entidades T2: ' + t2List.length + '</P>';
         logTxt += '<P>Calificación mínima: ' + calificacionMinima + '</P>';
         logTxt += '<P>================================</P>';
+
+        // CRITICAL: Verificar calificaciones de rechazo DESPUÉS de determinar la calificación mínima
+        // Si tiene 2B, 3, 4 o 5 → retornar score 0 (rechazo automático)
+        const badRatings = (rejectionRules && rejectionRules.badRatings) || ['2B', '3', '4', '5'];
+        if (badRatings.indexOf(calificacionMinima) > -1) {
+            logTxt += '<P>========== RECHAZO POR CALIFICACION ==========</P>';
+            logTxt += '<P>Calificación mínima detectada: ' + calificacionMinima + '</P>';
+            logTxt += '<P>Esta calificación está en la lista de rechazo: [' + badRatings.join(', ') + ']</P>';
+            logTxt += '<P>Score retornado: 0 (rechazo automático)</P>';
+            logTxt += '<P>==============================================</P>';
+            
+            // Extraer periodo de consulta para rechazo
+            let periodoConsultaRejected = '';
+            try {
+                const fechaConsulta = (normalizedData.metadata && normalizedData.metadata.fechaConsulta) || '';
+                if (fechaConsulta) {
+                    const fecha = new Date(fechaConsulta);
+                    if (!isNaN(fecha.getTime())) {
+                        const year = fecha.getFullYear();
+                        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                        periodoConsultaRejected = year + '-' + month;
+                    }
+                }
+            } catch (e) {
+                log.error('Error al formatear periodo de consulta en rechazo', e);
+            }
+            
+            return {
+                score: 0,
+                isGood: false,
+                rawScore: 0,
+                total: 0,
+                calificacionMinima: calificacionMinima,
+                endeudamiento: 0,
+                contador: entityCount,
+                mensaje: 'Rechazado por calificación: ' + calificacionMinima,
+                logTxt: logTxt,
+                rejected: true,
+                rejectionReason: 'BAD_RATING',
+                rejectionDetails: 'Calificación mínima ' + calificacionMinima + ' está en lista de rechazo',
+                periodoConsulta: periodoConsultaRejected,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
+            };
+        }
 
         let t6List = [];
         try {
@@ -717,7 +813,7 @@ define(['N/log'], function (log) {
         cont_t0_fucac_binned_res = -7.01;
         brou_grupo_binned_res = -15.44;
         t0_santa_binned_res = -18.27;
-        t0_fnb_binned_res = -42.71; // Default para FNB (se sobrescribirá si cumple condiciones)
+        t0_fnb_binned_res = 0; // Inicia en 0 - lógica condicional determina valor final
 
         for (let key2 = 0, __n2 = t2List.length; key2 < __n2; key2++) {
             let currentt2 = t2List[key2];
@@ -753,19 +849,22 @@ define(['N/log'], function (log) {
             }
 
             // t0_fnb_binned_res según object0.CalificacionMinima0
-            // IMPORTANTE: Este valor ya está inicializado en -42.71 por defecto
-            // Solo se modifica si cumple condiciones específicas
+            // IMPORTANTE: Inicializado en 0, lógica condicional determina valor final
+            // Replicar la lógica exacta del SDB-Enlamano-score.js (if-else-if-else-if)
             const fnbBefore = t0_fnb_binned_res;
             if ((object0Min.CalificacionMinima0 === 2 || object0Min.CalificacionMinima0 === 1)) {
                 if (nameIncludesAny(name0U, ['INTEGRALES','BAUTZEN','CREDITOS DIRECTOS','EMPRENDIMIENTOS','MICROFINANZAS','OCA','PASS CARD','PROMOTORA','REPUBLICA MICROFINANZAS','REPUBLICA MICROFINAZAS','RETOP','CIA','SOCUR','VERENDY'])) {
                     t0_fnb_binned_res = 14.06;
                 }
+                // Si no matchea nombres FNB, queda en 0 (valor inicial)
             } else if (object0Min.CalificacionMinima0 === 3 && t0_fnb_binned_res !== 14.06) {
                 if (nameIncludesAny(name0U, ['INTEGRALES','BAUTZEN','CREDITOS DIRECTOS','EMPRENDIMIENTOS','MICROFINANZAS','OCA','PASS CARD','PROMOTORA','REPUBLICA MICROFINANZAS','REPUBLICA MICROFINAZAS','RETOP','CIA','SOCUR','VERENDY'])) {
                     t0_fnb_binned_res = -6.06;
                 }
+            } else if (t0_fnb_binned_res !== 14.06 && t0_fnb_binned_res !== -6.06) {
+                // Para otros valores de CalificacionMinima0 (4, 5, 6, etc.), asignar -42.71
+                t0_fnb_binned_res = -42.71;
             }
-            // NO ejecutar else aquí - mantener el valor que tiene (default -42.71 o el asignado arriba)
             
             if (fnbBefore !== t0_fnb_binned_res) {
                 logTxt += '<P>DEBUG t0_fnb changed for ' + name0U + ': ' + fnbBefore + ' -> ' + t0_fnb_binned_res + ' (object0Min.CalificacionMinima0=' + object0Min.CalificacionMinima0 + ')</P>';
@@ -1102,7 +1201,10 @@ define(['N/log'], function (log) {
                 rejectionReason: null,
                 goodThreshold: goodThreshold,
                 isGood: scoreRounded >= goodThreshold,
-                provider: normalizedData.provider
+                provider: normalizedData.provider,
+                periodoConsulta: periodoConsulta,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: normalizedData.flags || {},
             validation: { hasValidData: true },
@@ -1115,21 +1217,24 @@ define(['N/log'], function (log) {
             endeudamiento: endeudamiento,
             nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
             error_reglas: false,
-            logTxt: logTxt
-        };
+            logTxt: logTxt,
+            periodoConsulta: periodoConsulta,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
+        }; 
 
-                log.debug('computeScore - returning result', {
-                    finalScore: scoreRounded,
-                    rawScore: scoreNumeric,
-                    total: total,
-                    endeudamiento: endeudamiento
-                });
+            log.debug('computeScore - returning result', {
+                finalScore: scoreRounded,
+                rawScore: scoreNumeric,
+                total: total,
+                endeudamiento: endeudamiento
+            });
 
-                return result;
+            return result;
     }
 
-    function computeScore(normalizedData, scoringRules) {
-        return computeScoreStrict(normalizedData, scoringRules);
+    function computeScore(normalizedData, scoringRules, normalizedDataT6) {
+        return computeScoreStrict(normalizedData, scoringRules, normalizedDataT6);
     }
 
 
@@ -1584,7 +1689,35 @@ define(['N/log'], function (log) {
     /**
      * OPTIMIZADO: Crear resultado de rechazo con mínima metadata
      */
-    function createRejectedScore(reason, message, logTxt) {
+    function createRejectedScore(reason, message, logTxt, normalizedData) {
+        // Extraer periodo de consulta si normalizedData está disponible
+        let periodoConsulta = '';
+        let periodoT2 = '';
+        let periodoT6 = '';
+        
+        if (normalizedData && normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
+            try {
+                const fecha = new Date(normalizedData.metadata.fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    periodoConsulta = year + '-' + month;
+                }
+            } catch (e) {
+                // Ignorar error silenciosamente
+            }
+        }
+        
+        // Extraer periodos T2 y T6 si están disponibles
+        if (normalizedData && normalizedData.periodData) {
+            if (normalizedData.periodData.t0 && normalizedData.periodData.t0.metadata) {
+                periodoT2 = normalizedData.periodData.t0.metadata.periodo || '';
+            }
+            if (normalizedData.periodData.t6 && normalizedData.periodData.t6.metadata) {
+                periodoT6 = normalizedData.periodData.t6.metadata.periodo || '';
+            }
+        }
+        
         return {
             finalScore: 0,
             rawScore: 0,
@@ -1596,11 +1729,17 @@ define(['N/log'], function (log) {
                 rejectionReason: reason,
                 rejectionMessage: message || reason,
                 goodThreshold: 499,
-                isGood: false
+                isGood: false,
+                periodoConsulta: periodoConsulta,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: {},
             validation: { hasValidData: false },
-            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>')
+            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>'),
+            periodoConsulta: periodoConsulta,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
         };
     }
     

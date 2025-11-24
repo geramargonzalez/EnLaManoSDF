@@ -52,7 +52,33 @@ define([
 
             const __tFetch0 = Date.now();
             const idLog = auxLib.createLogRecord(documento, null, false, 6, options?.provider, null);
-            const normalizedData = fetchProviderData(documento, options);
+            // Para Equifax, usar período 2 (T2) en lugar de 0 para obtener datos actuales
+            const periodForT2 = (options.provider == PROVIDER_EQUIFAX) ? 2 : 0;
+            const normalizedData = fetchProviderData(documento, options, periodForT2);
+            let normalizedDataT6 = null;
+            log.debug({ title: 'Normalized Data t2 months', details: { idLog, normalizedData } });
+            
+            // Solo obtener T6 si es Equifax Y la calificación mínima es 1C, 2A o N/C
+            if (options.provider === PROVIDER_EQUIFAX) {
+                const worstRating = normalizedData?.metadata?.worstRating || '0';
+                const shouldFetchT6 = worstRating === '1C' || worstRating === '2A' || worstRating === 'N/C';
+                
+                log.debug({ 
+                    title: 'T6 Fetch Decision', 
+                    details: { 
+                        worstRating: worstRating, 
+                        shouldFetchT6: shouldFetchT6,
+                        reason: shouldFetchT6 ? 'Rating requires T6 data' : 'Rating does not require T6 data'
+                    } 
+                });
+                
+                if (shouldFetchT6) {
+                    normalizedDataT6 = fetchProviderData(documento, options, 8);
+                     // log.debug({ title: 'Normalized Data t6 months', details: { idLog, normalizedDataT6 } });
+                } else {
+                    log.debug({ title: 'T6 Fetch Skipped', details: { worstRating: worstRating } });
+                }
+            }
             const __tFetch1 = Date.now();
             if (!normalizedData) {
                 throw createServiceError('PROVIDER_NO_DATA', 'Proveedor no devolvio datos');
@@ -61,7 +87,7 @@ define([
             const __tScore0 = Date.now();
             let scoreResult;
             try {
-                scoreResult = scoreEngine.computeScore(normalizedData, rules);
+                scoreResult = scoreEngine.computeScore(normalizedData, rules, normalizedDataT6);
                 log.debug({ title: 'computeScore result', details: { idLog, scoreResult } });
                 auxLib.updateLogWithResponse(idLog, null, scoreResult?.metadata?.isRejected ? false : true, scoreResult, normalizedData );
 
@@ -159,16 +185,16 @@ define([
     /**
      * Obtiene datos del proveedor especificado o usa fallback
      */
-    function fetchProviderData(documento, options) {
+    function fetchProviderData(documento, options, periodMonths) {
         const provider = options.provider || PROVIDER_EQUIFAX; // Default a Equifax
         
         try {
             switch (provider.toLowerCase()) {
                 case PROVIDER_EQUIFAX:
-                    return equifaxAdapter.fetch(documento, options);
+                    return equifaxAdapter.fetch(documento, options, periodMonths);
                     
                 case PROVIDER_BCU:
-                    return bcuAdapter.fetch(documento, options);
+                    return bcuAdapter.fetch(documento, options, periodMonths);
                     
                 case PROVIDER_MYM:
                     return mymAdapter.fetch(documento, options);
@@ -238,8 +264,8 @@ define([
      */
     function cacheScore(documento, provider, scoreResult) {
         try {
-            var cacheKey = buildCacheKey(documento, provider);
-            var scoreCache = cache.getCache({
+            const cacheKey = buildCacheKey(documento, provider);
+            const scoreCache = cache.getCache({
                 name: 'bcuScore',
                 scope: CACHE_SCOPE
             });
