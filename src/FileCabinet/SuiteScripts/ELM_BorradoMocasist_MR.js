@@ -48,18 +48,16 @@ define(['N/record', 'N/search', 'N/runtime', 'N/task'],
       }
 
       function summarize(summary) {
-          const logTitle = 'Summarize';
-          log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
+           const logTitle = 'Summarize';
+           log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
 
             const scriptTask = task.create({
                 taskType: task.TaskType.MAP_REDUCE,
-                scriptId: '',
-                deploymentId: ''
+                scriptId: 'customscript_elm_bulk_mocasist_mr',
+                deploymentId: 'customdeploy_elm_bulk_mocasist_mr'
             });
             const taskId = scriptTask.submit();
             log.audit(logTitle, 'Mocasist Creation submitted new Map/Reduce task with ID: ' + taskId);
-
-   
       }
 
       return {

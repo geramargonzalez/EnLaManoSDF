@@ -3,8 +3,8 @@
  * @NScriptType MapReduceScript
  */
 
-define(['N/record', 'N/search', 'N/runtime'],
-  function (record, search, runtime) {
+define(['N/record', 'N/search', 'N/runtime', 'N/task'],
+  function (record, search, runtime, task) {
 
       function getInputData() {
           const logTitle = 'Get Input Data';
@@ -49,15 +49,15 @@ define(['N/record', 'N/search', 'N/runtime'],
 
       function summarize(summary) {
           const logTitle = 'Summarize';
-          log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
+          
             const scriptTask = task.create({
                 taskType: task.TaskType.MAP_REDUCE,
-                scriptId: '',
-                deploymentId: ''
+                scriptId: 'customscript_elm_crea_lista_negra',
+                deploymentId: 'customdeploy_elm_crea_lista_negra'
             });
             const taskId = scriptTask.submit();
             log.audit(logTitle, 'Mocasist Creation submitted new Map/Reduce task with ID: ' + taskId);
-      
+           log.audit(logTitle, 'Usage Consumed ' + summary.usage + ' Number of Queues ' + summary.concurrency + ' Number of Yields ' + summary.yields);
         }
 
       return {

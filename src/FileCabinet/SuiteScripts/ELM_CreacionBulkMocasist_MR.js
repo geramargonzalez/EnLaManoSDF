@@ -17,18 +17,13 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
           try {
               log.debug(logTitle, '**** START *****');
               // Retrieve the file ID from script parameter or use a default/hardcoded one
-              const fileId = runtime.getCurrentScript().getParameter({ name: 'custscript_elm_mocasist_file' }) || 15;
-           //   var csvFile = file.load({ id: '../Mocasist - Documento/Mocasist.csv' });
-
+        
+              const csvFile = file.load({ id: '../Mocasist - Documento/Mocasist.csv' });
               
-              if (!fileId) {
+              if (!csvFile) {
                   throw new Error('File ID is missing');
               }
 
-              const csvFile = file.load({
-                  id: fileId
-              });
-              
               log.debug('csvFile', 'Loaded file: ' + csvFile.name);
               
               // Iterate over the lines of the file
@@ -61,21 +56,19 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
               // Assuming CSV format: Documento,Nombre
               // Adjust the separator if needed (e.g., ';')
                const line = context.value;
-                 if (!line) return;
+               log.debug(logTitle, 'Processing line: ' + line);
+               if (!line) return;
                const fields = line.split(';');
               
               // Basic validation to skip empty lines or headers
               // You might want to add a check for headers here, e.g.:
-              // if (columns[0] === 'Documento') return;
-
-              if (fields.length < 2) return;
+            // -  if (fields[0].toLowerCase().trim() === 'documento') return;
 
               const docNumber = fields[0];
-              const name = fields[1];
 
               if (!docNumber) return;
 
-              log.debug(logTitle, 'Processing Doc: ' + docNumber + ', Name: ' + name);
+              log.debug(logTitle, 'Processing Doc: ' + docNumber );
 
               // Check if record already exists
               const existingSearch = search.create({
@@ -102,11 +95,6 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
                   value: docNumber
               });
 
-              newRecord.setValue({
-                  fieldId: 'custrecord_elm_mocasist_name',
-                  value: name
-              });
-
               const recordId = newRecord.save();
               log.audit(logTitle, 'Created MOCASIST record ID: ' + recordId + ' for document: ' + docNumber);
 
@@ -127,20 +115,23 @@ define(['N/record', 'N/search', 'N/runtime', 'N/file', 'N/error'],
       function summarize(summary) {
           const logTitle = 'Summarize';
             try {
-                  const fileSearch = search.create({
-                    type: search.Type.FOLDER,
-                    filters: [
-                        ['internalid', 'is', 17]
-                    ],
-                    columns: [
-                        search.createColumn({
-                        name: "internalid",
-                        join: "file"
-                     })
-                    ]
-                });
+
+
+            const fileIdFindIT = runtime.getCurrentScript().getParameter({ name: 'custscript_elm_folder_mocasist' }) || 17 ;
+            const fileSearch = search.create({
+                type: search.Type.FOLDER,
+                filters: [
+                    ['internalid', 'is', fileIdFindIT]
+                ],
+                columns: [
+                    search.createColumn({
+                    name: "internalid",
+                    join: "file"
+                    })
+                ]
+            });
                 
-                var fileId = null;
+                let fileId = null;
                 fileSearch.run().each(function(result) {
                     fileId = result.getValue({
                         name: 'internalid',
