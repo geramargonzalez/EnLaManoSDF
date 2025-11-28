@@ -25,21 +25,28 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
  
         try {
             // Mapear options a nuevo formato optimizado
+            let provider = 'equifax';
+            if (options.provider == '1') {
+                provider = 'mym';
+            }
+
+            if (options.provider == '3') {
+                provider = 'bcu';
+            }
+
             const newOptions = {
-                provider: (options && options.provider) || 'equifax',
+                provider: provider,
                 strictRules: options && options.strictRules,
                 forceRefresh: options && options.forceRefresh,
                 debug: options && options.debug,
                 timeout: 15000 // Timeout agresivo
             };
 
+
             // Llamada optimizada al servicio
             const result = scoreService.calculateScore(dni, newOptions);
 
-            log.debug({
-                title: 'ELM Score Fast Result',
-                details: dni.substr(-4) + ': ' + JSON.stringify(result)
-            });
+      
             
             // Mapear respuesta a formato legacy para backward compatibility
             if (result.metadata && result.metadata.isRejected) {
@@ -58,6 +65,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
             }
 
             // Respuesta exitosa en formato exactamente igual a SDB-Enlamano-score.js
+            // CRITICAL: Agregar t2/t6 para compatibilidad con extractBcuData
             return {
                 score: result.score,
                 calificacionMinima: result.calificacionMinima || extractWorstRating(result),
@@ -66,7 +74,12 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                 endeudamiento: result.endeudamiento !== undefined ? result.endeudamiento : extractTotalDebt(result),
                 nombre: result.nombre || '',
                 error_reglas: false,
-                logTxt: result.logTxt || ''
+                logTxt: result.logTxt || '',
+                // Agregar t2/t6 desde normalizedData para que extractBcuData pueda procesarlos
+                t2: result.normalizedData?.periodData?.t0 || null,
+                t6: result.normalizedData?.periodData?.t6 || null,
+                periodoT2: result.periodoT2 || result.metadata?.periodoT2,
+                periodoT6: result.periodoT6 || result.metadata?.periodoT6
             };
 
         } catch (error) {

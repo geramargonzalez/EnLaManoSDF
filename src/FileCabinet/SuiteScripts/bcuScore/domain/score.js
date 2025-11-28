@@ -77,6 +77,50 @@ define(['N/log'], function (log) {
     }
 
     /**
+     * Extrae periodo de consulta desde fechaConsulta o usa fecha actual como fallback
+     */
+    function extractPeriodoConsulta(normalizedData) {
+        if (normalizedData && normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
+            try {
+                const fecha = new Date(normalizedData.metadata.fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    return year + '-' + month;
+                }
+            } catch (e) {
+                // Fallback silencioso
+            }
+        }
+        // Usar fecha actual como fallback
+        const now = new Date();
+        return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    }
+
+    /**
+     * Extrae periodo T2 desde t0 (rawMirror o metadata)
+     */
+    function extractPeriodoT2(t0) {
+        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
+            return t0.rawMirror.periodo;
+        }
+        if (t0 && t0.metadata && t0.metadata.periodo) {
+            return t0.metadata.periodo;
+        }
+        return '';
+    }
+
+    /**
+     * Extrae periodo T6 desde t6 (metadata)
+     */
+    function extractPeriodoT6(t6) {
+        if (t6 && t6.metadata && t6.metadata.periodo) {
+            return t6.metadata.periodo;
+        }
+        return '';
+    }
+
+    /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
      */
     function computeScoreStrict(normalizedData, scoringRules) {
@@ -101,9 +145,13 @@ define(['N/log'], function (log) {
         }
 
         // Inicializar log para compatibilidad con el script original
+        // Extraer periodo de consulta usando helper function
+        const periodoConsulta = extractPeriodoConsulta(normalizedData);
+        
         let logTxt = '<P>============= INICIO SCORING =============</P>';
         logTxt += '<P>Provider: ' + (normalizedData.provider || 'UNKNOWN') + '</P>';
         logTxt += '<P>Documento: ' + ((normalizedData.metadata && normalizedData.metadata.documento) || 'UNKNOWN') + '</P>';
+        logTxt += '<P>Periodo Consulta: ' + periodoConsulta + '</P>';
         logTxt += '<P>Timestamp: ' + new Date().toISOString() + '</P>';
         logTxt += '<P>==========================================</P>';
         
@@ -113,8 +161,6 @@ define(['N/log'], function (log) {
         const rejectionRules = scoringRules.rejectionRules;
         const flags = normalizedData.flags || {};
 
-ñ
-
         const t0Data = normalizedData.periodData && normalizedData.periodData.t0;
         if (!t0Data || !t0Data.entities) {
             log.error('computeScore - NO_DATA validation failed', {
@@ -123,7 +169,7 @@ define(['N/log'], function (log) {
                 isArray: !!(t0Data && t0Data.entities && Array.isArray(t0Data.entities)),
                 t0Keys: t0Data ? Object.keys(t0Data) : 'NO_T0'
             });
-            return createRejectedScore('NO_DATA', 'Sin datos para scoring');
+            return createRejectedScore('NO_DATA', 'Sin datos para scoring', null, normalizedData);
         }
 
         // CRITICAL FIX: Convert Java array to JavaScript array if needed
@@ -148,16 +194,16 @@ define(['N/log'], function (log) {
                         typeof_entities: typeof entities,
                         hasLength: !!(entities && entities.length !== undefined)
                     });
-                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables');
+                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables', null, normalizedData);
                 }
             } catch (convErr) {
                 log.error('computeScore - failed to convert t0 entities', convErr.toString());
-                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0');
+                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0', null, normalizedData);
             }
         }
 
         if (!entities || entities.length === 0) {
-            return createRejectedScore('NO_DATA', 'Sin entidades en t0');
+            return createRejectedScore('NO_DATA', 'Sin entidades en t0', null, normalizedData);
         }
 
         const entityCount = entities.length;
@@ -184,10 +230,10 @@ define(['N/log'], function (log) {
 
         // Early exit: límites de deuda
          if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
-            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva');
+            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva', null, normalizedData);
         }
         if (rejectionRules && rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
-            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva');
+            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva', null, normalizedData);
         }
 
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
@@ -251,6 +297,14 @@ define(['N/log'], function (log) {
         // Esto es consistente con el score original SDB-Enlamano-score.js
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
+
+        // Extraer periodos T2/T6 para logTxt usando helper functions
+        const periodoT2ForLog = extractPeriodoT2(t0);
+        const periodoT6ForLog = extractPeriodoT6(t6);
+        
+        // Agregar periodos al logTxt
+        logTxt += '<P>Periodo T2: ' + periodoT2ForLog + '</P>';
+        logTxt += '<P>Periodo T6: ' + periodoT6ForLog + '</P>';
 
         // CRITICAL FIX: Convert t6 entities from Java array if needed
         if (t6.entities && !Array.isArray(t6.entities)) {
@@ -1089,6 +1143,10 @@ define(['N/log'], function (log) {
         logTxt += '<P>Is Good (>= ' + goodThreshold + '): ' + (scoreRounded >= goodThreshold) + '</P>';
         logTxt += '<P>===========================================</P>';
 
+        // Extraer periodos para compatibilidad con extractBcuData (reutilizar helper functions)
+        const periodoT2 = extractPeriodoT2(t0);
+        const periodoT6 = extractPeriodoT6(t6);
+
         // Resultado unificado: contrato moderno + compatibilidad legacy
         let result = { 
             // Contrato moderno
@@ -1102,7 +1160,9 @@ define(['N/log'], function (log) {
                 rejectionReason: null,
                 goodThreshold: goodThreshold,
                 isGood: scoreRounded >= goodThreshold,
-                provider: normalizedData.provider
+                provider: normalizedData.provider,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: normalizedData.flags || {},
             validation: { hasValidData: true },
@@ -1115,7 +1175,12 @@ define(['N/log'], function (log) {
             endeudamiento: endeudamiento,
             nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
             error_reglas: false,
-            logTxt: logTxt
+            logTxt: logTxt,
+            
+            // Datos para extractBcuData
+            normalizedData: normalizedData,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
         };
 
                 log.debug('computeScore - returning result', {
@@ -1584,7 +1649,14 @@ define(['N/log'], function (log) {
     /**
      * OPTIMIZADO: Crear resultado de rechazo con mínima metadata
      */
-    function createRejectedScore(reason, message, logTxt) {
+    function createRejectedScore(reason, message, logTxt, normalizedData) {
+        // Extraer periodos usando helper functions
+        const periodoConsulta = normalizedData ? extractPeriodoConsulta(normalizedData) : '';
+        const t0 = (normalizedData && normalizedData.periodData) ? normalizedData.periodData.t0 : null;
+        const t6 = (normalizedData && normalizedData.periodData) ? normalizedData.periodData.t6 : null;
+        const periodoT2 = extractPeriodoT2(t0);
+        const periodoT6 = extractPeriodoT6(t6);
+        
         return {
             finalScore: 0,
             rawScore: 0,
@@ -1596,11 +1668,17 @@ define(['N/log'], function (log) {
                 rejectionReason: reason,
                 rejectionMessage: message || reason,
                 goodThreshold: 499,
-                isGood: false
+                isGood: false,
+                periodoConsulta: periodoConsulta,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: {},
             validation: { hasValidData: false },
-            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>')
+            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>'),
+            periodoConsulta: periodoConsulta,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
         };
     }
     
