@@ -72,8 +72,7 @@ function createRulesDeps() {
 
 function createScoreDeps() {
     return {
-        'N/log': createLogger('score'),
-        './scoreCompat': loadAmdModule(path.join(SUITESCRIPTS_DIR, 'bcuScore', 'domain', 'scoreCompat.js'), createDefaultDeps('scoreCompat'), new Map())
+        'N/log': createLogger('score')
     };
 }
 

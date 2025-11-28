@@ -101,9 +101,31 @@ define(['N/log'], function (log) {
         }
 
         // Inicializar log para compatibilidad con el script original
+        // Extraer periodo de consulta
+        let periodoConsulta = '';
+        if (normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
+            try {
+                const fecha = new Date(normalizedData.metadata.fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    periodoConsulta = year + '-' + month;
+                }
+            } catch (e) {
+                // Usar fecha actual como fallback
+                const now = new Date();
+                periodoConsulta = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            }
+        } else {
+            // Usar fecha actual como fallback
+            const now = new Date();
+            periodoConsulta = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+        }
+        
         let logTxt = '<P>============= INICIO SCORING =============</P>';
         logTxt += '<P>Provider: ' + (normalizedData.provider || 'UNKNOWN') + '</P>';
         logTxt += '<P>Documento: ' + ((normalizedData.metadata && normalizedData.metadata.documento) || 'UNKNOWN') + '</P>';
+        logTxt += '<P>Periodo Consulta: ' + periodoConsulta + '</P>';
         logTxt += '<P>Timestamp: ' + new Date().toISOString() + '</P>';
         logTxt += '<P>==========================================</P>';
         
@@ -113,8 +135,6 @@ define(['N/log'], function (log) {
         const rejectionRules = scoringRules.rejectionRules;
         const flags = normalizedData.flags || {};
 
-ñ
-
         const t0Data = normalizedData.periodData && normalizedData.periodData.t0;
         if (!t0Data || !t0Data.entities) {
             log.error('computeScore - NO_DATA validation failed', {
@@ -123,7 +143,7 @@ define(['N/log'], function (log) {
                 isArray: !!(t0Data && t0Data.entities && Array.isArray(t0Data.entities)),
                 t0Keys: t0Data ? Object.keys(t0Data) : 'NO_T0'
             });
-            return createRejectedScore('NO_DATA', 'Sin datos para scoring');
+            return createRejectedScore('NO_DATA', 'Sin datos para scoring', null, normalizedData);
         }
 
         // CRITICAL FIX: Convert Java array to JavaScript array if needed
@@ -148,16 +168,16 @@ define(['N/log'], function (log) {
                         typeof_entities: typeof entities,
                         hasLength: !!(entities && entities.length !== undefined)
                     });
-                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables');
+                    return createRejectedScore('NO_DATA', 'Entidades t0 no procesables', null, normalizedData);
                 }
             } catch (convErr) {
                 log.error('computeScore - failed to convert t0 entities', convErr.toString());
-                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0');
+                return createRejectedScore('NO_DATA', 'Error convirtiendo entidades t0', null, normalizedData);
             }
         }
 
         if (!entities || entities.length === 0) {
-            return createRejectedScore('NO_DATA', 'Sin entidades en t0');
+            return createRejectedScore('NO_DATA', 'Sin entidades en t0', null, normalizedData);
         }
 
         const entityCount = entities.length;
@@ -184,10 +204,10 @@ define(['N/log'], function (log) {
 
         // Early exit: límites de deuda
          if (rejectionRules && rejectionRules.maxVencido && totals.vencido > rejectionRules.maxVencido) {
-            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva');
+            return createRejectedScore('EXCESS_VENCIDO', 'Deuda vencida excesiva', null, normalizedData);
         }
         if (rejectionRules && rejectionRules.maxCastigado && totals.castigado > rejectionRules.maxCastigado) {
-            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva');
+            return createRejectedScore('EXCESS_CASTIGADO', 'Deuda castigada excesiva', null, normalizedData);
         }
 
         // Ahora replicamos la lógica de pasos 2-5 del SDB-Enlamano-score.js
@@ -251,6 +271,24 @@ define(['N/log'], function (log) {
         // Esto es consistente con el score original SDB-Enlamano-score.js
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
+
+        // Extraer periodos T2/T6 para logTxt
+        let periodoT2ForLog = '';
+        let periodoT6ForLog = '';
+        
+        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
+            periodoT2ForLog = t0.rawMirror.periodo;
+        } else if (t0 && t0.metadata && t0.metadata.periodo) {
+            periodoT2ForLog = t0.metadata.periodo;
+        }
+        
+        if (t6 && t6.metadata && t6.metadata.periodo) {
+            periodoT6ForLog = t6.metadata.periodo;
+        }
+        
+        // Agregar periodos al logTxt
+        logTxt += '<P>Periodo T2: ' + periodoT2ForLog + '</P>';
+        logTxt += '<P>Periodo T6: ' + periodoT6ForLog + '</P>';
 
         // CRITICAL FIX: Convert t6 entities from Java array if needed
         if (t6.entities && !Array.isArray(t6.entities)) {
@@ -1089,6 +1127,20 @@ define(['N/log'], function (log) {
         logTxt += '<P>Is Good (>= ' + goodThreshold + '): ' + (scoreRounded >= goodThreshold) + '</P>';
         logTxt += '<P>===========================================</P>';
 
+        // Extraer periodos para compatibilidad con extractBcuData
+        let periodoT2 = '';
+        let periodoT6 = '';
+        
+        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
+            periodoT2 = t0.rawMirror.periodo;
+        } else if (t0 && t0.metadata && t0.metadata.periodo) {
+            periodoT2 = t0.metadata.periodo;
+        }
+        
+        if (t6 && t6.metadata && t6.metadata.periodo) {
+            periodoT6 = t6.metadata.periodo;
+        }
+
         // Resultado unificado: contrato moderno + compatibilidad legacy
         let result = { 
             // Contrato moderno
@@ -1102,7 +1154,9 @@ define(['N/log'], function (log) {
                 rejectionReason: null,
                 goodThreshold: goodThreshold,
                 isGood: scoreRounded >= goodThreshold,
-                provider: normalizedData.provider
+                provider: normalizedData.provider,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: normalizedData.flags || {},
             validation: { hasValidData: true },
@@ -1115,7 +1169,12 @@ define(['N/log'], function (log) {
             endeudamiento: endeudamiento,
             nombre: (normalizedData.metadata && normalizedData.metadata.nombre) || '',
             error_reglas: false,
-            logTxt: logTxt
+            logTxt: logTxt,
+            
+            // Datos para extractBcuData
+            normalizedData: normalizedData,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
         };
 
                 log.debug('computeScore - returning result', {
@@ -1584,7 +1643,35 @@ define(['N/log'], function (log) {
     /**
      * OPTIMIZADO: Crear resultado de rechazo con mínima metadata
      */
-    function createRejectedScore(reason, message, logTxt) {
+    function createRejectedScore(reason, message, logTxt, normalizedData) {
+        // Extraer periodo de consulta si normalizedData está disponible
+        let periodoConsulta = '';
+        let periodoT2 = '';
+        let periodoT6 = '';
+        
+        if (normalizedData && normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
+            try {
+                const fecha = new Date(normalizedData.metadata.fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    periodoConsulta = year + '-' + month;
+                }
+            } catch (e) {
+                // Ignorar error silenciosamente
+            }
+        }
+        
+        // Extraer periodos T2 y T6 si están disponibles
+        if (normalizedData && normalizedData.periodData) {
+            if (normalizedData.periodData.t0 && normalizedData.periodData.t0.metadata) {
+                periodoT2 = normalizedData.periodData.t0.metadata.periodo || '';
+            }
+            if (normalizedData.periodData.t6 && normalizedData.periodData.t6.metadata) {
+                periodoT6 = normalizedData.periodData.t6.metadata.periodo || '';
+            }
+        }
+        
         return {
             finalScore: 0,
             rawScore: 0,
@@ -1596,11 +1683,17 @@ define(['N/log'], function (log) {
                 rejectionReason: reason,
                 rejectionMessage: message || reason,
                 goodThreshold: 499,
-                isGood: false
+                isGood: false,
+                periodoConsulta: periodoConsulta,
+                periodoT2: periodoT2,
+                periodoT6: periodoT6
             },
             flags: {},
             validation: { hasValidData: false },
-            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>')
+            logTxt: logTxt || ('<P>Rechazado: ' + reason + ' - ' + (message || '') + '</P>'),
+            periodoConsulta: periodoConsulta,
+            periodoT2: periodoT2,
+            periodoT6: periodoT6
         };
     }
     
