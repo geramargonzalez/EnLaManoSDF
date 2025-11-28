@@ -77,6 +77,50 @@ define(['N/log'], function (log) {
     }
 
     /**
+     * Extrae periodo de consulta desde fechaConsulta o usa fecha actual como fallback
+     */
+    function extractPeriodoConsulta(normalizedData) {
+        if (normalizedData && normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
+            try {
+                const fecha = new Date(normalizedData.metadata.fechaConsulta);
+                if (!isNaN(fecha.getTime())) {
+                    const year = fecha.getFullYear();
+                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+                    return year + '-' + month;
+                }
+            } catch (e) {
+                // Fallback silencioso
+            }
+        }
+        // Usar fecha actual como fallback
+        const now = new Date();
+        return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    }
+
+    /**
+     * Extrae periodo T2 desde t0 (rawMirror o metadata)
+     */
+    function extractPeriodoT2(t0) {
+        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
+            return t0.rawMirror.periodo;
+        }
+        if (t0 && t0.metadata && t0.metadata.periodo) {
+            return t0.metadata.periodo;
+        }
+        return '';
+    }
+
+    /**
+     * Extrae periodo T6 desde t6 (metadata)
+     */
+    function extractPeriodoT6(t6) {
+        if (t6 && t6.metadata && t6.metadata.periodo) {
+            return t6.metadata.periodo;
+        }
+        return '';
+    }
+
+    /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
      */
     function computeScoreStrict(normalizedData, scoringRules) {
@@ -101,26 +145,8 @@ define(['N/log'], function (log) {
         }
 
         // Inicializar log para compatibilidad con el script original
-        // Extraer periodo de consulta
-        let periodoConsulta = '';
-        if (normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
-            try {
-                const fecha = new Date(normalizedData.metadata.fechaConsulta);
-                if (!isNaN(fecha.getTime())) {
-                    const year = fecha.getFullYear();
-                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
-                    periodoConsulta = year + '-' + month;
-                }
-            } catch (e) {
-                // Usar fecha actual como fallback
-                const now = new Date();
-                periodoConsulta = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-            }
-        } else {
-            // Usar fecha actual como fallback
-            const now = new Date();
-            periodoConsulta = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-        }
+        // Extraer periodo de consulta usando helper function
+        const periodoConsulta = extractPeriodoConsulta(normalizedData);
         
         let logTxt = '<P>============= INICIO SCORING =============</P>';
         logTxt += '<P>Provider: ' + (normalizedData.provider || 'UNKNOWN') + '</P>';
@@ -272,19 +298,9 @@ define(['N/log'], function (log) {
         let t0 = (normalizedData.periodData && normalizedData.periodData.t0) || { entities: [], aggregates: {} };
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
 
-        // Extraer periodos T2/T6 para logTxt
-        let periodoT2ForLog = '';
-        let periodoT6ForLog = '';
-        
-        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
-            periodoT2ForLog = t0.rawMirror.periodo;
-        } else if (t0 && t0.metadata && t0.metadata.periodo) {
-            periodoT2ForLog = t0.metadata.periodo;
-        }
-        
-        if (t6 && t6.metadata && t6.metadata.periodo) {
-            periodoT6ForLog = t6.metadata.periodo;
-        }
+        // Extraer periodos T2/T6 para logTxt usando helper functions
+        const periodoT2ForLog = extractPeriodoT2(t0);
+        const periodoT6ForLog = extractPeriodoT6(t6);
         
         // Agregar periodos al logTxt
         logTxt += '<P>Periodo T2: ' + periodoT2ForLog + '</P>';
@@ -1127,19 +1143,9 @@ define(['N/log'], function (log) {
         logTxt += '<P>Is Good (>= ' + goodThreshold + '): ' + (scoreRounded >= goodThreshold) + '</P>';
         logTxt += '<P>===========================================</P>';
 
-        // Extraer periodos para compatibilidad con extractBcuData
-        let periodoT2 = '';
-        let periodoT6 = '';
-        
-        if (t0 && t0.rawMirror && t0.rawMirror.periodo) {
-            periodoT2 = t0.rawMirror.periodo;
-        } else if (t0 && t0.metadata && t0.metadata.periodo) {
-            periodoT2 = t0.metadata.periodo;
-        }
-        
-        if (t6 && t6.metadata && t6.metadata.periodo) {
-            periodoT6 = t6.metadata.periodo;
-        }
+        // Extraer periodos para compatibilidad con extractBcuData (reutilizar helper functions)
+        const periodoT2 = extractPeriodoT2(t0);
+        const periodoT6 = extractPeriodoT6(t6);
 
         // Resultado unificado: contrato moderno + compatibilidad legacy
         let result = { 
@@ -1644,33 +1650,12 @@ define(['N/log'], function (log) {
      * OPTIMIZADO: Crear resultado de rechazo con mínima metadata
      */
     function createRejectedScore(reason, message, logTxt, normalizedData) {
-        // Extraer periodo de consulta si normalizedData está disponible
-        let periodoConsulta = '';
-        let periodoT2 = '';
-        let periodoT6 = '';
-        
-        if (normalizedData && normalizedData.metadata && normalizedData.metadata.fechaConsulta) {
-            try {
-                const fecha = new Date(normalizedData.metadata.fechaConsulta);
-                if (!isNaN(fecha.getTime())) {
-                    const year = fecha.getFullYear();
-                    const month = String(fecha.getMonth() + 1).padStart(2, '0');
-                    periodoConsulta = year + '-' + month;
-                }
-            } catch (e) {
-                // Ignorar error silenciosamente
-            }
-        }
-        
-        // Extraer periodos T2 y T6 si están disponibles
-        if (normalizedData && normalizedData.periodData) {
-            if (normalizedData.periodData.t0 && normalizedData.periodData.t0.metadata) {
-                periodoT2 = normalizedData.periodData.t0.metadata.periodo || '';
-            }
-            if (normalizedData.periodData.t6 && normalizedData.periodData.t6.metadata) {
-                periodoT6 = normalizedData.periodData.t6.metadata.periodo || '';
-            }
-        }
+        // Extraer periodos usando helper functions
+        const periodoConsulta = normalizedData ? extractPeriodoConsulta(normalizedData) : '';
+        const t0 = (normalizedData && normalizedData.periodData) ? normalizedData.periodData.t0 : null;
+        const t6 = (normalizedData && normalizedData.periodData) ? normalizedData.periodData.t6 : null;
+        const periodoT2 = extractPeriodoT2(t0);
+        const periodoT6 = extractPeriodoT6(t6);
         
         return {
             finalScore: 0,
