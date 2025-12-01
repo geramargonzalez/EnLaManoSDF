@@ -163,7 +163,7 @@ define(['N/search', 'N/log'], function (search, log) {
                 id: scoreNetsuiteID,
                 columns: [
                     // Campos básicos (algunos comentados porque no se usan)
-                    'custrecord_sdb_score_base_score',
+                    //  'custrecord_sdb_score_base_score',
                     // 'custrecord_sdb_score_rejection_rules', // COMENTADO: Campo probablemente no existe
                     'custrecord_sdb_banco_binned',
                     'custrecord_sdb_ent_t6_binned',
@@ -186,7 +186,7 @@ define(['N/search', 'N/log'], function (search, log) {
                     // 'custrecord_sdb_score_coefficient', // COMENTADO: Campo probablemente no existe
                     // 'custrecord_sdb_score_threshold', // COMENTADO: Campo no existe en custom record
                     // 'custrecord_sdb_score_vigente_max', // COMENTADO: Campo probablemente no existe
-                    'custrecord_sdb_score_base_score'
+                    //'custrecord_sdb_score_base_score'
                     // 'custrecord_sdb_score_vencido_weight', // COMENTADO: Campo probablemente no existe
                     // 'custrecord_sdb_score_rating_penalties' // COMENTADO: Campo probablemente no existe
                 ]
@@ -208,7 +208,7 @@ define(['N/search', 'N/log'], function (search, log) {
                 mode: 'strict',
                 numeric: clone(DEFAULT_NUMERIC),
                 aliases: clone(DEFAULT_ALIAS_MAP),
-                baseScore: parseFloat(getFieldValue('custrecord_sdb_score_base_score')) || DEFAULT_RULES.baseScore,
+                baseScore: DEFAULT_RULES.baseScore,
                 rejectionRules: DEFAULT_RULES.rejectionRules, // parseRejectionRules(getFieldValue('custrecord_sdb_score_rejection_rules')), // COMENTADO: Campo no existe
                 periods: DEFAULT_RULES.periods, // Usar configuración estática
                 trending: DEFAULT_RULES.trending // Usar configuración estática

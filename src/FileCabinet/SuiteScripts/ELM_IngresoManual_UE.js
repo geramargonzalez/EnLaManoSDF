@@ -91,7 +91,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                if(isEdit) {
                   if (infoRepetido?.id && infoRepetido?.id == newRecord?.id) {
                         infoRepetido = {};
-                  }
+                  } 
                }
              log.debug('infoRepetido test', JSON.stringify(infoRepetido));
                if (auxLib.checkBlacklist(docNumber)) {
@@ -131,11 +131,11 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                      rejectReason: objScriptParam.rechazoMocasist
                   });
                }
-               const isPreLead = infoRepetido.status === objScriptParam.preLeadStatus;
-               const isRejected = infoRepetido.approvalStatus === objScriptParam.estadoRechazado;
-               const isFromExternal = infoRepetido.service === objScriptParam.externalService;
+               const isPreLead = infoRepetido?.status === objScriptParam.preLeadStatus;
+               const isRejected = infoRepetido?.approvalStatus === objScriptParam.estadoRechazado;
+               const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
 
-              const shouldScore = !infoRepetido.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
+              const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
                if (shouldScore) {
                   //const score = scoreLib.scoreFinal(docNumber);
                   const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, debug: true, strictRules: true });

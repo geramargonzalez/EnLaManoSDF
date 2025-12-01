@@ -21,7 +21,7 @@
  * 
  */
 
-define(['N/search', 'N/error', 'N/https', 'N/runtime'], 
+define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equifaxAdapter', 'N/record'], 
     function (search, error, https, runtime) {
 
     // ============================================
@@ -30,7 +30,7 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
     
     const CONFIG = {
         // Cambiar según ambiente
-        IS_PRODUCTION: false, // true para producción
+        IS_PRODUCTION: true, // true para producción
         
         ENDPOINTS: {
             TESTING: 'https://sandbox.api.uy.alprestamo.io/bid/postback/only-by-url',
@@ -75,9 +75,6 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
             
             // Script parameters para configuración dinámica
             // const scriptObj = runtime.getCurrentScript();
-
-            log.debug(logTitle, `TRACKING_ID`, CONFIG.FIELDS.TRACKING_ID);
-            log.debug(logTitle, `ESTADO_GESTION`, CONFIG.FIELDS.ESTADO_GESTION);
             const leadSearchObj = search.create({
                 type: search.Type.CUSTOMER,
                 filters:
@@ -136,8 +133,6 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
         try {
             const leadData = JSON.parse(context.value);
             leadId = leadData.id;
-            
-            log.debug(logTitle, JSON.stringify(leadData));
             
             // Extraer valores del search result - Solo los obligatorios
             trackingId = leadData.values[CONFIG.FIELDS.TRACKING_ID];
@@ -221,10 +216,16 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
     function summarize(summary) {
         const logTitle = 'summarize';
         try {
+            
+
+  
+
+
             log.audit(logTitle, '========== RESUMEN EJECUCIÓN ==========');
             log.audit(logTitle, `Uso: ${summary.usage} unidades`);
             log.audit(logTitle, `Concurrencia: ${summary.concurrency}`);
             log.audit(logTitle, `Yields: ${summary.yields}`);
+
             
             // Contar éxitos
             let successCount = 0;
@@ -321,7 +322,7 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
      * GRANTED (granted):
      * - Gestionado (ID: 5)
      * 
-     * VALIDATED (validated):
+     * OFFERED (validated):
      * - En validación (ID: 7)
      * - Sin Respuesta (ID: 8)
      * - Revisión (ID: 10)
@@ -348,17 +349,19 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime'],
             // DENIED - Rechazados
             '21': CONFIG.STATUS.DENIED,       // No cumple Requisitos
             '24': CONFIG.STATUS.DENIED,       // Rechazado por Asesor
-            
+            '9': CONFIG.STATUS.DENIED,     // Desiste
+            '8': CONFIG.STATUS.DENIED,     // Sin Respuesta      
+           
             // VALIDATED GRANTED - Aprobados
             '5': CONFIG.STATUS.VALIDATED,       // Gestionado
-            '8': CONFIG.STATUS.VALIDATED,     // Sin Respuesta
+            '10': CONFIG.STATUS.VALIDATED,    // Revisión
             
             // OFFERED - En proceso de validación
+            '2': CONFIG.STATUS.OFFERED,     // Aprobado
             '7': CONFIG.STATUS.OFFERED,     // En validación
             '6': CONFIG.STATUS.OFFERED,     // Pendiente de Documentacion
-            '9': CONFIG.STATUS.OFFERED,     // Desiste
-            '10': CONFIG.STATUS.OFFERED,    // Revisión
-            
+           
+
             // GRANTED - Oferta presentada
             '11': CONFIG.STATUS.GRANTED       // Convertido
         };

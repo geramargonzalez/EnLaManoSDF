@@ -56,21 +56,12 @@ define([
             const periodForT2 = (options.provider == PROVIDER_EQUIFAX) ? 2 : 0;
             const normalizedData = fetchProviderData(documento, options, periodForT2);
             let normalizedDataT6 = null;
-            log.debug({ title: 'Normalized Data t2 months', details: { idLog, normalizedData } });
             
             // Solo obtener T6 si es Equifax Y la calificación mínima es 1C, 2A o N/C
             if (options.provider === PROVIDER_EQUIFAX) {
                 const worstRating = normalizedData?.metadata?.worstRating || '0';
                 const shouldFetchT6 = worstRating === '1C' || worstRating === '2A' || worstRating === 'N/C';
-                
-                log.debug({ 
-                    title: 'T6 Fetch Decision', 
-                    details: { 
-                        worstRating: worstRating, 
-                        shouldFetchT6: shouldFetchT6,
-                        reason: shouldFetchT6 ? 'Rating requires T6 data' : 'Rating does not require T6 data'
-                    } 
-                });
+        
                 
                 if (shouldFetchT6) {
                     normalizedDataT6 = fetchProviderData(documento, options, 8);
@@ -88,7 +79,6 @@ define([
             let scoreResult;
             try {
                 scoreResult = scoreEngine.computeScore(normalizedData, rules, normalizedDataT6);
-                log.debug({ title: 'computeScore result', details: { idLog, scoreResult } });
                 auxLib.updateLogWithResponse(idLog, null, scoreResult?.metadata?.isRejected ? false : true, scoreResult, normalizedData );
 
             } catch (computeErr) {
@@ -113,7 +103,6 @@ define([
                     _preview = String(scoreResult);
                 }
                 if (_preview && _preview.length > 3000) _preview = _preview.substring(0, 3000) + '... [truncated]';
-                log.debug({ title: 'computeScore result preview', details: { type: typeof scoreResult, preview: _preview } });
             } catch (dbgErr) {
                 try { log.debug({ title: 'computeScore preview error', details: dbgErr.toString() }); } catch (xx) {}
             }
@@ -164,8 +153,12 @@ define([
             } catch (tblErr) {
                 // no bloquear el flujo por errores al construir la tabla
                 scoreResult.variablesTable = '';
-                log.debug('Variables table build error', tblErr.toString());
+                log.error('Variables table build error', tblErr.toString());
             }
+
+            // CRITICAL: Agregar normalizedData para compatibilidad con extractBcuData
+            scoreResult.normalizedData = normalizedData;
+            scoreResult.normalizedDataT6 = normalizedDataT6;
 
             return scoreResult;
         } catch (error) {

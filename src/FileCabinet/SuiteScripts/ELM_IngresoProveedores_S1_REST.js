@@ -42,13 +42,15 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       const leadsDesactivados = auxLib.deactivateLeadsByDocumentNumber(docNumber);
 
       // Info repetido (una sola llamada, solo si no se desactivaron leads)
-      const infoRep = leadsDesactivados ? null : auxLib.getInfoRepetido(docNumber, null, false);
-      const notLatente = infoRep?.approvalStatus !== params?.estadoLatente;
+      const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoLight(docNumber, null, 'exists', false);
+      const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
       // Crear preLead mínimo al inicio del flujo “no latente”
       let preLeadId = null;
-      if (notLatente) {
-        preLeadId = auxLib.createPreLead(
+
+        if (notLatente) {
+
+         preLeadId = auxLib.createPreLead(
           params.externalService, docNumber, null, firstName, lastName,
           activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
           params?.estadoRechazado, null, source, activityType, trackingId
@@ -57,17 +59,17 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
       // ---------- Blacklist/Mocasist early-exit ----------
       const blacklisted = auxLib.checkBlacklist(docNumber);
-      if (blacklisted && notLatente) {
+      if (blacklisted) {
         response.success = false;
         response.result = 'Blacklist';
-        if (infoRep?.id) {
+        if (infoRepExist?.id) {
           copyLeadSnapshot({
-            sourceLeadId: infoRep.id,
+            sourceLeadId: infoRepExist.id,
             targetPreLeadId: preLeadId,
             docNumber,
             aprobado: params.estadoRepRechazado,
             rejectReason: params.rechazoBlacklist,
-            repetidoOriginalId: infoRep.id
+            repetidoOriginalId: infoRepExist.id
           })
         } else {
           auxLib.submitFieldsEntity(preLeadId, params?.estadoBlacklist, params?.rechazoBlacklist);
@@ -77,17 +79,17 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       }
 
       const isMocasist = auxLib.checkMocasist(docNumber);
-      if (isMocasist && notLatente) {
+      if (isMocasist) {
         response.success = false;
         response.result = 'Mocasist';
-        if (infoRep?.id) {
+        if (infoRepExist?.id) {
           copyLeadSnapshot({
-            sourceLeadId: infoRep.id,
+            sourceLeadId: infoRepExist.id,
             targetPreLeadId: preLeadId,
             docNumber,
             aprobado: params.estadoRepRechazado,
             rejectReason: params.rechazoMocasist,
-            repetidoOriginalId: infoRep.id
+            repetidoOriginalId: infoRepExist.id
           });
         } else {
           auxLib.submitFieldsEntity(preLeadId, params.estadoMocasist, params.rechazoMocasist);
@@ -99,18 +101,15 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       // ---------- Si NO está latente hoy (flujo “normal”) ----------
       if (notLatente) {
         
-        if (!infoRep?.id) {
+        if (!infoRepExist?.id) {
           // Caso NUEVO → Scoring & BCU
           // Usar motor bcuScore optimizado con fallback al SDB cl�sico
           let score;
-          try {
-            log.debug(`${LOG_PREFIX} Usando bcuScoreLib para doc ${docNumber} con provider ${params.providerBCU }`);
+       
             score = bcuScoreLib.scoreFinal(docNumber, { provider: params.providerBCU, forceRefresh: true, strictRules: true, debug: true });
+            log.debug(`${LOG_PREFIX} BCU Score Result`, { score });
           // score = scoreLib.scoreFinal(docNumber);
-          } catch (e) {
-            // Fallback al motor antiguo si algo falla
-            score = scoreLib.scoreFinal(docNumber);
-          } 
+
           if (score?.error_reglas) {
 
    /*           const detailText = String(score.detail || score.details || '').toLowerCase();
@@ -144,14 +143,49 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
           // Extraer BCU t2/t6 (1 sola vez)
           const bcuData = auxLib.extractBcuData(score) || {};
+          log.debug(`${LOG_PREFIX} bcuData extraído`, { 
+            hasT2: !!bcuData?.t2, 
+            hasT6: !!bcuData?.t6,
+            t2Qualifications: bcuData?.t2Qualifications?.length || 0,
+            t6Qualifications: bcuData?.t6Qualifications?.length || 0
+          });
+
           const t2Info = auxLib.getBcuPeriodInfo(bcuData?.t2, 't2') || {};
           const t6Info = auxLib.getBcuPeriodInfo(bcuData?.t6, 't6') || {};
-          const endeudT2 = toNum(t2Info?.rubrosGenerales?.[0]?.MnPesos);
-          const endeudT6 = toNum(t6Info?.rubrosGenerales?.[0]?.MnPesos);
+          
+          log.debug(`${LOG_PREFIX} t2Info extraído`, { 
+            totalMnPesos: t2Info?.totalMnPesos,
+            totalMePesos: t2Info?.totalMePesos,
+            entidades: (t2Info?.entidades || []).length,
+            rubrosGenerales: (t2Info?.rubrosGenerales || []).length
+          });
+
+          log.debug(`${LOG_PREFIX} t6Info extraído`, { 
+            totalMnPesos: t6Info?.totalMnPesos,
+            totalMePesos: t6Info?.totalMePesos,
+            entidades: (t6Info?.entidades || []).length,
+            rubrosGenerales: (t6Info?.rubrosGenerales || []).length
+          });
+
+          // Sumar MN + ME para cada periodo (como hace score.js)
+          const endeudT2 = toNum(t2Info?.totalMnPesos) + toNum(t2Info?.totalMePesos);
+          const endeudT6 = toNum(t6Info?.totalMnPesos) + toNum(t6Info?.totalMePesos);
           const cantEntT2 = (t2Info?.entidades || []).length;
           const cantEntT6 = (t6Info?.entidades || []).length;
           const t2Quals = (bcuData?.t2Qualifications || []).map(q => q.calificacion);
           const t6Quals = (bcuData?.t6Qualifications || []).map(q => q.calificacion);
+
+          log.debug(`${LOG_PREFIX} Variables BCU calculadas`, {
+            docNumber,
+            endeudT2,
+            endeudT6,
+            cantEntT2,
+            cantEntT6,
+            t2Quals: t2Quals.join(','),
+            t6Quals: t6Quals.join(','),
+            score: score?.score,
+            calificacionMinima: score?.calificacionMinima
+          });
 
           if (score && toNum(score.score) > params.scoreMin) {
             // Convertir a lead y calcular oferta
@@ -217,6 +251,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
         } else {
           // REPETIDO con múltiples escenarios, sin duplicar ramas
+          const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
           const repetidoIsPreLead = infoRep.status === params.preLeadStatus;
           const repetidoIsRejected = infoRep.approvalStatus === params.estadoRechazado;
           const repetidoNoInfo = infoRep.approvalStatus === params.NohayInfoBCU;
@@ -331,6 +366,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
       // ---------- Ya estaba LATENTE ----------
       } else {
+
+        const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
         if (source === 'AlPrestamo' && infoRep?.canal !== '2') {
           const ponder = auxLib.getPonderador(infoRep?.score, infoRep?.calificacionMinima, infoRep?.endeudamiento, salary, activity, age, source);
           const montoCuota = toNum(salary) * toNum(ponder?.ponderador);

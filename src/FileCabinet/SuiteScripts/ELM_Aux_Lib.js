@@ -322,7 +322,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
        * @param {string} special - Special flag for additional filtering.
        * @param {string} canal - The source identifier to search for the provider.
        */
-      function getInfoRepetido(docNumber, preLeadId, special, canal) {
+       function getInfoRepetido(docNumber, preLeadId, special, canal) {
          try {
 
             const filters =  [
@@ -432,6 +432,326 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
+
+            /**
+       * getInfoRepetido - Busca si existe un lead repetido y opcionalmente devuelve toda la info.
+       * @param {string|number} docNumber    - El documento del lead/pre-lead.
+       * @param {number}        preLeadId    - ID del pre-lead a excluir de la búsqueda.
+       * @param {string}        special      - Si es 'exists', sólo verifica existencia (modo liviano).
+       * @param {string|number} canal        - Canal / fuente para filtrar (opcional).
+       * @returns {boolean|object|null} 
+       *          - si special === 'exists' → true/false
+       *          - si no → objeto con info del lead o null si no hay.
+       */
+       function getInfoRepetidoLight(docNumber, preLeadId, special, canal) {
+         try {
+            var filters = [
+               ["stage", "anyof", "LEAD"],
+               "AND",
+               ["custentity_sdb_nrdocumento", "is", docNumber],
+               "AND",
+               ["isinactive", "is", "F"],
+               "AND",
+               ["datecreated", "within", "monthsago1", "secondsago0"],
+               "AND",
+               ["custentity_elm_lead_repetido_original", "anyof", "@NONE@"]
+            ];
+
+            if (canal) {
+               filters.push("AND");
+               filters.push(["custentity_elm_channel", "anyof", canal]);
+            }
+
+            var onlyExists = (special === 'exists');
+
+            // Si sólo queremos saber si existe, no necesitamos todas las columnas
+            var columns;
+            if (onlyExists) {
+               columns = [
+                  search.createColumn({ name: "internalid" }),
+                  search.createColumn({ name: "custentity_elm_aprobado" })
+               ];
+            } else {
+               columns = [
+                  search.createColumn({ name: "entitystatus" }),
+                  search.createColumn({ name: "custentity_elm_aprobado" }),
+                  search.createColumn({ name: "custentity_elm_service" }),
+                  search.createColumn({ name: "firstname" }),
+                  search.createColumn({ name: "lastname" }),
+                  search.createColumn({ name: "custentity_sdb_actividad" }),
+                  search.createColumn({ name: "custentity_sdb_infolab_importe" }),
+                  search.createColumn({ name: "custentity_sdb_fechanac" }),
+                  search.createColumn({ name: "custentity_elm_years_work" }),
+                  search.createColumn({ name: "email" }),
+                  search.createColumn({ name: "custentity_sdb_edad" }),
+                  search.createColumn({ name: "custentity_score" }),
+                  search.createColumn({ name: "custentity_calificacion" }),
+                  search.createColumn({ name: "custentity_elm_reject_reason" }),
+                  search.createColumn({ name: "custentity_response_score_bcu" }),
+                  search.createColumn({ name: "custentity_elm_channel" }),
+                  search.createColumn({ name: "custentity_elm_lead_repetido_original" }),
+                  search.createColumn({ name: "isinactive" }),
+                  search.createColumn({ name: "mobilephone" }),
+                  search.createColumn({ name: "custentity_sdb_montoofrecido" }),
+                  search.createColumn({ 
+                     name: "datecreated", 
+                     sort: search.Sort.DESC
+                  })
+               ];
+            }
+
+            var leadsInCurrentPeriodSS = search.create({
+               type: "customer",
+               filters: filters,
+               columns: columns
+            });
+
+            if (preLeadId) {
+               leadsInCurrentPeriodSS.filters.push(
+                  search.createFilter({
+                     name: "internalid",
+                     operator: search.Operator.NONEOF,
+                     values: preLeadId
+                  })
+               );
+            }
+
+            // 🔹 OPTIMIZACIÓN CLAVE:
+            // No usamos runPaged().count ni .each.
+            // Solo traemos el PRIMER resultado ordenado por datecreated DESC.
+            var results = leadsInCurrentPeriodSS.run().getRange({
+               start: 0,
+               end: 1
+            });
+
+            var firstResult = results && results[0];
+
+            // Modo liviano: sólo existencia
+            if (onlyExists) {
+               return !!firstResult;
+            }
+
+            // Modo completo: devolver info o null si no hay
+            if (!firstResult) {
+               return null;
+            }
+
+            var endeudamiento = null;
+            var califMinima = null;
+            var scoreBcuResponse = firstResult.getValue('custentity_response_score_bcu');
+
+            if (scoreBcuResponse) {
+               try {
+                  var parsedResponse = JSON.parse(scoreBcuResponse);
+                  endeudamiento = parsedResponse && parsedResponse.endeudamiento || null;
+                  califMinima = parsedResponse && parsedResponse.calificacionMinima || null;
+               } catch (e) {
+                  log.error('Error parsing custentity_response_score_bcu', e);
+               }
+            }
+
+            var infoRepetido = {
+               id: firstResult.id,
+               status: firstResult.getValue('entitystatus'),
+               approvalStatus: firstResult.getValue('custentity_elm_aprobado'),
+               service: firstResult.getValue('custentity_elm_service'),
+               firstName: firstResult.getValue('firstname'),
+               lastName: firstResult.getValue('lastname'),
+               activity: firstResult.getValue('custentity_sdb_actividad'),
+               salary: firstResult.getValue('custentity_sdb_infolab_importe'),
+               dateOfBirth: firstResult.getValue('custentity_sdb_fechanac'),
+               yearsOfWork: firstResult.getValue('custentity_elm_years_work'),
+               email: firstResult.getValue('email'),
+               age: firstResult.getValue('custentity_sdb_edad'),
+               score: firstResult.getValue('custentity_score'),
+               calificacion: firstResult.getValue('custentity_calificacion'),
+               rejectionReason: firstResult.getValue('custentity_elm_reject_reason'),
+               endeudamiento: endeudamiento,
+               canal: firstResult.getValue('custentity_elm_channel'),
+               leadRepetidoOriginal: firstResult.getValue('custentity_elm_lead_repetido_original'),
+               isinactive: firstResult.getValue('isinactive'),
+               mobilephone: firstResult.getValue('mobilephone'),
+               calificacionMinima: califMinima,
+               montoOfrecido: firstResult.getValue('custentity_sdb_montoofrecido')
+            };
+
+            log.debug('getInfoRepetido', 'Found repeated lead info: ' + JSON.stringify(infoRepetido));
+            return infoRepetido;
+
+         } catch (error) {
+            log.error('getInfoRepetido', error);
+            throw errorModule.create({
+               name: 'GET_INFO_REPETIDO_ERROR',
+               message: 'Error getting repeated lead information: ' + error.message,
+               notifyOff: true
+            });
+         }
+      }
+
+
+
+      /**
+       * getInfoRepetido - Busca si existe un lead repetido y opcionalmente devuelve toda la info.
+       * @param {string|number} docNumber - Nro de documento.
+       * @param {number} preLeadId        - ID del pre-lead a excluir.
+       * @param {string} special          - Si es 'exists', solo chequea existencia.
+       * @param {string|number} canal     - Canal / source (opcional).
+       * @returns {boolean|object|null}
+       *          - special === 'exists' → true/false
+       *          - otro caso → objeto con info o null si no hay registro.
+       */
+      function getInfoRepetidoSql(docNumber, preLeadId, special, canal) {
+      try {
+         const onlyExists = (special === 'exists');
+
+         // WHERE base compartido
+         let whereClause = `
+            customer.custentity_sdb_nrdocumento = '${docNumber}'
+            AND customer.isinactive = 'F'
+            AND customer.datecreated >= SYSDATE - 30
+            AND (customer.custentity_elm_lead_repetido_original IS NULL OR customer.custentity_elm_lead_repetido_original = 0)
+         `;
+
+         //    customer.searchStage = 'Lead'
+         if (canal) {
+            whereClause += ` AND custentity_elm_channel = '${canal}' `;
+         }
+
+         if (preLeadId) {
+            whereClause += ` AND id <> ${preLeadId} `;
+            
+         }
+
+         let sql;
+
+         if (onlyExists) {
+            // 🔹 Modo liviano: devuelve el ID y custentity_elm_aprobado del customer encontrado
+            sql = `
+               SELECT
+                  id,
+                  custentity_elm_aprobado
+               FROM
+                  customer
+               WHERE
+                  ${whereClause}
+               ORDER BY
+                  datecreated DESC
+            `;
+         } else {
+            // 🔹 Modo completo: todas las columnas necesarias
+            sql = `
+               SELECT
+                  id,
+                  entitystatus,
+                  custentity_elm_aprobado,
+                  custentity_elm_service,
+                  firstname,
+                  lastname,
+                  custentity_sdb_actividad,
+                  custentity_sdb_infolab_importe,
+                  custentity_sdb_fechanac,
+                  custentity_elm_years_work,
+                  email,
+                  custentity_sdb_edad,
+                  custentity_score,
+                  custentity_calificacion,
+                  custentity_elm_reject_reason,
+                  custentity_response_score_bcu,
+                  custentity_elm_channel,
+                  custentity_elm_lead_repetido_original,
+                  isinactive,
+                  mobilephone,
+                  custentity_sdb_montoofrecido,
+                  datecreated
+               FROM
+                  customer
+               WHERE
+                  ${whereClause}
+               ORDER BY
+                  datecreated DESC
+            `;
+         }
+
+         const resultSet = query.runSuiteQL({
+            query: sql
+         });
+
+         const rows = resultSet.asMappedResults();
+
+         // 🔹 Modo "exists": devolver objeto con id y custentity_elm_aprobado, o null
+         if (onlyExists) {
+            if (rows.length > 0) {
+               return {
+                  id: rows[0].id,
+                  approvalStatus: rows[0].custentity_elm_aprobado
+               };
+            }
+            return null;
+         }
+
+         // 🔹 Modo full: devolver objeto o null
+         if (!rows.length) {
+            return null;
+         }
+
+         const row = rows[0];
+
+         // Parseo del JSON de BCU
+         let endeudamiento = null;
+         let califMinima = null;
+         const scoreBcuResponse = row.custentity_response_score_bcu;
+
+         if (scoreBcuResponse) {
+            try {
+               const parsedResponse = JSON.parse(scoreBcuResponse);
+               endeudamiento = parsedResponse?.endeudamiento || null;
+               califMinima  = parsedResponse?.calificacionMinima || null;
+            } catch (e) {
+               log.error('Error parsing custentity_response_score_bcu', e);
+            }
+         }
+
+         const infoRepetido = {
+            id: row.id,
+            status: row.entitystatus,
+            approvalStatus: row.custentity_elm_aprobado,
+            service: row.custentity_elm_service,
+            firstName: row.firstname,
+            lastName: row.lastname,
+            activity: row.custentity_sdb_actividad,
+            salary: row.custentity_sdb_infolab_importe,
+            dateOfBirth: row.custentity_sdb_fechanac,
+            yearsOfWork: row.custentity_elm_years_work,
+            email: row.email,
+            age: row.custentity_sdb_edad,
+            score: row.custentity_score,
+            calificacion: row.custentity_calificacion,
+            rejectionReason: row.custentity_elm_reject_reason,
+            endeudamiento: endeudamiento,
+            canal: row.custentity_elm_channel,
+            leadRepetidoOriginal: row.custentity_elm_lead_repetido_original,
+            isinactive: row.isinactive,
+            mobilephone: row.mobilephone,
+            calificacionMinima: califMinima,
+            montoOfrecido: row.custentity_sdb_montoofrecido
+         };
+
+         return infoRepetido;
+
+      } catch (error) {
+         log.error('getInfoRepetidoSQL', error);
+         throw errorModule.create({
+            name: 'GET_INFO_REPETIDO_ERROR',
+            message: 'Error getting repeated lead information: ' + error.message,
+            notifyOff: true
+         });
+      }
+      }
+
+
+
+
+
        /**  
        * convertToLead -  Converts a pre-lead to a lead with various fields.
        * @param {integer} preLeadId - The ID of the pre-lead to convert.
@@ -1079,9 +1399,18 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                         'Could not copy field ' + sourceFieldId + ': ' + fieldError.message);
                }
             });
+            // Validate targetId exists
+            if (!options.targetId) {
+               throw errorModule.create({
+                  name: 'MISSING_TARGET_ID',
+                  message: 'targetId is required for copyRecordToRecord',
+                  notifyOff: true
+               });
+            }
+            
             // Submit all values at once
-            const targetId = record.submitFields({
-               type: options.sourceType,
+            const resultId = record.submitFields({
+               type: options.targetType || options.sourceType,
                id: options.targetId,
                values: valuesToSubmit,
                options: {
@@ -1092,9 +1421,9 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             
             log.audit('Record copied', 
                'Copied from ' + options.sourceType + ' ID: ' + options.sourceId + 
-               ' to ' + (options.targetType || options.sourceType) + ' ID: ' + targetId);
+               ' to ' + (options.targetType || options.sourceType) + ' ID: ' + resultId);
             
-            return targetId;
+            return resultId;
             
          } catch (e) {
             log.error('copyRecordToRecord error', e);
@@ -1229,6 +1558,32 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       }
 
       /**
+       * calculateTotalDebt - Helper function to calculate total debt (MN + ME) from rubrosValoresGenerales
+       * This matches the logic used in score.js for calculating t2_mnPesos, t2_mePesos, etc.
+       * @param {Array} rubrosGenerales - Array of rubros from BCU data
+       * @returns {object} Object with totalMnPesos and totalMePesos
+       */
+      function calculateTotalDebt(rubrosGenerales) {
+         if (!Array.isArray(rubrosGenerales) || rubrosGenerales.length === 0) {
+            return { totalMnPesos: 0, totalMePesos: 0 };
+         }
+
+         let totalMnPesos = 0;
+         let totalMePesos = 0;
+
+         rubrosGenerales.forEach(rubro => {
+            // Handle both camelCase and PascalCase properties
+            const mnPesos = rubro.MnPesos || rubro.mnPesos || 0;
+            const mePesos = rubro.MePesos || rubro.mePesos || 0;
+            
+            totalMnPesos += parseFloat(mnPesos) || 0;
+            totalMePesos += parseFloat(mePesos) || 0;
+         });
+
+         return { totalMnPesos, totalMePesos };
+      }
+
+      /**
        * getBcuPeriodInfo - This function extracts BCU period information from a given BCU data object.
        * @param {object} bcuData - The BCU data object (can be the full response or a specific period object).
        * @param {string} period - The period for which to extract the information ('t2' or 't6').
@@ -1237,23 +1592,41 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       function getBcuPeriodInfo(bcuData, period) {
          const stLogTitle = 'getBcuPeriodInfo';
          try {
-            // Handle new structure with t2/t6 objects
+            // Handle new structure with t2/t6 objects directly (no nested .data)
             if (bcuData && (bcuData.t2 || bcuData.t6)) {
                const periodData = period === 't6' ? bcuData.t6 : bcuData.t2;
-               if (!periodData?.data) {
+               
+               // Check if periodData has .data property (legacy) or is direct structure (new)
+               const data = periodData?.data || periodData;
+               
+               if (!data) {
                   log.debug(stLogTitle, `No data found for period ${period}`);
                   return null;
                }
-               const data = periodData.data;
+
+               // Try rubrosValoresGenerales first, fallback to aggregates
+               let rubrosGenerales = data?.rubrosValoresGenerales;
+               let totals = calculateTotalDebt(rubrosGenerales);
+               
+               // Si rubrosValoresGenerales está vacío, usar aggregates
+               if ((!rubrosGenerales || rubrosGenerales.length === 0) && data?.aggregates) {
+                  const agg = data.aggregates;
+                  totals.totalMnPesos = (agg.vigente?.mn || 0) + (agg.vencido?.mn || 0) + (agg.castigado?.mn || 0);
+                  totals.totalMePesos = (agg.vigente?.me || 0) + (agg.vencido?.me || 0) + (agg.castigado?.me || 0);
+                  log.debug(stLogTitle, `Using aggregates for ${period}: MN=${totals.totalMnPesos}, ME=${totals.totalMePesos}`);
+               }
+               
                return {
                   nombre: data?.nombre,
                   documento: data?.documento,
                   sectorActividad: data?.sectorActividad,
                   periodo: data?.periodo,
-                  rubrosGenerales: data?.rubrosValoresGenerales,
-                  entidades: data?.entidadesRubrosValores,
-                  totalVigentePesos: data?.rubrosValoresGenerales?.find(r => r.rubro === 'VIGENTE')?.mnPesos || 0,
-                  totalVigenteDolares: data?.rubrosValoresGenerales?.find(r => r.rubro === 'VIGENTE')?.mnDolares || 0,
+                  rubrosGenerales: rubrosGenerales,
+                  entidades: data?.entidadesRubrosValores || data?.entities,
+                  totalMnPesos: totals.totalMnPesos,
+                  totalMePesos: totals.totalMePesos,
+                  totalVigentePesos: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnPesos || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnPesos || 0,
+                  totalVigenteDolares: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnDolares || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnDolares || 0,
                   errors: periodData.errors || null
                };
             }
@@ -1264,15 +1637,20 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             }
 
             const data = bcuData.data;
+            const rubrosGenerales = data.RubrosValoresGenerales || data.rubrosValoresGenerales;
+            const totals = calculateTotalDebt(rubrosGenerales);
+            
             return {
                nombre: data.Nombre || data.nombre,
                documento: data.Documento || data.documento,
                sectorActividad: data.SectorActividad || data.sectorActividad,
                periodo: data.Periodo || data.periodo,
-               rubrosGenerales: data.RubrosValoresGenerales || data.rubrosValoresGenerales,
+               rubrosGenerales: rubrosGenerales,
                entidades: data.EntidadesRubrosValores || data.entidadesRubrosValores,
-               totalVigentePesos: (data.RubrosValoresGenerales || data.rubrosValoresGenerales)?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnPesos || (data.RubrosValoresGenerales || data.rubrosValoresGenerales)?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnPesos || 0,
-               totalVigenteDolares: (data.RubrosValoresGenerales || data.rubrosValoresGenerales)?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnDolares || (data.RubrosValoresGenerales || data.rubrosValoresGenerales)?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnDolares || 0
+               totalMnPesos: totals.totalMnPesos,
+               totalMePesos: totals.totalMePesos,
+               totalVigentePesos: rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnPesos || rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnPesos || 0,
+               totalVigenteDolares: rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnDolares || rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnDolares || 0
             };
 
          } catch (error) {
@@ -1359,6 +1737,118 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             log.error(stLogTitle, error);
             return { t2: null, t6: null };
          }
+      }
+
+
+
+      /**
+       * deactivateLeadsByDocumentNumber - Deactivates all leads with the specified document number.
+       * @param {string} documentNumber - The document number to search for.
+       * @returns {boolean} True if any leads were deactivated, false otherwise.
+       */
+      function deactivateLeadsByDocumentNumberSQL(documentNumber) {
+      const stLogTitle = 'deactivateLeadsByDocumentNumberSQL';
+      try {
+         if (!documentNumber) return false;
+
+         // 1) Buscar IDs de leads “padre” activos que cumplen la condición
+         //    Equivalente a tu saved search de padres:
+         //    - stage = LEAD
+         //    - status in (7,6)
+         //    - datecreated before lastmonthtodate (aprox con ADD_MONTHS/TRUNC)
+         //    - nro documento
+         //    - lead_repetido_original IS NULL
+         //    - activo
+         const parentSql = `
+            SELECT
+               id
+            FROM
+               customer
+            WHERE
+               stage = 'LEAD'
+               AND entitystatus IN (6, 7)
+               AND datecreated < ADD_MONTHS(TRUNC(SYSDATE), -1)
+               AND custentity_sdb_nrdocumento = '${documentNumber}'
+               AND custentity_elm_lead_repetido_original IS NULL
+               AND isinactive = 'F'
+         `;
+
+         const parentResult = query.runSuiteQL({
+            query: parentSql,
+            params: [documentNumber]
+         });
+
+         const parentRows = parentResult.asMappedResults() || [];
+         const parentIds = parentRows.map(r => r.id);
+
+         let parentsUpdated = 0;
+         parentIds.forEach(id => {
+            record.submitFields({
+               type: record.Type.LEAD,
+               id: id,
+               values: { isinactive: true },
+               options: { enableSourcing: false, ignoreMandatoryFields: true }
+            });
+            parentsUpdated++;
+         });
+
+         // 2) Buscar hijos (leads que referencian a alguno de esos padres)
+         //    Equivalente a tu segunda saved search:
+         //    - stage = LEAD
+         //    - nro documento
+         //    - activo
+         //    - custentity_elm_lead_repetido_original anyof parentIds
+         let childrenUpdated = 0;
+
+         if (parentIds.length) {
+            const inPlaceholders = parentIds.map(() => '?').join(',');
+            const childSql = `
+               SELECT
+                  id
+               FROM
+                  customer
+               WHERE
+                  stage = 'LEAD'
+                  AND custentity_sdb_nrdocumento = '${documentNumber}'
+                  AND isinactive = 'F'
+                  AND custentity_elm_lead_repetido_original IN (${inPlaceholders})
+            `;
+
+            const childParams = [documentNumber].concat(parentIds);
+
+            const childResult = query.runSuiteQL({
+               query: childSql,
+               params: childParams
+            });
+
+            const childRows = childResult.asMappedResults() || [];
+
+            childRows.forEach(r => {
+               record.submitFields({
+                  type: record.Type.LEAD,
+                  id: r.id,
+                  values: { isinactive: true },
+                  options: { enableSourcing: false, ignoreMandatoryFields: true }
+               });
+               childrenUpdated++;
+            });
+         }
+
+         const totalDeactivated = parentsUpdated + childrenUpdated;
+         log.debug(stLogTitle, {
+            documentNumber: documentNumber,
+            parentsUpdated: parentsUpdated,
+            childrenUpdated: childrenUpdated,
+            totalDeactivated: totalDeactivated,
+            allLeadsDeactivated: totalDeactivated > 0
+         });
+
+         return totalDeactivated > 0;
+
+      } catch (error) {
+         log.error(stLogTitle, error);
+         return false;
+      }
       }
 
       /**
@@ -1524,7 +2014,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                leads.push({
                   id: result.getValue('internalid')
                });
-               return true; // Continue iterating
+               return true;
             });
             return leads;
          } catch (error) {
@@ -1581,7 +2071,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                return existingId;
             }
 
-            const recSnap = record.create({ type: recordTypeId, isDynamic: false });
+            const recSnap = record.create({ type: 'customrecord_elm_apr_lead_his', isDynamic: false });
             recSnap.setValue({ fieldId: 'custrecord_elm_apr_doc', value: String(docNumber) });
             if (leadId) {
                 recSnap.setValue({ fieldId: 'custrecord_elm_apr_lead', value: parseInt(leadId, 10) || String(leadId) });
@@ -1647,9 +2137,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                });
             }
            
-            const idPost = post.save();
-            log.debug(logTitle, 'Log created with ID: ' + idPost);
-            return idPost;
+            return post.save();
          } catch (error) {
             log.error(logTitle, 'Error creating log: ' + error);
             throw errorModule.create({
@@ -1681,7 +2169,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                values['custrecord_elm_logs_info_bruta'] = dataRow;
             }
 
-           const idLog = record.submitFields({
+           record.submitFields({
                type: 'customrecord_elm_serv_logs',
                id: logId,
                values: values,
@@ -1690,7 +2178,6 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                   ignoreMandatoryFields: true
                }
             });
-            log.debug(logTitle, 'Log updated with ID: ' + idLog);
          } catch (error) {
             log.error(logTitle, 'Error updating log: ' + error);
             throw errorModule.create({
@@ -1927,6 +2414,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       }
    }
 
+
+
       return {
          calculateYearsSinceDate: calculateYearsSinceDate,
          getActivityType: getActivityType,
@@ -1963,7 +2452,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          snapshotAprobados: snapshotAprobados,
          isClientActive: isClientActive,
          createGestionLead: createGestionLead,
-         operadorByLead: operadorByLead
+         operadorByLead: operadorByLead,
+         getInfoRepetidoSql: getInfoRepetidoSql,
+         deactivateLeadsByDocumentNumberSQL: deactivateLeadsByDocumentNumberSQL,
+         getInfoRepetidoLight: getInfoRepetidoLight,
       }
    });
 

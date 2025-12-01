@@ -38,7 +38,7 @@ define([], function () {
                     fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0]
                 }
             });
-        } 
+        }
 
         // Detectar formato de respuesta
         const isNewFormat = variables.hasOwnProperty('vigente') || 
@@ -98,6 +98,36 @@ define([], function () {
      * Respuesta con datos agregados en variablesDeSalida con PIPES (|) para múltiples instituciones
      */
     function normalizeEquifaxNewFormat(raw, variables, infoConsulta) {
+        // DETECTAR SI NO HAY DATOS BCU (todos los campos relevantes están vacíos)
+        // Esto ocurre cuando Equifax responde pero la persona no tiene datos en BCU
+        const bcuInstituciones = String(variables.bcu_instituciones || '').trim();
+        const bcuCalificacion = String(variables.bcu_calificacion || '').trim();
+        const bcuVigente = String(variables.vigente || '').trim();
+        const bcuVencido = String(variables.vencido || '').trim();
+        const bcuCastigado = String(variables.castigado || '').trim();
+        
+        const hasNoBcuData = !bcuInstituciones && !bcuCalificacion && 
+                             !bcuVigente && !bcuVencido && !bcuCastigado;
+        
+        if (hasNoBcuData) {
+            // Retornar estructura especial indicando que no hay datos BCU
+            return buildNormalizedData({
+                provider: PROVIDER_EQUIFAX,
+                documento: pickDocument(variables, raw),
+                periodData: { t0: createEmptyPeriod(), t6: createEmptyPeriod() },
+                flags: { 
+                    isDeceased: false,
+                    hasRejectableRating: false,
+                    noBcuData: true  // Flag especial para indicar ausencia de datos BCU
+                },
+                metadata: {
+                    nombre: normalizeNameFormat(variables.nombre || infoConsulta.nombre),
+                    worstRating: '0',
+                    fechaConsulta: infoConsulta.fechaConsulta || new Date().toISOString().split('T')[0]
+                }
+            });
+        }
+        
         // Parsear valores con PIPES - formato "Me: X Mn: Y|Me: X2 Mn: Y2"
         const vigenteArray = parseMoneyStringArray(variables.vigente || 'Me: 0 Mn: 0');
         const vencidoArray = parseMoneyStringArray(variables.vencido || 'Me: 0 Mn: 0');

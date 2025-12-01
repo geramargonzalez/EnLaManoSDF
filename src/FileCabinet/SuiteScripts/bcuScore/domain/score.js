@@ -85,6 +85,12 @@ define(['N/log'], function (log) {
             return createRejectedScore('INVALID_INPUT', 'Datos inválidos', null, normalizedData);
         }
 
+        // Detectar si no hay datos BCU (flag especial de normalize.js)
+        const flags = normalizedData.flags || {};
+        if (flags.noBcuData === true) {
+            return createRejectedScore('NO_BCU_DATA', 'Sin información en BCU', null, normalizedData);
+        }
+
         // Extraer y formatear periodo de consulta (año-mes) al inicio
         let periodoConsulta = '';
         try {
@@ -113,7 +119,6 @@ define(['N/log'], function (log) {
         function dbg(title, details) { if (debugEnabled) { try { log.debug(title, details); } catch (e) {} } }
 
         const rejectionRules = scoringRules.rejectionRules;
-        const flags = normalizedData.flags || {};
 
 
         const t0Data = normalizedData.periodData && normalizedData.periodData.t0;
@@ -140,10 +145,6 @@ define(['N/log'], function (log) {
                         tempArr.push(entities[idx]);
                     }
                     entities = tempArr;
-                    log.debug('computeScore - converted t0 entities from Java array', {
-                        originalType: typeof t0Data.entities,
-                        newLength: entities.length
-                    });
                 } else {
                     log.error('computeScore - t0.entities not convertible', {
                         typeof_entities: typeof entities,
@@ -256,15 +257,8 @@ define(['N/log'], function (log) {
         let t6 = (normalizedData.periodData && normalizedData.periodData.t6) || { entities: [], aggregates: {} };
         if ((!t6.entities || t6.entities.length === 0) && normalizedDataT6 && normalizedDataT6.periodData && normalizedDataT6.periodData.t0) {
             t6 = normalizedDataT6.periodData.t0;
-            log.debug('computeScore - using normalizedDataT6.periodData.t0 as t6', {
-                t6EntitiesLength: t6.entities ? t6.entities.length : 0
-            });
+          
         }
-
-        log.debug('computeScore - before array conversions', { 
-            t6EntitiesLength: t6.entities ? t6.entities.length : 0,
-            t6HasRubros: !!(t6.rubrosValoresGenerales && t6.rubrosValoresGenerales.length)
-        });
 
         // CRITICAL FIX: Convert t6 entities from Java array if needed
         if (t6.entities && !Array.isArray(t6.entities)) {
@@ -275,9 +269,7 @@ define(['N/log'], function (log) {
                         t6TempArr.push(t6.entities[t6idx]);
                     }
                     t6.entities = t6TempArr;
-                    log.debug('computeScore - converted t6 entities from Java array', {
-                        newLength: t6.entities.length
-                    });
+                
                 }
             } catch (t6ConvErr) {
                 log.error('computeScore - failed to convert t6 entities', t6ConvErr.toString());
@@ -333,22 +325,12 @@ define(['N/log'], function (log) {
         let t6_mnPesos = -1;
         let t6_mePesos = -1;
  
-        // DEBUG: Log array conversion results
-        // NOTA: t0 contiene datos de T2 para MYM (ver normalize.js)
-/*         log.debug('computeScore - after array conversions', {
-            t2EntitiesLength: (t0 && t0.entities) ? t0.entities.length : 'NO_T2_ENTITIES',
-            t2RubrosLength: (t0 && t0.rubrosValoresGenerales) ? t0.rubrosValoresGenerales.length : 'NO_T2_RUBROS',
-            t6EntitiesLength: (t6 && t6.entities) ? t6.entities.length : 'NO_T6_ENTITIES',
-            t6RubrosLength: (t6 && t6.rubrosValoresGenerales) ? t6.rubrosValoresGenerales.length : 'NO_T6_RUBROS',
-            t2FirstRubro: (t0 && t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) ? JSON.stringify(t0.rubrosValoresGenerales[0]) : 'NO_FIRST_RUBRO',
-            realPeriod: (t0 && t0.metadata && t0.metadata.realPeriod) || 'T0'
-        }); */
+
 
         // Intentar desde rubrosValoresGenerales directamente (igual que producción)
         try {
             if (t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) {
                 t2_mnPesos = t0.rubrosValoresGenerales[0].MnPesos;
-                log.debug('t2_mnPesos extracted from rubrosValoresGenerales[0].MnPesos', { value: t2_mnPesos });
             }
         } catch (E) {
             log.error('Failed to extract t2_mnPesos from rubrosValoresGenerales', E.toString());
@@ -356,7 +338,6 @@ define(['N/log'], function (log) {
             try {
                 if (t0.aggregates && t0.aggregates.vigente) {
                     t2_mnPesos = t0.aggregates.vigente.mn;
-                    log.debug('t2_mnPesos extracted from aggregates.vigente.mn', { value: t2_mnPesos });
                 }
             } catch (E1) {
                 log.error('Failed to extract t2_mnPesos from aggregates', E1.toString());
@@ -366,14 +347,12 @@ define(['N/log'], function (log) {
         try {
             if (t0.rubrosValoresGenerales && t0.rubrosValoresGenerales[0]) {
                 t2_mePesos = t0.rubrosValoresGenerales[0].MePesos;
-                log.debug('t2_mePesos extracted from rubrosValoresGenerales[0].MePesos', { value: t2_mePesos });
             }
         } catch (E) {
             log.error('Failed to extract t2_mePesos from rubrosValoresGenerales', E.toString());
             try {
                 if (t0.aggregates && t0.aggregates.vigente) {
                     t2_mePesos = t0.aggregates.vigente.me;
-                    log.debug('t2_mePesos extracted from aggregates.vigente.me', { value: t2_mePesos });
                 }
             } catch (E1) {
                 log.error('Failed to extract t2_mePesos from aggregates', E1.toString());
@@ -383,14 +362,12 @@ define(['N/log'], function (log) {
         try {
             if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
                 t6_mnPesos = t6.rubrosValoresGenerales[0].MnPesos;
-                log.debug('t6_mnPesos extracted from rubrosValoresGenerales[0].MnPesos', { value: t6_mnPesos });
             }
         } catch (E) {
             log.error('Failed to extract t6_mnPesos from rubrosValoresGenerales', E.toString());
             try {
                 if (t6.aggregates && t6.aggregates.vigente) {
                     t6_mnPesos = t6.aggregates.vigente.mn;
-                    log.debug('t6_mnPesos extracted from aggregates.vigente.mn', { value: t6_mnPesos });
                 }
             } catch (E1) {
                 log.error('Failed to extract t6_mnPesos from aggregates', E1.toString());
@@ -400,27 +377,19 @@ define(['N/log'], function (log) {
         try {
             if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
                 t6_mePesos = t6.rubrosValoresGenerales[0].MePesos;
-                log.debug('t6_mePesos extracted from rubrosValoresGenerales[0].MePesos', { value: t6_mePesos });
             }
         } catch (E) {
             log.error('Failed to extract t6_mePesos from rubrosValoresGenerales', E.toString());
             try {
                 if (t6.aggregates && t6.aggregates.vigente) {
                     t6_mePesos = t6.aggregates.vigente.me;
-                    log.debug('t6_mePesos extracted from aggregates.vigente.me', { value: t6_mePesos });
                 }
             } catch (E1) {
                 log.error('Failed to extract t6_mePesos from aggregates', E1.toString());
             }
         }
 
-        // DEBUG: Log extracted Mn/Me values
-        log.debug('computeScore - extracted Mn/Me values', {
-            t2_mnPesos: t2_mnPesos,
-            t2_mePesos: t2_mePesos,
-            t6_mnPesos: t6_mnPesos,
-            t6_mePesos: t6_mePesos
-        });
+     
 
         // Agregar valores extraídos al logTxt para debugging
         logTxt += '<P>========== VALORES EXTRAIDOS ==========</P>';
@@ -441,10 +410,7 @@ define(['N/log'], function (log) {
             if (t6_mnPesos <= 0 && t6_mePesos <= 0) {
                 // T6 no disponible - asumir sin cambio (endeudamiento = 0)
                 endeudamiento = 0;
-                log.debug('computeScore - T6 data not available, setting endeudamiento to 0 (no change)', {
-                    t6_mnPesos: t6_mnPesos,
-                    t6_mePesos: t6_mePesos
-                });
+             
             } else {
                 endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
             }
@@ -453,7 +419,6 @@ define(['N/log'], function (log) {
             log.error('computeScore - endeudamiento calculation error', E.toString());
         }
 
-        log.debug('computeScore - endeudamiento calculated', { endeudamiento: endeudamiento });
 
         // Agregar endeudamiento al logTxt
         logTxt += '<P>========== ENDEUDAMIENTO ==========</P>';
@@ -1223,12 +1188,6 @@ define(['N/log'], function (log) {
             periodoT6: periodoT6
         }; 
 
-            log.debug('computeScore - returning result', {
-                finalScore: scoreRounded,
-                rawScore: scoreNumeric,
-                total: total,
-                endeudamiento: endeudamiento
-            });
 
             return result;
     }
