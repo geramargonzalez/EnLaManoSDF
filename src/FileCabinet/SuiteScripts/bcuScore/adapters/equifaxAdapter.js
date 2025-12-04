@@ -110,8 +110,6 @@ function (https, log, runtime, encode, normalize, search) {
         }
     }
 
-
-
     /**
      * Genera un nuevo token de Equifax mediante OAuth2.
      * NOTA: Esta función genera un nuevo token en cada llamada.

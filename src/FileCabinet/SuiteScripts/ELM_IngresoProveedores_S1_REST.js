@@ -104,20 +104,9 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
         if (!infoRepExist?.id) {
           // Caso NUEVO → Scoring & BCU
           // Usar motor bcuScore optimizado con fallback al SDB cl�sico
-          let score;
-       
-            score = bcuScoreLib.scoreFinal(docNumber, { provider: params.providerBCU, forceRefresh: true, strictRules: true, debug: true });
-            log.debug(`${LOG_PREFIX} BCU Score Result`, { score });
-          // score = scoreLib.scoreFinal(docNumber);
+          let score = bcuScoreLib.scoreFinal(docNumber, { provider: params.providerBCU, forceRefresh: true, strictRules: true, debug: true });
 
           if (score?.error_reglas) {
-
-   /*           const detailText = String(score.detail || score.details || '').toLowerCase();
-            const isTimeoutDetail = (
-                detailText.indexOf('el host al cual está intentando conectarse') !== -1 && detailText.indexOf('exced') !== -1
-            ) || detailText.indexOf('excedido el tiempo') !== -1 || detailText.indexOf('excedido el tiempo máximo') !== -1;
-            const isBcuFetchError = detailText.indexOf('error al obtener datos del bcu') !== -1; */
-
 
             const approvalStatus =
               score.error_reglas === 500 ? params.estadoErrorBCU :
@@ -142,50 +131,20 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           }
 
           // Extraer BCU t2/t6 (1 sola vez)
-          const bcuData = auxLib.extractBcuData(score) || {};
+      /*     const bcuData = auxLib.extractBcuData(score) || {};
           log.debug(`${LOG_PREFIX} bcuData extraído`, { 
             hasT2: !!bcuData?.t2, 
             hasT6: !!bcuData?.t6,
-            t2Qualifications: bcuData?.t2Qualifications?.length || 0,
-            t6Qualifications: bcuData?.t6Qualifications?.length || 0
-          });
+            t2Entities: bcuData?.t2?.entities?.length || 0,
+            t6Entities: bcuData?.t6?.entities?.length || 0
+          }); */
 
-          const t2Info = auxLib.getBcuPeriodInfo(bcuData?.t2, 't2') || {};
-          const t6Info = auxLib.getBcuPeriodInfo(bcuData?.t6, 't6') || {};
-          
-          log.debug(`${LOG_PREFIX} t2Info extraído`, { 
-            totalMnPesos: t2Info?.totalMnPesos,
-            totalMePesos: t2Info?.totalMePesos,
-            entidades: (t2Info?.entidades || []).length,
-            rubrosGenerales: (t2Info?.rubrosGenerales || []).length
-          });
+          // ========== USAR FUNCIÓN CENTRALIZADA PARA EXTRAER VARIABLES BCU ==========
+          const bcuVars = auxLib.extractBcuVariables(score);
+          const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
-          log.debug(`${LOG_PREFIX} t6Info extraído`, { 
-            totalMnPesos: t6Info?.totalMnPesos,
-            totalMePesos: t6Info?.totalMePesos,
-            entidades: (t6Info?.entidades || []).length,
-            rubrosGenerales: (t6Info?.rubrosGenerales || []).length
-          });
+          log.debug(`${LOG_PREFIX} BCU vars extraídas`, { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, endeudamiento: score.endeudamiento });
 
-          // Sumar MN + ME para cada periodo (como hace score.js)
-          const endeudT2 = toNum(t2Info?.totalMnPesos) + toNum(t2Info?.totalMePesos);
-          const endeudT6 = toNum(t6Info?.totalMnPesos) + toNum(t6Info?.totalMePesos);
-          const cantEntT2 = (t2Info?.entidades || []).length;
-          const cantEntT6 = (t6Info?.entidades || []).length;
-          const t2Quals = (bcuData?.t2Qualifications || []).map(q => q.calificacion);
-          const t6Quals = (bcuData?.t6Qualifications || []).map(q => q.calificacion);
-
-          log.debug(`${LOG_PREFIX} Variables BCU calculadas`, {
-            docNumber,
-            endeudT2,
-            endeudT6,
-            cantEntT2,
-            cantEntT6,
-            t2Quals: t2Quals.join(','),
-            t6Quals: t6Quals.join(','),
-            score: score?.score,
-            calificacionMinima: score?.calificacionMinima
-          });
 
           if (score && toNum(score.score) > params.scoreMin) {
             // Convertir a lead y calcular oferta
@@ -199,7 +158,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
             let isLatente = true;
             if (ponder?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END') && source !== 'AlPrestamo') isLatente = false;
-            if (source === 'AlPrestamo' && !ofertaFinal) isLatente = false;
+            // if (source === 'AlPrestamo' && !ofertaFinal) isLatente = false;
 
             if (isLatente) {
               response.success = true;
@@ -217,7 +176,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 ponder?.montoCuotaName,
                 score,
                 ofertaFinal?.plazo,
-                endeudT2, endeudT6, cantEntT2, cantEntT6, t2Quals, t6Quals
+                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
               );
             } else {
               response.success = false;
@@ -231,7 +190,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 ponder?.montoCuotaName,
                 score,
                 null,
-                endeudT2, endeudT6, cantEntT2, cantEntT6, score?.calificacionMinima, t6Quals
+                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
               );
             }
           } else {
@@ -245,7 +204,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
               0, 0, 0,
               'Score Minimo',
               score,
-              null
+              null,
+              endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
             );
           }
 

@@ -3,8 +3,8 @@
  *@NScriptType Restlet
  */
 
-define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
-   function (runtime, scoreLib, auxLib, record) {
+define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','./ELM_SCORE_BCU_LIB.js'],
+   function (runtime, scoreLib, auxLib, record, bcuScoreLib) {
       function post(requestBody) {
          const logTitle = 'post';
          const objScriptParam = getScriptParameters();
@@ -32,8 +32,8 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
                let yearsOfWork;
                if (workStartDate) yearsOfWork = auxLib.calculateYearsSinceDate(workStartDate);
                let activity = auxLib.getActivityType(activityType);
-               let score = scoreLib.scoreFinal(docNumber);
-               const bcuData = auxLib.extractBcuData(score);
+               let score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
+               /* const bcuData = auxLib.extractBcuData(score);
                const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
                const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
                const cantEntidadesT2 = t2Info?.entidades.length || 0;
@@ -43,12 +43,16 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
                
                const t2Quals = bcuData?.t2Qualifications?.map(q => q.calificacion);
                // Get all qualification values from T6  
-               const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion);
+               const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion); */
                
                if (score?.error_reglas) {
                      let approvalStatus = objScriptParam.estadoRechazado;
                      if (score.error_reglas == 500 || score.error_reglas == 400) {
-                        approvalStatus = 15;
+                        if (objScriptParam.providerBCU == '2') {
+                                 approvalStatus = 28;
+                           } else {
+                                 approvalStatus = 15;
+                        }
                      }
                      log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
                      response.success = false;
@@ -85,8 +89,8 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
 
                   if (isLatente) {
                      log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + ofertaFinal?.cuotaFinal);
-                     auxLib.submitFieldsEntity(leadId, objScriptParam.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-                      cantEntidadesT6, t2Quals, t6Quals);
+                     auxLib.submitFieldsEntity(leadId, objScriptParam.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo/* , endeudamientoT2, endeudamientoT6, cantEntidadesT2,
+                      cantEntidadesT6, t2Quals, t6Quals */);
                        response.success = true;
                        response.result = 'Lead Aprobado correctamente';
                        auxLib.snapshotAprobados(docNumber, leadId, objScriptParam.estadoAprobado, 8);
@@ -94,8 +98,8 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
                      log.audit('Error', 'No hay oferta para el documento:  ' + docNumber);
                      response.success = false;
                      response.result = 'No hay oferta';
-                     auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta, null, null, 0, 0, montoCuotaObj.montoCuotaName, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-                      cantEntidadesT6, t2Quals, t6Quals);
+                     auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta, null, null, 0, 0, montoCuotaObj.montoCuotaName, score, null/* , endeudamientoT2, endeudamientoT6, cantEntidadesT2,
+                      cantEntidadesT6, t2Quals, t6Quals */);
                      const idCleanOperator = record.submitFields({
                         type: record.Type.LEAD,
                         id: leadId,
@@ -176,7 +180,8 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record'],
             }),
             leadStatus: scriptObj.getParameter({
                name: 'custscript_elm_entity_stat_lead'
-            })
+            }),
+            providerBCU: '2'
          };
          return objParams;
       }

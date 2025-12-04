@@ -340,8 +340,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                      filters.push("AND");
                      filters.push(["custentity_elm_channel","anyof", canal]);
                   }
- 
-            log.debug('getInfoRepetido filters', JSON.stringify(filters));
+
             var leadsInCurrentPeriodSS = search.create({
                type: "customer",
                filters: filters,
@@ -856,7 +855,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             cantEntidadesT2,
             cantEntidadesT6,
             peroCalifT2,
-            peroCalifT6
+            peroCalifT6,
+            endeudamiento
          } = options;
 
          const stLogTitle = 'updateEntity';
@@ -904,7 +904,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                'custentity_elm_t2_cantidad_entidades': cantEntidadesT2 || null,
                'custentity_elm_t6_cant_de_enti': cantEntidadesT6 || null,
                'custentity_elm_peor_calif': peroCalifT2 || null,
-               'custentity_t6_elm_pero_cal': peroCalifT6 || null
+               'custentity_t6_elm_pero_cal': peroCalifT6 || null,
+               'custentity_elm_end_lead': endeudamiento || null   
             };
 
             // Apply all non-null values
@@ -939,7 +940,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
        * @param {number} endeudamientoT6 - The T6 indebtedness to set.
        */
       function submitFieldsEntity(entity, approvalStatus, rejectReason, newEntityStatus, infoRepetido, montoCuota, ofertaFinal, montoCuotaName, score, plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-         cantEntidadesT6, peroCalifT2, peroCalifT6, canal) {
+         cantEntidadesT6, peroCalifT2, peroCalifT6, canal, endeudamiento) {
          let stLogTitle = 'submitFieldsEntity';
          try {
             let firstName;
@@ -977,7 +978,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                custentity_elm_t2_cantidad_entidades: cantEntidadesT2 || null,
                custentity_elm_t6_cant_de_enti: cantEntidadesT6 || null,
                custentity_elm_peor_calif: peroCalifT2 || null,
-               custentity_t6_elm_pero_cal: peroCalifT6 || null
+               custentity_t6_elm_pero_cal: peroCalifT6 || null,
+               custentity_elm_end_lead: endeudamiento || null   
 
             }
 
@@ -1559,6 +1561,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
 
       /**
        * calculateTotalDebt - Helper function to calculate total debt (MN + ME) from rubrosValoresGenerales
+       * Suma VIGENTE + VENCIDO + CASTIGADO (excluye CONTINGENCIAS)
        * This matches the logic used in score.js for calculating t2_mnPesos, t2_mePesos, etc.
        * @param {Array} rubrosGenerales - Array of rubros from BCU data
        * @returns {object} Object with totalMnPesos and totalMePesos
@@ -1571,13 +1574,21 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          let totalMnPesos = 0;
          let totalMePesos = 0;
 
+         // Solo sumar VIGENTE, VENCIDO, CASTIGADO (excluir CONTINGENCIAS)
+         const rubrosAIncluir = ['VIGENTE', 'VENCIDO', 'CASTIGADO'];
+
          rubrosGenerales.forEach(rubro => {
-            // Handle both camelCase and PascalCase properties
-            const mnPesos = rubro.MnPesos || rubro.mnPesos || 0;
-            const mePesos = rubro.MePesos || rubro.mePesos || 0;
+            const rubroNombre = (rubro.Rubro || rubro.rubro || '').toUpperCase();
             
-            totalMnPesos += parseFloat(mnPesos) || 0;
-            totalMePesos += parseFloat(mePesos) || 0;
+            // Solo procesar rubros que no sean CONTINGENCIAS
+            if (rubrosAIncluir.includes(rubroNombre)) {
+               // Handle both camelCase and PascalCase properties
+               const mnPesos = rubro.MnPesos || rubro.mnPesos || 0;
+               const mePesos = rubro.MePesos || rubro.mePesos || 0;
+               
+               totalMnPesos += parseFloat(mnPesos) || 0;
+               totalMePesos += parseFloat(mePesos) || 0;
+            }
          });
 
          return { totalMnPesos, totalMePesos };
@@ -1592,65 +1603,42 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       function getBcuPeriodInfo(bcuData, period) {
          const stLogTitle = 'getBcuPeriodInfo';
          try {
-            // Handle new structure with t2/t6 objects directly (no nested .data)
-            if (bcuData && (bcuData.t2 || bcuData.t6)) {
-               const periodData = period === 't6' ? bcuData.t6 : bcuData.t2;
-               
-               // Check if periodData has .data property (legacy) or is direct structure (new)
-               const data = periodData?.data || periodData;
-               
-               if (!data) {
-                  log.debug(stLogTitle, `No data found for period ${period}`);
-                  return null;
-               }
-
-               // Try rubrosValoresGenerales first, fallback to aggregates
-               let rubrosGenerales = data?.rubrosValoresGenerales;
-               let totals = calculateTotalDebt(rubrosGenerales);
-               
-               // Si rubrosValoresGenerales está vacío, usar aggregates
-               if ((!rubrosGenerales || rubrosGenerales.length === 0) && data?.aggregates) {
-                  const agg = data.aggregates;
-                  totals.totalMnPesos = (agg.vigente?.mn || 0) + (agg.vencido?.mn || 0) + (agg.castigado?.mn || 0);
-                  totals.totalMePesos = (agg.vigente?.me || 0) + (agg.vencido?.me || 0) + (agg.castigado?.me || 0);
-                  log.debug(stLogTitle, `Using aggregates for ${period}: MN=${totals.totalMnPesos}, ME=${totals.totalMePesos}`);
-               }
-               
-               return {
-                  nombre: data?.nombre,
-                  documento: data?.documento,
-                  sectorActividad: data?.sectorActividad,
-                  periodo: data?.periodo,
-                  rubrosGenerales: rubrosGenerales,
-                  entidades: data?.entidadesRubrosValores || data?.entities,
-                  totalMnPesos: totals.totalMnPesos,
-                  totalMePesos: totals.totalMePesos,
-                  totalVigentePesos: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnPesos || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnPesos || 0,
-                  totalVigenteDolares: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnDolares || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnDolares || 0,
-                  errors: periodData.errors || null
-               };
-            }
-
-            // Handle legacy structure (backward compatibility)
-            if (!bcuData?.data) {
+            // Si bcuData es null/undefined, retornar null
+            if (!bcuData) {
+               log.debug(stLogTitle, `No bcuData provided for period ${period}`);
                return null;
             }
 
-            const data = bcuData.data;
-            const rubrosGenerales = data.RubrosValoresGenerales || data.rubrosValoresGenerales;
-            const totals = calculateTotalDebt(rubrosGenerales);
+            // bcuData ya ES el objeto del período (t2 o t6) directamente
+            // Estructura esperada: { totals, entities, aggregates, rubrosValoresGenerales }
+            const data = bcuData;
+            
+            // Intentar obtener rubrosValoresGenerales
+            let rubrosGenerales = data?.rubrosValoresGenerales || data?.RubrosValoresGenerales;
+            let totals = calculateTotalDebt(rubrosGenerales);
+            
+            log.debug(stLogTitle, `Period ${period}: rubrosGenerales=${rubrosGenerales?.length || 0}, totals=${JSON.stringify(totals)}`);
+            
+            // Si rubrosValoresGenerales está vacío o no tiene datos, usar aggregates
+            if ((!totals.totalMnPesos && !totals.totalMePesos) && data?.aggregates) {
+               const agg = data.aggregates;
+               totals.totalMnPesos = (agg.vigente?.mn || 0) + (agg.vencido?.mn || 0) + (agg.castigado?.mn || 0);
+               totals.totalMePesos = (agg.vigente?.me || 0) + (agg.vencido?.me || 0) + (agg.castigado?.me || 0);
+               log.debug(stLogTitle, `Using aggregates for ${period}: MN=${totals.totalMnPesos}, ME=${totals.totalMePesos}`);
+            }
             
             return {
-               nombre: data.Nombre || data.nombre,
-               documento: data.Documento || data.documento,
-               sectorActividad: data.SectorActividad || data.sectorActividad,
-               periodo: data.Periodo || data.periodo,
+               nombre: data?.nombre,
+               documento: data?.documento,
+               sectorActividad: data?.sectorActividad,
+               periodo: data?.periodo,
                rubrosGenerales: rubrosGenerales,
-               entidades: data.EntidadesRubrosValores || data.entidadesRubrosValores,
+               entidades: data?.entidadesRubrosValores || data?.entities,
                totalMnPesos: totals.totalMnPesos,
                totalMePesos: totals.totalMePesos,
-               totalVigentePesos: rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnPesos || rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnPesos || 0,
-               totalVigenteDolares: rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.MnDolares || rubrosGenerales?.find(r => (r.Rubro || r.rubro) === 'VIGENTE')?.mnDolares || 0
+               totalVigentePesos: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnPesos || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnPesos || 0,
+               totalVigenteDolares: rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.mnDolares || rubrosGenerales?.find(r => (r.rubro || r.Rubro) === 'VIGENTE')?.MnDolares || 0,
+               errors: data?.errors || null
             };
 
          } catch (error) {
@@ -1736,6 +1724,157 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          } catch (error) {
             log.error(stLogTitle, error);
             return { t2: null, t6: null };
+         }
+      }
+
+      /**
+       * extractBcuVariables - Extrae todas las variables BCU (T2/T6) desde un scoreResponse
+       * Devuelve un objeto listo para usar con las 6 variables principales
+       * @param {object} scoreResponse - El objeto de respuesta del score BCU
+       * @returns {object} Objeto con: endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6
+       */
+      function extractBcuVariables(scoreResponse) {
+         const stLogTitle = 'extractBcuVariables';
+         
+         // Valores por defecto
+         const result = {
+            endeudT2: 0,
+            endeudT6: 0,
+            cantEntT2: 0,
+            cantEntT6: 0,
+            peorCalifT2: '',
+            peorCalifT6: ''
+         };
+
+         try {
+            if (!scoreResponse) {
+               log.debug(stLogTitle, 'No scoreResponse provided');
+               return result;
+            }
+
+            // Orden de calificaciones de peor a mejor
+            const RATING_ORDER = ['5', '4', '3', '2D', '2C', '2B', '2A', '1C', '1B', '1A'];
+            
+            // Helper: obtener la peor calificación de un array de entidades
+            const getWorstRating = (entities) => {
+               if (!Array.isArray(entities) || entities.length === 0) return '';
+               let worstIndex = RATING_ORDER.length;
+               entities.forEach(ent => {
+                  const calif = ent.Calificacion || ent.calificacion || '';
+                  const idx = RATING_ORDER.indexOf(calif);
+                  if (idx !== -1 && idx < worstIndex) {
+                     worstIndex = idx;
+                  }
+               });
+               return worstIndex < RATING_ORDER.length ? RATING_ORDER[worstIndex] : '';
+            };
+
+            // Helper: convertir a número
+            const toNum = (val) => parseFloat(val) || 0;
+
+            // ============ PROCESAR T2 ============
+            const t2Data = scoreResponse.t2;
+            if (t2Data) {
+               const t2Info = getBcuPeriodInfo(t2Data, 't2');
+               if (t2Info) {
+                  result.endeudT2 = toNum(t2Info.totalMnPesos) + toNum(t2Info.totalMePesos);
+               }
+               
+               // Cantidad de entidades T2
+               const t2Entities = t2Data.entities || t2Data.entidadesRubrosValores || [];
+               result.cantEntT2 = Array.isArray(t2Entities) ? t2Entities.length : 0;
+               
+               // Peor calificación T2
+               result.peorCalifT2 = getWorstRating(t2Entities);
+            }
+
+            // ============ PROCESAR T6 ============
+            const t6Data = scoreResponse.t6;
+            if (t6Data) {
+               const t6Info = getBcuPeriodInfo(t6Data, 't6');
+               if (t6Info) {
+                  result.endeudT6 = toNum(t6Info.totalMnPesos) + toNum(t6Info.totalMePesos);
+               }
+               
+               // Cantidad de entidades T6
+               let t6Entities = t6Data.entities || t6Data.entidadesRubrosValores || [];
+               
+               // Fallback: si t6.entities está vacío, intentar extraer de logTxt
+               if ((!Array.isArray(t6Entities) || t6Entities.length === 0) && scoreResponse.logTxt) {
+                  const logText = scoreResponse.logTxt;
+                  
+                  // Intentar extraer t6_cantEntidades del logTxt
+                  const cantEntMatch = logText.match(/t6_cantEntidades:\s*(\d+)/);
+                  if (cantEntMatch) {
+                     result.cantEntT6 = parseInt(cantEntMatch[1], 10) || 0;
+                  }
+                  
+                  // Intentar extraer t6_peorCalif del logTxt
+                  const peorCalifMatch = logText.match(/t6_peorCalif:\s*(\S+)/);
+                  if (peorCalifMatch) {
+                     result.peorCalifT6 = peorCalifMatch[1];
+                  }
+                  
+                  log.debug(stLogTitle, `T6 from logTxt: cantEnt=${result.cantEntT6}, peorCalif=${result.peorCalifT6}`);
+               } else {
+                  result.cantEntT6 = Array.isArray(t6Entities) ? t6Entities.length : 0;
+                  result.peorCalifT6 = getWorstRating(t6Entities);
+               }
+            }
+            
+            // ============ FALLBACK FINAL: extraer de logTxt si endeudT6 es 0 ============
+            if (result.endeudT6 === 0 && scoreResponse.logTxt) {
+               const logText = scoreResponse.logTxt;
+               
+               // Buscar t6_mnPesos y t6_mePesos en logTxt (formato: <P>t6_mnPesos: VALOR</P>)
+               const t6MnMatch = logText.match(/t6_mnPesos:\s*([\d.-]+)/i);
+               const t6MeMatch = logText.match(/t6_mePesos:\s*([\d.-]+)/i);
+               if (t6MnMatch || t6MeMatch) {
+                  const t6Mn = toNum(t6MnMatch?.[1]);
+                  const t6Me = toNum(t6MeMatch?.[1]);
+                  // Solo usar valores positivos (el score usa -1 como indicador de no disponible)
+                  if (t6Mn > 0 || t6Me > 0) {
+                     result.endeudT6 = (t6Mn > 0 ? t6Mn : 0) + (t6Me > 0 ? t6Me : 0);
+                     log.debug(stLogTitle, `T6 endeud from logTxt: mn=${t6Mn}, me=${t6Me}, total=${result.endeudT6}`);
+                  }
+               }
+               
+               // Si cantEntT6 sigue en 0, intentar extraer de logTxt (formato: <P>t6.entities.length: VALOR</P>)
+               if (result.cantEntT6 === 0) {
+                  const cantEntMatch = logText.match(/t6\.entities\.length:\s*(\d+)/i);
+                  if (cantEntMatch) {
+                     result.cantEntT6 = parseInt(cantEntMatch[1], 10) || 0;
+                     log.debug(stLogTitle, `T6 cantEnt from logTxt: ${result.cantEntT6}`);
+                  }
+               }
+               
+               // Si peorCalifT6 sigue vacío, buscar en T6 Entity en logTxt (formato: T6 Entity[X]: NAME | Calif: CALIFICACION)
+               if (!result.peorCalifT6) {
+                  const t6CalifMatches = logText.match(/T6 Entity\[\d+\]:[^|]+\|\s*Calif:\s*([^|\s<]+)/gi);
+                  if (t6CalifMatches && t6CalifMatches.length > 0) {
+                     const t6Califs = t6CalifMatches.map(m => {
+                        const califMatch = m.match(/Calif:\s*([^|\s<]+)/i);
+                        return califMatch ? califMatch[1] : null;
+                     }).filter(c => c);
+                     
+                     // Encontrar la peor calificación
+                     if (t6Califs.length > 0) {
+                        result.peorCalifT6 = getWorstRating(t6Califs.map(c => ({ Calificacion: c })));
+                        log.debug(stLogTitle, `T6 peorCalif from logTxt: ${result.peorCalifT6}`);
+                     }
+                  }
+               }
+            }
+
+            log.debug(stLogTitle, `BCU Variables: endeudT2=${result.endeudT2}, endeudT6=${result.endeudT6}, ` +
+               `cantEntT2=${result.cantEntT2}, cantEntT6=${result.cantEntT6}, ` +
+               `peorCalifT2=${result.peorCalifT2}, peorCalifT6=${result.peorCalifT6}`);
+
+            return result;
+
+         } catch (error) {
+            log.error(stLogTitle, `Error extracting BCU variables: ${error.message}`);
+            return result;
          }
       }
 
@@ -2440,6 +2579,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          validateAndFormatLastName: validateAndFormatLastName,
          getBcuPeriodInfo: getBcuPeriodInfo,
          extractBcuData: extractBcuData,
+         extractBcuVariables: extractBcuVariables,
          operadorByLead: operadorByLead,
          extractQualifications: extractQualifications,
          deactivateLeadsByDocumentNumber: deactivateLeadsByDocumentNumber,

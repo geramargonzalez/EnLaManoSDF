@@ -120,11 +120,12 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                               if (score.error_reglas == null) {
                                  score.error_reglas = false;
                               } 
-                              const montoCuotaObj = auxLib.getPonderador(score?.score, score?.calificacionMinima, score?.endeudamiento, salary, activity, age, source);
+                              const montoCuotaObj = auxLib.getPonderador(score?.score, score?.calificacionMinima, score?.endeudamiento, salary, activity, age, null);
                               const montoCuota = parseFloat(salary) * parseFloat(montoCuotaObj?.ponderador);
                        /*        let ofertaFinal
                               if (montoCuota > 0) { */
-                                const ofertaFinal = getOfertaFinal(source, montoCuota);
+                              //   const ofertaFinal = getOfertaFinal(source, montoCuota);
+                                const ofertaFinal = auxLib.getOfertaFinal(montoCuota);
                               //  }
                               
                               let isLatente = true;
@@ -133,10 +134,10 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                                  isLatente = false;
                               }
 
-                              if (source == 'AlPrestamo' && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
+                          /*     if (source == 'AlPrestamo' && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
                                   isLatente = false;
                               }
-                               
+                                */
                   
                               if (isLatente) {
                                  log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + parseFloat(ofertaFinal?.cuotaFinal));
@@ -443,7 +444,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
 
             } else {
 
-               if (source == 'AlPrestamo' && infoRepetido?.canal != "2") {
+          /*      if (source == 'AlPrestamo' && infoRepetido?.canal != "2") {
                   const montoCuotaObj = auxLib.getPonderador(infoRepetido?.score, infoRepetido?.calificacionMinima, infoRepetido?.endeudamiento, salary, activity, age, source);
                   const montoCuota = parseFloat(salary) * parseFloat(montoCuotaObj?.ponderador);
                   const ofertaFinal = getOfertaFinal(source, montoCuota);
@@ -469,14 +470,14 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                      }); 
                      log.debug('updateAlPrestamoScenarioID S1', updateAlPrestamoScenarioID);
 
-                  } else {
-                     response.success = false;
-                     response.result = 'Repetido';
+                  } else { */
+                   /*   response.success = false;
+                     response.result = 'Repetido'; */
                     
-                  }
+                  // }
 
                    
-               } else {
+             
 
                   if (source == 'Creditleads') {
                      response.oferta = infoRepetido?.montoOfrecido;
@@ -484,7 +485,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
 
                   response.success = true;
                   response.result = 'Listo para recibir datos en servicio 2';
-               }
+               
 
                const comentRec = record.create({
                   type: 'customrecord_elm_comentarios',
@@ -543,7 +544,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
 
             const searchObj = search.create({
                type: "customrecord_sdb_oferta_final",
-               filters: searchFilters,
+               filters: ["custrecord_monto_cuota", "lessthanorequalto", monto_cuota],
                columns: searchColumns
             });
 

@@ -79,7 +79,7 @@ define(['N/log'], function (log) {
     /**
      * OPTIMIZADO: Scoring O(n) con mínimas operaciones y early exits
      */
-    function computeScoreStrict(normalizedData, scoringRules, normalizedDataT6) {
+    function computeScore(normalizedData, scoringRules, normalizedDataT6) {
         // Validación mínima
         if (!normalizedData || !scoringRules) {
             return createRejectedScore('INVALID_INPUT', 'Datos inválidos', null, normalizedData);
@@ -112,7 +112,6 @@ define(['N/log'], function (log) {
         logTxt += '<P>Provider: ' + (normalizedData.provider || 'UNKNOWN') + '</P>';
         logTxt += '<P>Documento: ' + ((normalizedData.metadata && normalizedData.metadata.documento) || 'UNKNOWN') + '</P>';
         logTxt += '<P>Periodo Consulta: ' + (periodoConsulta || 'N/A') + '</P>';
-        logTxt += '<P>Timestamp: ' + new Date().toISOString() + '</P>';
         logTxt += '<P>==========================================</P>';
         
         const debugEnabled = !!(scoringRules && scoringRules.debug);
@@ -929,7 +928,7 @@ define(['N/log'], function (log) {
         */
 
         // DEBUG: Log valores ANTES de multiplicar por coeficientes
-        logTxt += '<P>========== VALORES ANTES DE MULTIPLICAR ==========</P>';
+/*         logTxt += '<P>========== VALORES ANTES DE MULTIPLICAR ==========</P>';
         logTxt += '<P>ent_t6_binned_res: ' + ent_t6_binned_res + '</P>';
         logTxt += '<P>t6_binned_res: ' + t6_binned_res + '</P>';
         logTxt += '<P>t6_creditel_binned_res: ' + t6_creditel_binned_res + '</P>';
@@ -947,10 +946,10 @@ define(['N/log'], function (log) {
         logTxt += '<P>t6_pronto_binned_res: ' + t6_pronto_binned_res + '</P>';
         logTxt += '<P>t0_scotia_binned_res: ' + t0_scotia_binned_res + '</P>';
         logTxt += '<P>cred_dir_binned_res: ' + cred_dir_binned_res + '</P>';
-        logTxt += '<P>===================================================</P>';
+        logTxt += '<P>===================================================</P>'; */
         
         // DEBUG: Log coeficientes (binned) usados
-        logTxt += '<P>========== COEFICIENTES (BINNED) ==========</P>';
+      /*   logTxt += '<P>========== COEFICIENTES (BINNED) ==========</P>';
         logTxt += '<P>ent_t6_binned: ' + ent_t6_binned + '</P>';
         logTxt += '<P>t6_binned: ' + t6_binned + '</P>';
         logTxt += '<P>t6_creditel_binned: ' + t6_creditel_binned + '</P>';
@@ -969,7 +968,7 @@ define(['N/log'], function (log) {
         logTxt += '<P>t0_scotia_binned: ' + t0_scotia_binned + '</P>';
         logTxt += '<P>cred_dir_binned: ' + cred_dir_binned + '</P>';
         logTxt += '<P>intercept: ' + intercept + '</P>';
-        logTxt += '<P>===================================================</P>';
+        logTxt += '<P>===================================================</P>'; */
 
         // Calculo final: multiplicar por bins y sumar (limpio y canónico)
         ent_t6_binned_res = ent_t6_binned_res * (ent_t6_binned || 1);
@@ -1192,9 +1191,7 @@ define(['N/log'], function (log) {
             return result;
     }
 
-    function computeScore(normalizedData, scoringRules, normalizedDataT6) {
-        return computeScoreStrict(normalizedData, scoringRules, normalizedDataT6);
-    }
+
 
 
 

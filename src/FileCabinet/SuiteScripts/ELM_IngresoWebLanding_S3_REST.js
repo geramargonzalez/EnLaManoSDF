@@ -3,8 +3,10 @@
  *@NScriptType Restlet
  */
 
-define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"],
-   function (scoreLib, auxLib, runtime, record) {
+define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",  './ELM_SCORE_BCU_LIB.js'],
+   
+   
+   function (scoreLib, auxLib, runtime, record, bcuScoreLib) {
       function post(requestBody) { 
          const logTitle = 'post';
          const objScriptParam = getScriptParameters();
@@ -40,19 +42,11 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                      let repetidoIsFromManual = infoRepetido?.service === objScriptParam.manualService;
 
                      if (!infoRepetido.id || (repetidoIsFromExternal && repetidoIsPreLead && repetidoIsRejected)) {
-                        const score = scoreLib.scoreFinal(docNumber);
-                        // Extract BCU data for t2 and t6 periods
-                        const bcuData = auxLib.extractBcuData(score);
-                        const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
-                        const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
-                        const cantEntidadesT2 = t2Info?.entidades.length || 0;
-                        const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
-                        const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
-                        const cantEntidadesT6 = t6Info?.entidades.length || 0;
-                        
-                        const t2Quals = bcuData?.t2Qualifications?.map(q => q.calificacion);
-                        // Get all qualification values from T6  
-                        const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion);
+                        //const score = scoreLib.scoreFinal(docNumber);
+                        const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
+
+                           const bcuVars = auxLib.extractBcuVariables(score);
+                           const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
                         if (score.calificacionMinima == 'N/C') {
                               log.audit('Error', 'El documento ' + docNumber + ' tiene mala calificación en BCU.');
@@ -65,7 +59,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                         }
                         if (score && score.score > 499) {
                            log.audit('Success', 'El documento ' + docNumber + ' fue evaluado con éxito. Pre Lead aprobado: ' + preLeadId);
-                           auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoPendienteEvaluacion, null, null, null, null, null, null, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, t2Quals, t6Quals);
+                           auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoPendienteEvaluacion, null, null, null, null, null, null, score, null, endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento );
 
                            if (repetidoIsFromExternal || repetidoIsFromManual) {
 
@@ -81,15 +75,15 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                                  response.success = true;
                                  response.result = 'Listo para recibir datos en servicio 4';
                                  log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + ofertaFinal?.cuotaFinal);
-                                 auxLib.submitFieldsEntity(lead, objScriptParam?.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-                                 cantEntidadesT6, t2Quals, t6Quals);
+                                 auxLib.submitFieldsEntity(lead, objScriptParam?.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudT2, endeudT6, cantEntT2,
+                                 cantEntT6, peorCalifT2, peorCalifT6,  null, score.endeudamiento );
                                  auxLib.snapshotAprobados(docNumber, lead, objScriptParam?.estadoAprobado, 5);
 
                               } else {
                                  log.audit('Error', 'No hay oferta para el documento:  ' + docNumber);
                                  response.success = false;
                                  response.result = 'No hay oferta';
-                                 auxLib.submitFieldsEntity(lead, objScriptParam?.estadoRechazado, objScriptParam?.rechazoNoHayOferta, null, null, 0, 0, montoCuotaObj?.montoCuotaName, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, t2Quals, t6Quals);
+                                 auxLib.submitFieldsEntity(lead, objScriptParam?.estadoRechazado, objScriptParam?.rechazoNoHayOferta, null, null, 0, 0, montoCuotaObj?.montoCuotaName, score, null , endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento );
                               }
                            } else {
                                  response.success = true;
@@ -101,7 +95,13 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
                            response.result = 'BCU';
                            let approvalStatus = objScriptParam.estadoRechazado;
                            if (score.error_reglas == 500){
-                              approvalStatus = 15;
+
+                              if (objScriptParam.providerBCU == '2') {
+                                  approvalStatus = 28;
+                              } else {
+                                  approvalStatus = 15;
+                              }
+                             
                            }
 
                            if (score.error_reglas == 404) {
@@ -349,7 +349,8 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record"]
             }),
             estadoBlacklist: scriptObj.getParameter({
                name: 'custscript_elm_est_blacklist_s3'
-            })
+            }),
+            providerBCU: '2'
         };
       
          return objParams;

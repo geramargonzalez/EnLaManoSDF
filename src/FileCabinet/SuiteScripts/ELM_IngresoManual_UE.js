@@ -86,7 +86,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                if (workStartDate) {
                   newRecord.setValue(FIELDS.yearsWork, auxLib.calculateYearsSinceDate(workStartDate));
                }
-               let infoRepetido = auxLib.getInfoRepetido(docNumber, null, false);
+               let infoRepetido = auxLib.getInfoRepetido(docNumber, null, null, false);
 
                if(isEdit) {
                   if (infoRepetido?.id && infoRepetido?.id == newRecord?.id) {
@@ -134,23 +134,11 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const isPreLead = infoRepetido?.status === objScriptParam.preLeadStatus;
                const isRejected = infoRepetido?.approvalStatus === objScriptParam.estadoRechazado;
                const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
-
-              const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
+               const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
                if (shouldScore) {
-                  //const score = scoreLib.scoreFinal(docNumber);
-                  const score = bcuScoreLib.scoreFinal(docNumber, { provider: 'equifax', forceRefresh: true, debug: true, strictRules: true });
-
-                  const bcuData = auxLib.extractBcuData(score);
-                  const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
-                  const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
-                  const cantEntidadesT2 = t2Info?.entidades.length || 0;
-                  const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
-                  const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
-                  const cantEntidadesT6 = t6Info?.entidades.length || 0;
-                   
-                  const peroCalifT2 = JSON.stringify(bcuData?.t2Qualifications?.map(q => q.calificacion));
-                  // Get all qualification values from T6
-                  const peroCalifT6 = JSON.stringify(bcuData?.t6Qualifications?.map(q => q.calificacion));
+                  const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+                  const bcuVars = auxLib.extractBcuVariables(score);
+                  const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
                   if (score !== null && score?.score > 499) {
                      const montoCuotaObj = auxLib.getPonderador(score?.score, score.calificacionMinima, score.endeudamiento, newValues.salary, newValues.activity, newValues.age, canal);
@@ -175,12 +163,13 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                            ofertaFinal: parseFloat(ofertaFinal?.oferta),
                            montoCuotaName: montoCuotaObj?.montoCuotaName,
                            plazo: ofertaFinal?.plazo,
-                           endeudamientoT2,
-                           endeudamientoT6,
-                           cantEntidadesT2,
-                           cantEntidadesT6,
-                           peroCalifT2,
-                           peroCalifT6
+                           endeudamientoT2: endeudT2,
+                           endeudamientoT6: endeudT6,
+                           cantEntidadesT2: cantEntT2,
+                           cantEntidadesT6: cantEntT6,
+                           peroCalifT2: peorCalifT2,
+                           peroCalifT6: peorCalifT6,
+                           endeudamiento: score.endeudamiento
                         }); 
 
                         // Snapshot de aprobados se actualiza en afterSubmit cuando ya existe el ID del lead
@@ -196,12 +185,13 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                            ofertaFinal: 0,
                            montoCuotaName: montoCuotaObj.montoCuotaName,
                            plazo: 0,
-                           endeudamientoT2,
-                           endeudamientoT6,
-                           cantEntidadesT2,
-                           cantEntidadesT6,
-                           peroCalifT2,
-                           peroCalifT6
+                           endeudamientoT2: endeudT2,
+                           endeudamientoT6: endeudT6,
+                           cantEntidadesT2: cantEntT2,
+                           cantEntidadesT6: cantEntT6,
+                           peorCalifT2: peorCalifT2,
+                           peorCalifT6: peorCalifT6,
+                           endeudamiento: score.endeudamiento
                         });
                      }
                   } else {
@@ -209,7 +199,11 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                      let approvalStatus = objScriptParam.estadoRechazado;
 
                      if (score.error_reglas == 500 || score.error_reglas == 400) {
-                        approvalStatus = objScriptParam.estErrorBCU;
+                        if (objScriptParam.providerBCU == '2') {
+                                 approvalStatus = 28;
+                           } else {
+                                 approvalStatus = objScriptParam.estErrorBCU;
+                        }
                      }
 
                      if (score.error_reglas == 404) {
@@ -290,7 +284,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             estadoRepRechazado: scriptObj.getParameter({ name: 'custscript_elm_rep_rechazado_man' }),
             estadoRepAprobado: scriptObj.getParameter({ name: 'custscript_elm_rep_aprobado_manual' }),
             estadoMocasist: scriptObj.getParameter({ name: 'custscript_elm_estado_mocasist_man' }),
-            estadoBlacklist: scriptObj.getParameter({ name: 'custscript_elm_estado_blacklist_man' })
+            estadoBlacklist: scriptObj.getParameter({ name: 'custscript_elm_estado_blacklist_man' }),
+            providerBCU: '2'
+
          };
       };
 

@@ -3,8 +3,8 @@
  * @NScriptType MapReduceScript
  */
 
-define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js"],
-    function (record, search, runtime, error, email, scoreLib, auxLib) {
+define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", './ELM_SCORE_BCU_LIB.js'],
+    function (record, search, runtime, error, email, scoreLib, auxLib, bcuScoreLib) {
          
 
          /**
@@ -22,7 +22,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                     [
                        ["status","anyof","7","6"], 
                        "AND", 
-                        [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_elm_aprobado","anyof","15"]],
+                        [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_elm_aprobado","anyof","15", "28"]],
                         "AND", 
                        ["custentity_elm_lead_repetido_original","anyof","@NONE@"]/* 
                          ,"AND",
@@ -38,6 +38,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                         search.createColumn({name: "custentity_sdb_actividad", label: "Activity"}),
                         search.createColumn({name: "custentity_sdb_fechanac", label: "Fecha de Nacimiento"}),
                         search.createColumn({name: "mobilephone", label: "Mobile Phone"}),
+                        search.createColumn({name: "custentity_elm_aprobado", label: "Estado de Gestion"}),
                     ]
                  });
                  const searchResultCount = customerSearchObj.runPaged().count;
@@ -77,6 +78,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                 const age = auxLib.calculateYearsSinceDate(dateOfBirth);
                 const preLeadId = LeadsData?.id;
                 const mobilePhone = LeadsData?.values?.mobilephone;
+                const approvalStatus = LeadsData?.values?.custentity_elm_aprobado?.value; 
                 
                 let blackList = auxLib.checkBlacklist(docNumber);
 
@@ -87,42 +89,49 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                       let infoRepetido = auxLib.getInfoRepetido(docNumber, preLeadId, false);
     
                       if (!infoRepetido?.id) { 
-                         
-                     
-                           const score = scoreLib.scoreFinal(docNumber);
-                           const bcuData = auxLib.extractBcuData(score);
-                           const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
-                           const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
-                           const cantEntidadesT2 = t2Info?.entidades.length || 0;
-                           const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
-                           const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
-                           const cantEntidadesT6 = t6Info?.entidades.length || 0;
                            
-                           const t2Quals = bcuData.t2Qualifications?.map(q => q.calificacion);
-                           // Get all qualification values from T6  
-                           const t6Quals = bcuData.t6Qualifications?.map(q => q.calificacion);
- 
-
-                            // Manejo de rechazo BCU con calificación visible
-                            if (score?.error_reglas) {
-                               let approvalStatus = objScriptParam.estadoRechazado;
-                               if (score.error_reglas == 500 || score.error_reglas == 400) {
-                                  approvalStatus = 15;
-                               }
-     
-                               if (score.error_reglas == 404) {
-                                  approvalStatus = 16;
-                               }
-                               log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
-             
-                               auxLib.submitFieldsEntity(preLeadId, approvalStatus, objScriptParam.rechazoBCU, null, null, null, null, null, {
-                                  score: 0,
-                                  calificacionMinima: score.calificacionMinima,
-                                  detail: score.detail,
-                                  nombre: score.nombre
-                               });
+                              let score;
+                              if (approvalStatus == 28) {
+                                    score = bcuScoreLib.scoreFinal(docNumber, { provider: '2', forceRefresh: false, debug: false, strictRules: true });
+                              } else {
+                                    score = scoreLib.scoreFinal(docNumber);
+                              }
+                              const bcuData = auxLib.extractBcuData(score);
+                              const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
+                              const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
+                              const cantEntidadesT2 = t2Info?.entidades.length || 0;
+                              const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
+                              const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
+                              const cantEntidadesT6 = t6Info?.entidades.length || 0;
                               
-                            }
+                              const t2Quals = bcuData.t2Qualifications?.map(q => q.calificacion);
+                              // Get all qualification values from T6  
+                              const t6Quals = bcuData.t6Qualifications?.map(q => q.calificacion);
+
+                              // Manejo de rechazo BCU con calificación visible
+                              if (score?.error_reglas) {
+                                 let approvalStatus = objScriptParam.estadoRechazado;
+                                 if (score.error_reglas == 500 || score.error_reglas == 400) {
+                                    if (approvalStatus == 28) {
+                                          approvalStatus = 28;
+                                       } else {
+                                          approvalStatus = 15
+                                    }
+                                 }
+      
+                                 if (score.error_reglas == 404) {
+                                    approvalStatus = 16;
+                                 }
+                                 log.audit('Error', `El documento ${docNumber} tiene mala calificación en BCU.`);
+               
+                                 auxLib.submitFieldsEntity(preLeadId, approvalStatus, objScriptParam.rechazoBCU, null, null, null, null, null, {
+                                    score: 0,
+                                    calificacionMinima: score.calificacionMinima,
+                                    detail: score.detail,
+                                    nombre: score.nombre
+                                 });
+                                 
+                              }
     
                             if (score && score.score > objScriptParam.scoreMin) {
                   
@@ -140,9 +149,9 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
-                               if ((source == 2 || source == 'AlPrestamo') && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
+                              /*  if ((source == 2 || source == 'AlPrestamo') && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
                                   isLatente = false;
-                              }
+                              } */
                               if (isLatente) {
                                   const estadoAprobExternal = mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.estadoLatente;
                                   const estadoAprobadoInTernal =  mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.pendienteDeEvaluacion;
