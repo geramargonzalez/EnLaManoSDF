@@ -13,6 +13,9 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
          let docNumber = requestBody.docNumber;
          let firstName = requestBody.firstName;
          let lastName = requestBody.lastName;
+         const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
+         const maskedFirstName = isSandbox ? 'default' : firstName;
+         const maskedLastName = isSandbox ? 'default' : lastName;
          let activityType = requestBody.activityType;
          let salary = requestBody.salary;
          let dateOfBirth = requestBody.dateOfBirth;
@@ -46,7 +49,7 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
             log.debug('infoRepetido S1', infoRepetido);
             if (infoRepetido?.approvalStatus != objScriptParam?.estadoLatente) {
                
-               let preLeadId = auxLib.createPreLead(objScriptParam.externalService, docNumber, null, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, objScriptParam?.estadoRechazado,null, source, activityType, trackingId);
+               let preLeadId = auxLib.createPreLead(objScriptParam.externalService, docNumber, null, maskedFirstName, maskedLastName, activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate, objScriptParam?.estadoRechazado,null, source, activityType, trackingId);
                let blackList = auxLib.checkBlacklist(docNumber);
                
                if (!blackList) {
@@ -68,9 +71,9 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                            const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
                            const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
                            const cantEntidadesT6 = t6Info?.entidades.length || 0;
-                           const t2Quals = bcuData?.t2Qualifications?.map(q => q.calificacion);
+                           const t2Quals = bcuData?.t2Qualifications?.map(q => q?.calificacion);
                            // Get all qualification values from T6  
-                           const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion);
+                           const t6Quals = bcuData?.t6Qualifications?.map(q => q?.calificacion);
                            // Manejo de rechazo BCU con calificación visible
                            if (score?.error_reglas) {
                               let approvalStatus = objScriptParam.estadoRechazado;
@@ -124,13 +127,13 @@ define(['N/search', "./SDB-Enlamano-score.js", 'N/runtime', "./ELM_Aux_Lib.js", 
                               const montoCuota = parseFloat(salary) * parseFloat(montoCuotaObj?.ponderador);
                        /*        let ofertaFinal
                               if (montoCuota > 0) { */
-                              //   const ofertaFinal = getOfertaFinal(source, montoCuota);
-                                const ofertaFinal = auxLib.getOfertaFinal(montoCuota);
+                              const ofertaFinal = getOfertaFinal(source, montoCuota);
+                                
                               //  }
                               
                               let isLatente = true;
                               
-                              if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END') && source != 'AlPrestamo') {
+                              if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
 

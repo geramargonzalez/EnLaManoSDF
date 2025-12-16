@@ -1,7 +1,8 @@
 /**
- * @NApiVersion 2.1
- * @NScriptType Restlet
- */
+ *@NApiVersion 2.1
+ *@NScriptType Restlet
+ */ 
+ 
 define(['N/search', './SDB-Enlamano-score.js', 'N/runtime', './ELM_Aux_Lib.js', 'N/record', './ELM_SCORE_BCU_LIB.js'],
 function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
@@ -19,6 +20,11 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       docNumber, firstName, lastName, activityType,
       salary, dateOfBirth, workStartDate, source, trackingId
     } = body || {};
+
+    // En sandbox, enmascarar nombres de leads/preleads
+    const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
+    const maskedFirstName = isSandbox ? 'default' : firstName;
+    const maskedLastName = isSandbox ? 'default' : lastName;
 
     const idLog = auxLib.createLogRecord(docNumber, null, false, 1, source, body);
     const response = { docNumber, success: false, result: 'Consulte nuevamente más tarde' };
@@ -42,16 +48,16 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       const leadsDesactivados = auxLib.deactivateLeadsByDocumentNumber(docNumber);
 
       // Info repetido (una sola llamada, solo si no se desactivaron leads)
-      const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoLight(docNumber, null, 'exists', false);
+      const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
+      log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
       const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
       // Crear preLead mínimo al inicio del flujo “no latente”
       let preLeadId = null;
 
         if (notLatente) {
-
          preLeadId = auxLib.createPreLead(
-          params.externalService, docNumber, null, firstName, lastName,
+          params.externalService, docNumber, null, maskedFirstName, maskedLastName,
           activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
           params?.estadoRechazado, null, source, activityType, trackingId
         );
@@ -107,12 +113,10 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           let score = bcuScoreLib.scoreFinal(docNumber, { provider: params.providerBCU, forceRefresh: true, strictRules: true, debug: true });
 
           if (score?.error_reglas) {
-
             const approvalStatus =
-              score.error_reglas === 500 ? params.estadoErrorBCU :
-              score.error_reglas === 404 ? params.NohayInfoBCU :
-              params.estadoRechazado;
-
+            score.error_reglas === 500 ? params.estadoErrorBCU :
+            score.error_reglas === 404 ? params.NohayInfoBCU :
+            params.estadoRechazado;
             response.success = false;
             response.result = 'BCU';
             auxLib.submitFieldsEntity(preLeadId, approvalStatus, params.rechazoBCU, null, null, null, null, null, {
@@ -129,15 +133,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
             auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
             return response; // EARLY RETURN
           }
-
-          // Extraer BCU t2/t6 (1 sola vez)
-      /*     const bcuData = auxLib.extractBcuData(score) || {};
-          log.debug(`${LOG_PREFIX} bcuData extraído`, { 
-            hasT2: !!bcuData?.t2, 
-            hasT6: !!bcuData?.t6,
-            t2Entities: bcuData?.t2?.entities?.length || 0,
-            t6Entities: bcuData?.t6?.entities?.length || 0
-          }); */
 
           // ========== USAR FUNCIÓN CENTRALIZADA PARA EXTRAER VARIABLES BCU ==========
           const bcuVars = auxLib.extractBcuVariables(score);
@@ -157,13 +152,25 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
             const ofertaFinal = getOfertaFinal(source, montoCuota);
 
             let isLatente = true;
-            if (ponder?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END') && source !== 'AlPrestamo') isLatente = false;
+            if (ponder?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) isLatente = false;
             // if (source === 'AlPrestamo' && !ofertaFinal) isLatente = false;
 
             if (isLatente) {
-              response.success = true;
+              
+              response.success = true; 
               response.result = 'Listo para recibir datos en servicio 2';
+              
               if (source === 'Creditleads') response.oferta = ofertaFinal?.oferta;
+
+              if (source == 'AlPrestamo') {
+
+                if (score.score >= 650) {
+                    response.result = 'Latente: Campaña A';
+                } else {
+                    response.result = 'Latente: Campaña B';
+                }
+              
+              }
 
               auxLib.submitFieldsEntity(
                 leadId,
@@ -212,6 +219,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
         } else {
           // REPETIDO con múltiples escenarios, sin duplicar ramas
           const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
+          log.debug(`${LOG_PREFIX} Info repetido completo`, infoRep);
           const repetidoIsPreLead = infoRep.status === params.preLeadStatus;
           const repetidoIsRejected = infoRep.approvalStatus === params.estadoRechazado;
           const repetidoNoInfo = infoRep.approvalStatus === params.NohayInfoBCU;
@@ -301,7 +309,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 'custentity_sdb_montoofrecido': ofertaFinal?.internalid ? toNum(ofertaFinal?.oferta) : '',
                 'custentity_elm_oferta_final': ofertaFinal?.internalid ? toNum(ofertaFinal?.cuotaFinal) : '',
                 'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? toNum(ofertaFinal?.cuotaFinal) : '',
-                'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
+                'custentity_elm_monto_cuota': ponder?.montoCuotaName ? ponder?.montoCuotaName : '',
                 'custentity_elm_plazo': ofertaFinal?.plazo || '',
                 'custentity_score': infoRep.score,
                 'custentity_elm_lead_repetido_original': '',
@@ -317,17 +325,16 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
             });
           }
 
-          response.success = source === 'Creditleads';
-          response.result = response.success ? 'Listo para recibir datos en servicio 2' : 'Repetido';
-          if (source === 'Creditleads') response.oferta = infoRep?.montoOfrecido;
+          response.success = false;
+          response.result =  'Repetido';
 
-          auxLib.createListRepetido(docNumber, `${infoRep.firstName} ${infoRep.lastName}`);
         }
 
       // ---------- Ya estaba LATENTE ----------
       } else {
-
-        const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
+        const infoRep = auxLib.getInfoRepetidoSql(docNumber, null,null, false);
+        /*
+        
         if (source === 'AlPrestamo' && infoRep?.canal !== '2') {
           const ponder = auxLib.getPonderador(infoRep?.score, infoRep?.calificacionMinima, infoRep?.endeudamiento, salary, activity, age, source);
           const montoCuota = toNum(salary) * toNum(ponder?.ponderador);
@@ -350,14 +357,32 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           if (source === 'Creditleads') response.oferta = infoRep?.montoOfrecido;
           response.success = true;
           response.result = 'Listo para recibir datos en servicio 2';
-        }
+        } */
 
         // Comentario (creación directa, dynamic:false)
         const coment = record.create({ type: 'customrecord_elm_comentarios', isDynamic: false });
-        coment.setValue({ fieldId: 'custrecord_elm_com_lead', value: infoRep.id });
+        coment.setValue({ fieldId: 'custrecord_elm_com_lead', value: infoRep?.id });
         coment.setValue({ fieldId: 'custrecord_elm_comentarios_com', value: `El Lead ${docNumber} ingresó por proveedor externo: ${source}` });
         coment.save({ enableSourcing: false, ignoreMandatoryFields: true });
-      }
+
+        if (source === 'Creditleads') response.oferta = infoRep?.montoOfrecido;
+          response.success = true;
+          response.result = 'Listo para recibir datos en servicio 2';
+
+           if (source == 'AlPrestamo') {
+
+              if (infoRep.score >= 650) {
+                  response.result = 'Latente: Campaña A';
+              } else {
+                  response.result = 'Latente: Campaña B';
+              }
+            
+            }
+
+        }
+
+        
+      
 
     } catch (e) {
       log.error(`${LOG_PREFIX} post error`, e);
@@ -484,7 +509,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
   // Agrupa lógica común para setear campos de oferta en LEAD con submitFields
   function submitLeadOfertaFields(leadId, {
-    montoCuota, ofertaFinal, activity, dateOfBirth, workStartDate, salary, statusWhenOffer, channel, score, mobilephone
+    montoCuota, ofertaFinal, activity, dateOfBirth, workStartDate, salary, statusWhenOffer, channel, score, mobilephone, montoCuotaName, edad
   }) {
     const values = {
       'custentity_elm_channel': isEmpty(channel) ? undefined : String(channel),
@@ -492,7 +517,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       'custentity_sdb_montoofrecido': ofertaFinal?.internalid ? toNum(ofertaFinal.oferta) : '',
       'custentity_elm_oferta_final': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
       'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
-      'custentity_elm_monto_cuota': montoCuotaObj?.montoCuotaName ? montoCuotaObj?.montoCuotaName : '',
+      'custentity_elm_monto_cuota': montoCuotaName || '',
       'custentity_elm_plazo': ofertaFinal?.plazo || '',
       'custentity_sdb_actividad': activity || '',
       'custentity_sdb_fechanac': dateOfBirth || '',
@@ -500,7 +525,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       'custentity_sdb_infolab_importe': isEmpty(salary) ? '' : salary,
       'custentity_score': isEmpty(score) ? '' : score,
       'mobilephone': mobilephone || '',
-      'custentity_sdb_edad': age,
+      'custentity_sdb_edad': edad || '',
     };
 
     // Limpieza de undefined para evitar errores en submitFields
@@ -517,3 +542,4 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
   return { post };
 });
 
+''

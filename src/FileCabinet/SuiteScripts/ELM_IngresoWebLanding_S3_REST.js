@@ -13,6 +13,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
          let docNumber = requestBody?.docNumber;
          let mobilePhone = requestBody?.mobilephone;
          let source = requestBody?.source;
+         const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
          log.debug('RESTlet working', 'Documento: ' + docNumber + ' - Telefono: ' + mobilePhone + ' - Source: ' + source);
          const idLog = auxLib.createLogRecord(docNumber, null, false, 3, source, requestBody);
          const response = {
@@ -63,7 +64,20 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
 
                            if (repetidoIsFromExternal || repetidoIsFromManual) {
 
-                              let lead = auxLib.convertToLead(preLeadId, score, objScriptParam.leadStatus, objScriptParam.estadoPendienteEvaluacion, infoRepetido.firstName, infoRepetido.lastName, infoRepetido?.activityType, infoRepetido?.salary, infoRepetido?.dateOfBirth, infoRepetido.yearsOfWork, infoRepetido.email, infoRepetido?.age);
+                              let lead = auxLib.convertToLead(
+                                 preLeadId,
+                                 score,
+                                 objScriptParam.leadStatus,
+                                 objScriptParam.estadoPendienteEvaluacion,
+                                 isSandbox ? 'default' : infoRepetido.firstName,
+                                 isSandbox ? 'default' : infoRepetido.lastName,
+                                 infoRepetido?.activityType,
+                                 infoRepetido?.salary,
+                                 infoRepetido?.dateOfBirth,
+                                 infoRepetido.yearsOfWork,
+                                 infoRepetido.email,
+                                 infoRepetido?.age
+                              );
                               let montoCuotaObj = auxLib.getPonderador(score?.score, score?.calificacionMinima, score?.endeudamiento, infoRepetido?.salary, infoRepetido.activity, infoRepetido?.age);
                               let montoCuota = parseFloat(infoRepetido.salary) * parseFloat(montoCuotaObj.ponderador);
                               let ofertaFinal = auxLib.getOfertaFinal(montoCuota);
@@ -183,7 +197,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                            });
                              log.audit('Updated lead original', idUpdated);
                         }
-                        auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+                        auxLib.createListRepetido(docNumber, isSandbox ? 'default default' : (infoRepetido.firstName + ' ' + infoRepetido.lastName));
                      }
                   } else {
                      log.audit('Error', 'El documento ' + docNumber + ' pertenece a Mocasist.');
@@ -214,7 +228,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                               });
 
                                log.audit('Created customer', newCustomerId);
-                                auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+                                auxLib.createListRepetido(docNumber, isSandbox ? 'default default' : (infoRepetido.firstName + ' ' + infoRepetido.lastName));
                      } else {
                      auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoMocasist, objScriptParam?.rechazoMocasist);
                      }
@@ -249,7 +263,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
 
                                log.audit('Created customer', newCustomerId);
 
-                                auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+                                auxLib.createListRepetido(docNumber, isSandbox ? 'default default' : (infoRepetido.firstName + ' ' + infoRepetido.lastName));
                   } else {
                      auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoBlacklist, objScriptParam?.rechazoBlacklist);
                   }
@@ -350,7 +364,10 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
             estadoBlacklist: scriptObj.getParameter({
                name: 'custscript_elm_est_blacklist_s3'
             }),
-            providerBCU: '2'
+             //custscript_elm_bcu_elec_s3
+            providerBCU: scriptObj.getParameter({
+               name: 'custscript_elm_bcu_elec_s3'
+            })
         };
       
          return objParams;

@@ -42,6 +42,12 @@ libSandbox.define = function(deps, factory) {
   // map dependencies
   const resolved = (deps || []).map(function(d) {
     if (d === 'N/log') return { error: function() {}, debug: function() {}, audit: function() {} };
+    if (d === 'N/runtime') {
+      return {
+        EnvType: { SANDBOX: 'SANDBOX', PRODUCTION: 'PRODUCTION' },
+        envType: 'SANDBOX'
+      };
+    }
     if (d === './bcuScore/app/service') {
       return {
         calculateScore: function(dni, options) {

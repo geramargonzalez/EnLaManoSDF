@@ -36,21 +36,6 @@ function (https, log, normalize) {
             
             throw createMymError('MYM_FETCH_ERROR', error.message, error);
         }
-
-        // Fallback adicional: algunos entornos devuelven 'datosBcuT6' (sin guion bajo)
-        if (!datosBcuT6 && responseBody && responseBody.datosBcuT6 &&
-            responseBody.datosBcuT6 !== 'false' && responseBody.datosBcuT6 !== 'null') {
-            try {
-                datosBcuT6 = JSON.parse(responseBody.datosBcuT6);
-                log.debug({ title: 'MYM parsed datosBcuT6 (alias)', details: { documento: documento } });
-            } catch (e) {
-                log.error({
-                    title: 'MYM datosBcuT6 alias parse error - continuando con T6 vacío',
-                    details: { error: e.toString(), documento: documento }
-                });
-                datosBcuT6 = null;
-            }
-        }
     }
 
     /**
@@ -94,8 +79,11 @@ function (https, log, normalize) {
                 documento: documento,
                 hasDataosBcu: !!(responseBody && responseBody.datosBcu),
                 hasDatosBcuT6: !!(responseBody && (responseBody.datosBcu_T6 || responseBody.datosBcuT6)),
-                responseKeys: responseBody ? Object.keys(responseBody) : 'NO_RESPONSE',
-                responseBodyPreview: responseBody ? JSON.stringify(responseBody).substring(0, 500) : 'NO_BODY'
+                datosBcu_T6_type: typeof responseBody.datosBcu_T6,
+                datosBcu_T6_value: responseBody.datosBcu_T6 ? String(responseBody.datosBcu_T6).substring(0, 200) : 'EMPTY/NULL',
+                datosBcuT6_type: typeof responseBody.datosBcuT6,
+                datosBcuT6_value: responseBody.datosBcuT6 ? String(responseBody.datosBcuT6).substring(0, 200) : 'EMPTY/NULL',
+                responseKeys: responseBody ? Object.keys(responseBody) : 'NO_RESPONSE'
             }
         });
 
@@ -106,6 +94,11 @@ function (https, log, normalize) {
         if (responseBody.datosBcu) {
             try {
                 datosBcu = JSON.parse(responseBody.datosBcu);
+                
+                // CRITICAL FIX: Forzar conversión de arrays Java a JS nativo para T2
+                if (datosBcu && datosBcu.data) {
+                    datosBcu.data = forceConvertJavaArrays(datosBcu.data, documento, 'T2');
+                }
             } catch (e) {
                 throw createMymError('MYM_PARSE_BCU_ERROR', 'No se pudo parsear datosBcu', e);
             }
@@ -132,6 +125,31 @@ function (https, log, normalize) {
             responseBody.datosBcu_T6 !== false) {
             try {
                 datosBcuT6 = JSON.parse(responseBody.datosBcu_T6);
+                
+                // CRITICAL FIX: Forzar conversión de arrays Java a JS nativo
+                // Esto es necesario porque JSON.parse puede devolver objetos Java array-like
+                if (datosBcuT6 && datosBcuT6.data) {
+                    datosBcuT6.data = forceConvertJavaArrays(datosBcuT6.data, documento, 'T6');
+                }
+                
+                // DEBUG: Verificar estructura DESPUÉS de JSON.parse y conversión
+                if (datosBcuT6 && datosBcuT6.data) {
+                    const t6Data = datosBcuT6.data;
+                    const rubrosRaw = t6Data.RubrosValoresGenerales;
+                    log.audit({
+                        title: 'MYM T6 PARSE DEBUG',
+                        details: {
+                            documento: documento,
+                            rubrosIsArray: Array.isArray(rubrosRaw),
+                            rubrosType: Object.prototype.toString.call(rubrosRaw),
+                            rubrosLength: rubrosRaw ? rubrosRaw.length : 'null',
+                            rubrosHasIndex0: rubrosRaw ? !!(rubrosRaw[0]) : false,
+                            rubrosIndex0: rubrosRaw && rubrosRaw[0] ? JSON.stringify(rubrosRaw[0]) : 'empty',
+                            entidadesIsArray: Array.isArray(t6Data.EntidadesRubrosValores),
+                            entidadesLength: t6Data.EntidadesRubrosValores ? t6Data.EntidadesRubrosValores.length : 'null'
+                        }
+                    });
+                }
             } catch (e) {
                 log.error({
                     title: 'MYM datosBcu_T6 parse error - continuando con T6 vacío',
@@ -160,16 +178,42 @@ function (https, log, normalize) {
                 }
             }
         } else {
-            // datosBcu_T6 es false, null, o no existe - usar estructura vacía
-            log.debug({
-                title: 'MYM sin datosBcu_T6 - usando T6 vacío',
-                details: {
-                    documento: documento,
-                    datosBcu_T6Value: responseBody.datosBcu_T6,
-                    datosBcu_T6Type: typeof responseBody.datosBcu_T6
+            // datosBcu_T6 no existe o es false/null - intentar fallback con datosBcuT6 (sin guión bajo)
+            if (responseBody.datosBcuT6 && 
+                responseBody.datosBcuT6 !== 'false' && 
+                responseBody.datosBcuT6 !== false &&
+                responseBody.datosBcuT6 !== 'null') {
+                try {
+                    datosBcuT6 = JSON.parse(responseBody.datosBcuT6);
+                    // CRITICAL FIX: También convertir arrays para este formato alternativo
+                    if (datosBcuT6 && datosBcuT6.data) {
+                        datosBcuT6.data = forceConvertJavaArrays(datosBcuT6.data, documento, 'T6-alt');
+                    }
+                    log.debug({
+                        title: 'MYM parsed datosBcuT6 (alias sin guión bajo)',
+                        details: { documento: documento }
+                    });
+                } catch (e) {
+                    log.error({
+                        title: 'MYM datosBcuT6 alias parse error - continuando con T6 vacío',
+                        details: { error: e.toString(), documento: documento }
+                    });
+                    datosBcuT6 = null;
                 }
-            });
-            datosBcuT6 = null;
+            } else {
+                // Ningún formato de T6 disponible - usar estructura vacía
+                log.debug({
+                    title: 'MYM sin datosBcu_T6 ni datosBcuT6 - usando T6 vacío',
+                    details: {
+                        documento: documento,
+                        datosBcu_T6Value: responseBody.datosBcu_T6,
+                        datosBcu_T6Type: typeof responseBody.datosBcu_T6,
+                        datosBcuT6Value: responseBody.datosBcuT6,
+                        datosBcuT6Type: typeof responseBody.datosBcuT6
+                    }
+                });
+                datosBcuT6 = null;
+            }
         }
 
         // Verificar errores de validación en responseBody principal
@@ -336,6 +380,108 @@ function (https, log, normalize) {
             datosBcuT6: datosBcuT6,
             raw: responseBody
         };
+    }
+
+    /**
+     * CRITICAL: Fuerza la conversión de arrays Java a arrays JS nativos
+     * Esto es necesario porque JSON.parse en NetSuite puede devolver objetos
+     * que tienen estructura de array pero no pasan Array.isArray()
+     * @param {Object} data - Objeto que puede contener arrays Java
+     * @param {string} documento - Para logging
+     * @param {string} period - Nombre del período para logging
+     * @returns {Object} - Objeto con arrays convertidos
+     */
+    function forceConvertJavaArrays(data, documento, period) {
+        if (!data || typeof data !== 'object') return data;
+        
+        // Lista de propiedades que sabemos que son arrays
+        const arrayProps = ['EntidadesRubrosValores', 'RubrosValoresGenerales', 'Rubros', 'RubrosValores'];
+        
+        for (let i = 0; i < arrayProps.length; i++) {
+            const prop = arrayProps[i];
+            if (data[prop] !== undefined && data[prop] !== null) {
+                const original = data[prop];
+                const converted = convertToNativeArray(original);
+                
+                // Log solo si hubo conversión
+                if (!Array.isArray(original) && Array.isArray(converted) && converted.length > 0) {
+                    log.audit({
+                        title: 'forceConvertJavaArrays - Converted ' + prop,
+                        details: {
+                            documento: documento,
+                            period: period,
+                            originalType: Object.prototype.toString.call(original),
+                            convertedLength: converted.length
+                        }
+                    });
+                }
+                
+                data[prop] = converted;
+                
+                // Si es EntidadesRubrosValores, también convertir los Rubros dentro de cada entidad
+                if (prop === 'EntidadesRubrosValores' && Array.isArray(data[prop])) {
+                    for (let j = 0; j < data[prop].length; j++) {
+                        if (data[prop][j] && data[prop][j].RubrosValores) {
+                            data[prop][j].RubrosValores = convertToNativeArray(data[prop][j].RubrosValores);
+                        }
+                        if (data[prop][j] && data[prop][j].Rubros) {
+                            data[prop][j].Rubros = convertToNativeArray(data[prop][j].Rubros);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Convierte un objeto array-like a un array JS nativo
+     */
+    function convertToNativeArray(obj) {
+        // Ya es array nativo
+        if (Array.isArray(obj)) return obj;
+        
+        // Es null/undefined
+        if (obj === null || obj === undefined) return [];
+        
+        // Tiene propiedad length numérica (típico de Java arrays)
+        if (typeof obj === 'object' && typeof obj.length === 'number') {
+            const arr = [];
+            for (let i = 0; i < obj.length; i++) {
+                arr.push(obj[i]);
+            }
+            return arr;
+        }
+        
+        // Intentar convertir via JSON (fuerza serialización/deserialización)
+        try {
+            const jsonStr = JSON.stringify(obj);
+            const parsed = JSON.parse(jsonStr);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {
+            // Ignorar errores
+        }
+        
+        // Último intento: iterar con for..in
+        if (typeof obj === 'object') {
+            const keys = Object.keys(obj);
+            // Si las keys son numéricas consecutivas, probablemente es array-like
+            const isNumericKeys = keys.length > 0 && keys.every(function(k, idx) {
+                return String(idx) === k || !isNaN(parseInt(k, 10));
+            });
+            
+            if (isNumericKeys) {
+                const arr = [];
+                for (let i = 0; i < keys.length; i++) {
+                    arr.push(obj[keys[i]]);
+                }
+                return arr;
+            }
+        }
+        
+        // No se pudo convertir, retornar array vacío
+        return [];
     }
 
     /**

@@ -61,8 +61,6 @@ define([
             if (options.provider === PROVIDER_EQUIFAX) {
                 const worstRating = normalizedData?.metadata?.worstRating || '0';
                 const shouldFetchT6 = worstRating === '1C' || worstRating === '2A' || worstRating === 'N/C';
-        
-                
                 if (shouldFetchT6) {
                     normalizedDataT6 = fetchProviderData(documento, options, 8);
                      // log.debug({ title: 'Normalized Data t6 months', details: { idLog, normalizedDataT6 } });

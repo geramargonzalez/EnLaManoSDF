@@ -358,12 +358,16 @@ define(['N/log'], function (log) {
             }
         }
 
+        // Extraer t6_mnPesos - primero intentar rubrosValoresGenerales, luego aggregates
         try {
-            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
+            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0] && t6.rubrosValoresGenerales[0].MnPesos !== undefined) {
                 t6_mnPesos = t6.rubrosValoresGenerales[0].MnPesos;
+            } else if (t6.aggregates && t6.aggregates.vigente && t6.aggregates.vigente.mn !== undefined) {
+                // Fallback a aggregates si rubrosValoresGenerales no tiene datos
+                t6_mnPesos = t6.aggregates.vigente.mn;
             }
         } catch (E) {
-            log.error('Failed to extract t6_mnPesos from rubrosValoresGenerales', E.toString());
+            log.error('Failed to extract t6_mnPesos', E.toString());
             try {
                 if (t6.aggregates && t6.aggregates.vigente) {
                     t6_mnPesos = t6.aggregates.vigente.mn;
@@ -373,12 +377,16 @@ define(['N/log'], function (log) {
             }
         }
 
+        // Extraer t6_mePesos - primero intentar rubrosValoresGenerales, luego aggregates
         try {
-            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0]) {
+            if (t6.rubrosValoresGenerales && t6.rubrosValoresGenerales[0] && t6.rubrosValoresGenerales[0].MePesos !== undefined) {
                 t6_mePesos = t6.rubrosValoresGenerales[0].MePesos;
+            } else if (t6.aggregates && t6.aggregates.vigente && t6.aggregates.vigente.me !== undefined) {
+                // Fallback a aggregates si rubrosValoresGenerales no tiene datos
+                t6_mePesos = t6.aggregates.vigente.me;
             }
         } catch (E) {
-            log.error('Failed to extract t6_mePesos from rubrosValoresGenerales', E.toString());
+            log.error('Failed to extract t6_mePesos', E.toString());
             try {
                 if (t6.aggregates && t6.aggregates.vigente) {
                     t6_mePesos = t6.aggregates.vigente.me;
@@ -404,11 +412,12 @@ define(['N/log'], function (log) {
         let endeudamiento = -314;
         try {
             // CRITICAL FIX: Si T6 está vacío o tiene valores negativos (datos no disponibles),
-            // no podemos calcular endeudamiento histórico. En ese caso, usar endeudamiento = 0 
-            // (sin cambio) para no penalizar injustamente el score.
+            // no podemos calcular endeudamiento histórico. En ese caso, usar endeudamiento = 1
+            // para indicar que la deuda actual es "nueva" (no hay referencia histórica).
+            // endeudamiento = 1 significa que la deuda se duplicó respecto a T6 (o que no había deuda en T6)
             if (t6_mnPesos <= 0 && t6_mePesos <= 0) {
-                // T6 no disponible - asumir sin cambio (endeudamiento = 0)
-                endeudamiento = 0;
+                // T6 no disponible - asumir deuda nueva (endeudamiento = 1)
+                endeudamiento = 1;
              
             } else {
                 endeudamiento = ((t2_mnPesos + t2_mePesos) / (t6_mnPesos + t6_mePesos)) - 1;
@@ -657,6 +666,24 @@ define(['N/log'], function (log) {
         let contador = 0;
         let __maxCalifMinT6 = 0;
 
+        // CRITICAL FIX: Cuando T6 está vacío (0 entidades), se deben usar los woe_min
+        // para las variables T6, NO quedarse en 0.
+        // Según el modelo Excel:
+        // - t6.binned "missing" = -9.95 (woe para cuando no hay calificación T6)
+        // - t6_oca.binned "resto" = -15.16
+        // - t6_banco.binned "resto" = -37.55
+        // - etc.
+        
+        // Siempre inicializar con woe_min - se sobrescribirán si hay entidades T6 con match
+        t6_binned_res = -9.95;               // woe_min para t6.binned (missing/sin calificación)
+        t6_creditel_binned_res = -17.15;     // woe_min para t6_creditel.binned
+        t6_oca_binned_res = -15.16;          // woe_min para t6_oca.binned
+        t6_pronto_binned_res = -7.86;        // woe_min para t6_pronto.binned
+        cred_dir_binned_res = -90.18;        // woe_min para t6_cred_dir.binned (resto)
+        t6_cred_dir_comp_binned_res = -4.35; // woe_min para t6_cred_dir_comp.binned
+        t6_banco_binned_res = -37.55;        // woe_min para t6_banco.binned
+        vig_noauto_t6_coop_binned_res = -23.52; // woe_min para vig_noauto_t6_coop.binned
+
         for (let __i = 0, __n = t6List.length; __i < __n; __i++) {
             let current = t6List[__i];
             contador = contador + 1; // Incrementar contador igual que el original
@@ -691,14 +718,16 @@ define(['N/log'], function (log) {
                 t6_oca_binned_res = -15.16;
             }
 
-            // CREDITOS DIRECTOS / cred_dir_binned_res (replicar la lógica tal cual del original, incluyendo su quirks)
+            // CREDITOS DIRECTOS / cred_dir_binned_res
+            // Según modelo Excel: woe_min=-90.18, woe_max=30.77, default=-4.12 (cuando no hay entidades T6)
             const matchesCredDir = nameIncludesAny(nameU, ['CREDITOS DIRECTOS', 'CRED. DIRECTOS']);
             if ((matchesCredDir && califU === '1C') || califU === '2A') {
                 cred_dir_binned_res = 30.77;
             } else if ((matchesCredDir && cred_dir_binned_res !== 30.77 && califU !== '2A') || califU !== '1C') {
                 cred_dir_binned_res = -90.18;
             }
-            if (cred_dir_binned_res !== 30.77 || cred_dir_binned_res !== -90.18) {
+            // Si no entró en ninguno de los casos anteriores, usar -4.12 como valor intermedio
+            if (cred_dir_binned_res !== 30.77 && cred_dir_binned_res !== -90.18) {
                 cred_dir_binned_res = -4.12;
             }
 
@@ -745,10 +774,11 @@ define(['N/log'], function (log) {
         }
         
         // Después del loop, asignar ent_t6_binned_res según contador (igual que el original)
+        // Excel: woe_min=-63.64, woe_max=72.8 para cont_ent_t6
         if (contador === 0 || contador === 1) ent_t6_binned_res = -63.64;
         if (contador === 2 || contador === 3) ent_t6_binned_res = 8;
         if (contador === 4 || contador === 5) ent_t6_binned_res = 34.84;
-        if (contador > 5) ent_t6_binned_res = 72, 80; // Bug del original: asigna 72
+        if (contador > 5) ent_t6_binned_res = 72.8; // Corregido: era 72, 80 (bug operador coma)
         
         if ((__maxCalifMinT6 || 0) >= 5) {
             t6_binned_res = -9.95;
@@ -777,7 +807,19 @@ define(['N/log'], function (log) {
         cont_t0_fucac_binned_res = -7.01;
         brou_grupo_binned_res = -15.44;
         t0_santa_binned_res = -18.27;
-        t0_fnb_binned_res = 0; // Inicia en 0 - lógica condicional determina valor final
+        
+        // t0_fnb_binned_res: Regla del modelo según peor calificación (CalificacionMinima0)
+        // CalificacionMinima0: 1=1A, 2=1C, 3=2A, 4=2B, 5=3, 6=4, 7=5
+        // - Si peor calif = 1A (1) o 1C (2) → 14.06
+        // - Si peor calif = 2A (3) → -6.06
+        // - Resto → -42.71
+        if (object0Min.CalificacionMinima0 === 1 || object0Min.CalificacionMinima0 === 2) {
+            t0_fnb_binned_res = 14.06;
+        } else if (object0Min.CalificacionMinima0 === 3) {
+            t0_fnb_binned_res = -6.06;
+        } else {
+            t0_fnb_binned_res = -42.71;
+        }
 
         for (let key2 = 0, __n2 = t2List.length; key2 < __n2; key2++) {
             let currentt2 = t2List[key2];
@@ -812,27 +854,7 @@ define(['N/log'], function (log) {
                 dbg('Binned values Vizcaya other', t0_bbva_binned_res);
             }
 
-            // t0_fnb_binned_res según object0.CalificacionMinima0
-            // IMPORTANTE: Inicializado en 0, lógica condicional determina valor final
-            // Replicar la lógica exacta del SDB-Enlamano-score.js (if-else-if-else-if)
-            const fnbBefore = t0_fnb_binned_res;
-            if ((object0Min.CalificacionMinima0 === 2 || object0Min.CalificacionMinima0 === 1)) {
-                if (nameIncludesAny(name0U, ['INTEGRALES','BAUTZEN','CREDITOS DIRECTOS','EMPRENDIMIENTOS','MICROFINANZAS','OCA','PASS CARD','PROMOTORA','REPUBLICA MICROFINANZAS','REPUBLICA MICROFINAZAS','RETOP','CIA','SOCUR','VERENDY'])) {
-                    t0_fnb_binned_res = 14.06;
-                }
-                // Si no matchea nombres FNB, queda en 0 (valor inicial)
-            } else if (object0Min.CalificacionMinima0 === 3 && t0_fnb_binned_res !== 14.06) {
-                if (nameIncludesAny(name0U, ['INTEGRALES','BAUTZEN','CREDITOS DIRECTOS','EMPRENDIMIENTOS','MICROFINANZAS','OCA','PASS CARD','PROMOTORA','REPUBLICA MICROFINANZAS','REPUBLICA MICROFINAZAS','RETOP','CIA','SOCUR','VERENDY'])) {
-                    t0_fnb_binned_res = -6.06;
-                }
-            } else if (t0_fnb_binned_res !== 14.06 && t0_fnb_binned_res !== -6.06) {
-                // Para otros valores de CalificacionMinima0 (4, 5, 6, etc.), asignar -42.71
-                t0_fnb_binned_res = -42.71;
-            }
-            
-            if (fnbBefore !== t0_fnb_binned_res) {
-                logTxt += '<P>DEBUG t0_fnb changed for ' + name0U + ': ' + fnbBefore + ' -> ' + t0_fnb_binned_res + ' (object0Min.CalificacionMinima0=' + object0Min.CalificacionMinima0 + ')</P>';
-            }
+            // NOTA: t0_fnb_binned_res ya se calculó antes del loop basándose en cantidad de entidades T2
 
             // t0_scotia_binned - REPLICAR LÓGICA CON ELSE
             if (currentt2.Cont && nameIncludesAny(name0U, ['SCOTIABANK','SCOTIA'])) {
@@ -1191,10 +1213,6 @@ define(['N/log'], function (log) {
             return result;
     }
 
-
-
-
-
     /**
      * Verifica reglas de rechazo automático
      */
@@ -1373,7 +1391,7 @@ define(['N/log'], function (log) {
             applied: penalty !== 0
         };
     }
-
+ 
     /**
      * Calcula contribución por trending (comparación t0 vs t6)
      */

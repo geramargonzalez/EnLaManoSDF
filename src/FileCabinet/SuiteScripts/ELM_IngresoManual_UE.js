@@ -31,6 +31,14 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          let idLog = null;
          const docNumber = newRecord.getValue(FIELDS.docNumber);
          const estadoGestionPendienteSinRespuesta = newRecord.getValue(FIELDS.aprobado);
+
+          // En sandbox, enmascarar nombres de leads/preleads
+          const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
+          if (isSandbox) {
+             newRecord.setValue('firstname', 'default');
+             newRecord.setValue('lastname', 'default');
+          }
+
          const response = {
                docNumber: docNumber,
                success: true,
@@ -39,10 +47,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
         
          try {
 
-             if (type == scriptContext.UserEventType.CREATE) {
+               if (type == scriptContext.UserEventType.CREATE) {
                idLog = auxLib.createLogRecord(docNumber, null, false, 5, 'Manual');
             }
-
             if(estadoGestionPendienteSinRespuesta == 22) {
                return null
             }
@@ -285,7 +292,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             estadoRepAprobado: scriptObj.getParameter({ name: 'custscript_elm_rep_aprobado_manual' }),
             estadoMocasist: scriptObj.getParameter({ name: 'custscript_elm_estado_mocasist_man' }),
             estadoBlacklist: scriptObj.getParameter({ name: 'custscript_elm_estado_blacklist_man' }),
-            providerBCU: '2'
+            providerBCU: scriptObj.getParameter({ name: 'custscript_elm_provider_bcu_s5' })
 
          };
       };

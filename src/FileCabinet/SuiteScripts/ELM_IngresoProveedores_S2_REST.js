@@ -27,7 +27,7 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
                log.debug('Response S1  ' + docNumber, JSON.stringify(response));
                auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
                return response;
-            }
+            } 
 
             if (!mobilephone) {
                log.audit('Error', 'El documento ' + docNumber + ' no tiene un telefono valido.');
@@ -46,9 +46,11 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
 
                let channel = '';
                if (lead.status === objScriptParam.leadStatusLat) {
+                     
                   approvalStatus = objScriptParam.leadStatusApr;
                   response.success = true;
                   const canal = auxLib.getProveedorId(source)
+
                   auxLib.snapshotAprobados(docNumber, lead.id, approvalStatus, canal || '');
                   if (source) {
                    channel = auxLib.getProveedorId(source);

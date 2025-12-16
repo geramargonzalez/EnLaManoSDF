@@ -3,7 +3,7 @@
  * @description Normalización de respuestas de proveedores BCU a formato uniforme
  */
 
-define([], function () {
+define(['N/log'], function (log) {
     'use strict'; 
 
     const PROVIDER_EQUIFAX = 'equifax';
@@ -403,22 +403,65 @@ define([], function () {
         // Extraer data de T6 (datosBcuT6)
         const dataT6 = datosBcuT6.data || {};
         
+        // DEBUG LOGGING: Verificar qué tipo de datos llegaron para T6
+        log.audit({
+            title: 'normalizeMymResponse DEBUG T6',
+            details: {
+                documento: documento,
+                hasDatosBcuT6: !!datosBcuT6,
+                hasDataT6: !!dataT6,
+                dataT6Keys: dataT6 ? Object.keys(dataT6) : [],
+                entidadesT6Type: dataT6.EntidadesRubrosValores ? Object.prototype.toString.call(dataT6.EntidadesRubrosValores) : 'undefined',
+                entidadesT6IsArray: Array.isArray(dataT6.EntidadesRubrosValores),
+                rubrosT6Type: dataT6.RubrosValoresGenerales ? Object.prototype.toString.call(dataT6.RubrosValoresGenerales) : 'undefined',
+                rubrosT6IsArray: Array.isArray(dataT6.RubrosValoresGenerales),
+                rubrosT6Length: dataT6.RubrosValoresGenerales ? (dataT6.RubrosValoresGenerales.length || 'no-length') : 'undefined',
+                rubrosT6Sample: dataT6.RubrosValoresGenerales && dataT6.RubrosValoresGenerales[0] ? JSON.stringify(dataT6.RubrosValoresGenerales[0]) : 'empty or not indexable'
+            }
+        });
+        
         // Normalizar entidades y rubros de T2 (forzar arrays JS)
-        function ensureJsArray(arr) {
+        // CRITICAL: Los arrays Java de NetSuite pueden venir en varios formatos
+        function ensureJsArray(arr, debugLabel) {
+            // Ya es array JS
             if (Array.isArray(arr)) return arr.slice();
+            
+            // Array-like con length numérico (Java arrays)
             if (arr && typeof arr === 'object' && typeof arr.length === 'number') {
                 var out = [];
                 for (var i = 0; i < arr.length; i++) out.push(arr[i]);
                 return out;
             }
+            
+            // Intentar convertir usando JSON.stringify/parse (fuerza conversión a JS nativo)
+            if (arr && typeof arr === 'object') {
+                try {
+                    var jsonStr = JSON.stringify(arr);
+                    var parsed = JSON.parse(jsonStr);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {
+                    // Ignorar errores de serialización
+                }
+            }
+            
+            // Intentar usar Object.values si es iterable
+            if (arr && typeof arr === 'object' && typeof Object.values === 'function') {
+                try {
+                    var values = Object.values(arr);
+                    if (values.length > 0) return values;
+                } catch (e) {
+                    // Ignorar
+                }
+            }
+            
             return [];
         }
-        const entidadesT2 = ensureJsArray(dataT2.EntidadesRubrosValores || []);
-        const rubrosT2 = ensureJsArray(dataT2.RubrosValoresGenerales || []);
+        const entidadesT2 = ensureJsArray(dataT2.EntidadesRubrosValores || [], 'entidadesT2');
+        const rubrosT2 = ensureJsArray(dataT2.RubrosValoresGenerales || [], 'rubrosT2');
         
         // Normalizar entidades y rubros de T6
-        const entidadesT6 = ensureJsArray(dataT6.EntidadesRubrosValores || []);
-        const rubrosT6 = ensureJsArray(dataT6.RubrosValoresGenerales || []);
+        const entidadesT6 = ensureJsArray(dataT6.EntidadesRubrosValores || [], 'entidadesT6');
+        const rubrosT6 = ensureJsArray(dataT6.RubrosValoresGenerales || [], 'rubrosT6');
         
         // Convertir formato MYM a formato normalizado
         // NOTA: Usamos nombres t0/t6 en la estructura normalizada por compatibilidad con score.js

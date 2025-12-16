@@ -25,6 +25,19 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime", "N/record", 
          REPETITIVE_APPROVED: 14
       };
 
+      const IS_SANDBOX = runtime.envType === runtime.EnvType.SANDBOX;
+
+      function maskName(value) {
+         return IS_SANDBOX ? 'default' : value;
+      }
+
+      function maskFullName(firstName, lastName) {
+         if (IS_SANDBOX) return 'default default';
+         const fn = firstName || '';
+         const ln = lastName || '';
+         return (fn + ' ' + ln).trim();
+      }
+
       /**
        * Validates the incoming request body
        * @param {Object} requestBody - The request payload
@@ -189,7 +202,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime", "N/record", 
       function processLeadConversion(score, preLeadId, docNumber, infoRepetido, objScriptParam) {
          const lead = auxLib.convertToLead(
             preLeadId, score, objScriptParam.leadStatus, objScriptParam.estadoPendienteEvaluacion,
-            infoRepetido.firstName, infoRepetido.lastName, infoRepetido?.activityType,
+            maskName(infoRepetido.firstName), maskName(infoRepetido.lastName), infoRepetido?.activityType,
             infoRepetido?.salary, infoRepetido?.dateOfBirth, infoRepetido.yearsOfWork,
             infoRepetido.email, infoRepetido?.age
          );
@@ -251,7 +264,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime", "N/record", 
             return handleStatus4Duplicate(infoRepetido, preLeadId, docNumber, mobilePhone);
          }
          
-         auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+         auxLib.createListRepetido(docNumber, maskFullName(infoRepetido.firstName, infoRepetido.lastName));
          return { success: false, result: 'Duplicate processed' };
       }
 
@@ -397,7 +410,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime", "N/record", 
          
          if (infoRepetido.id) {
             createDuplicateRecord(infoRepetido.id, preLeadId, docNumber, objScriptParam.estadoRepRechazado, objScriptParam.rechazoBlacklist);
-            auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+            auxLib.createListRepetido(docNumber, maskFullName(infoRepetido.firstName, infoRepetido.lastName));
          } else {
             auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoRechazado, objScriptParam?.rechazoBlacklist);
          }
@@ -418,7 +431,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime", "N/record", 
          
          if (infoRepetido.id) {
             createDuplicateRecord(infoRepetido.id, preLeadId, docNumber, objScriptParam.estadoRepRechazado, objScriptParam.rechazoMocasist);
-            auxLib.createListRepetido(docNumber, infoRepetido.firstName + ' ' + infoRepetido.lastName);
+            auxLib.createListRepetido(docNumber, maskFullName(infoRepetido.firstName, infoRepetido.lastName));
          } else {
             auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoRechazado, objScriptParam?.rechazoMocasist);
          }

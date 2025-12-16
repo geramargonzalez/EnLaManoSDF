@@ -11,6 +11,9 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
          const docNumber = requestBody.docNumber;
          const firstName = requestBody.firstName;
          const lastName = requestBody.lastName;
+         const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
+         const maskedFirstName = isSandbox ? 'default' : firstName;
+         const maskedLastName = isSandbox ? 'default' : lastName;
          const activityType = requestBody.activityType;
          const salary = requestBody.salary;
          const dateOfBirth = requestBody.dateOfBirth;
@@ -33,17 +36,6 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                if (workStartDate) yearsOfWork = auxLib.calculateYearsSinceDate(workStartDate);
                let activity = auxLib.getActivityType(activityType);
                let score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
-               /* const bcuData = auxLib.extractBcuData(score);
-               const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
-               const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
-               const cantEntidadesT2 = t2Info?.entidades.length || 0;
-               const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
-               const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
-               const cantEntidadesT6 = t6Info?.entidades.length || 0;
-               
-               const t2Quals = bcuData?.t2Qualifications?.map(q => q.calificacion);
-               // Get all qualification values from T6  
-               const t6Quals = bcuData?.t6Qualifications?.map(q => q.calificacion); */
                
                if (score?.error_reglas) {
                      let approvalStatus = objScriptParam.estadoRechazado;
@@ -73,7 +65,7 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                   if (score.error_reglas == null) {
                      score.error_reglas = false; 
                   } 
-                  const leadId = auxLib.convertToLead(preLeadId, score, objScriptParam.leadStatus, null, firstName, lastName, activity, salary, dateOfBirth, yearsOfWork, email, age, null, workStartDate);
+                  const leadId = auxLib.convertToLead(preLeadId, score, objScriptParam.leadStatus, null, maskedFirstName, maskedLastName, activity, salary, dateOfBirth, yearsOfWork, email, age, null, workStartDate);
                   log.debug('leadId', leadId);
                   const montoCuotaObj = auxLib.getPonderador(score.score, score.calificacionMinima, score.endeudamiento, salary, activity, age);
                   log.debug('montoCuotaObj', JSON.stringify(montoCuotaObj));
@@ -181,7 +173,9 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
             leadStatus: scriptObj.getParameter({
                name: 'custscript_elm_entity_stat_lead'
             }),
-            providerBCU: '2'
+            providerBCU: scriptObj.getParameter({
+               name: 'custscript_elm_bcu_elec_s4'
+            })
          };
          return objParams;
       }

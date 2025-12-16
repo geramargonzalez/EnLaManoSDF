@@ -3,8 +3,9 @@
  * @description ELM_SCORE_BCU_LIB OPTIMIZADO para máxima velocidad de respuesta
  */
 
-define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
+define(['N/log', 'N/runtime', './bcuScore/app/service'], function (log, runtime, scoreService) {
     'use strict';
+
 
     /**
      * OPTIMIZADO: Entry point con mínima latencia y backward compatibility
@@ -22,6 +23,8 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                 score: 0
             };
         }
+
+        const isSandbox = runtime && runtime.envType === runtime.EnvType.SANDBOX;
  
         try {
             // Mapear options a nuevo formato optimizado
@@ -57,7 +60,7 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
                 const errorCode = rejectionReason === 'NO_BCU_DATA' ? 404 : 422;
                 
                 return {
-                    title: rejectionReason === 'NO_BCU_DATA' ? 'Sin información BCU' : 'Score rechazado',
+                    title: rejectionReason === 'NO_BCU_DATA' ? 'No hay Información en BCU' : 'Score rechazado',
                     error_reglas: errorCode,
                     detail: result.metadata.rejectionMessage || rejectionReason,
                     score: 0,
@@ -71,18 +74,22 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
 
             // Respuesta exitosa en formato exactamente igual a SDB-Enlamano-score.js
             // CRITICAL: Agregar t2/t6 para compatibilidad con extractBcuData
+            // T2 viene de normalizedData.periodData.t0 (periodo actual)
+            // T6 viene de normalizedDataT6.periodData.t0 (periodo 6 meses atrás - segunda llamada)
             return {
                 score: result.score,
                 calificacionMinima: result.calificacionMinima || extractWorstRating(result),
                 contador: result.contador || extractEntityCount(result),
                 mensaje: result.mensaje || 'No tenemos prestamo disponible en este momento',
                 endeudamiento: result.endeudamiento !== undefined ? result.endeudamiento : extractTotalDebt(result),
-                nombre: result.nombre || '',
+                nombre: isSandbox ? 'default default' : (result.nombre || ''),
                 error_reglas: false,
                 logTxt: result.logTxt || '',
                 // Agregar t2/t6 desde normalizedData para que extractBcuData pueda procesarlos
+                // T2 = datos del periodo actual (t0 de normalizedData)
+                // T6 = datos de 6 meses atrás (t0 de normalizedDataT6, ya que es una consulta separada)
                 t2: result.normalizedData?.periodData?.t0 || null,
-                t6: result.normalizedData?.periodData?.t6 || null,
+                t6: result.normalizedDataT6?.periodData?.t0 || result.normalizedData?.periodData?.t6 || null,
                 periodoT2: result.periodoT2 || result.metadata?.periodoT2,
                 periodoT6: result.periodoT6 || result.metadata?.periodoT6
             };
@@ -143,6 +150,8 @@ define(['N/log', './bcuScore/app/service'], function (log, scoreService) {
         
         return vigente + vencido + castigado;
     }
+
+
 
     // Public API con backward compatibility
     return {

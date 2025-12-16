@@ -3,11 +3,12 @@
  * @description Adaptador Equifax OPTIMIZADO para máxima velocidad de respuesta
  */
 
-define(['N/https', 'N/log', 'N/runtime', 'N/encode', '../domain/normalize', 'N/search'], 
-function (https, log, runtime, encode, normalize, search) {
+define(['N/https', 'N/log', 'N/runtime', 'N/encode', '../domain/normalize', 'N/search', 'N/record', 'N/format'], 
+function (https, log, runtime, encode, normalize, search, record, format) {
     'use strict';
 
     const TIMEOUT_MS = 10000; // REDUCIDO: 15s para respuesta rápida
+    const TOKEN_MAX_AGE_MS = 14 * 60 * 1000; // 14 minutos para forzar refresh frecuente
     
     // Pre-compilar URLs y headers para evitar string concatenations
     let _config = null;
@@ -73,24 +74,63 @@ function (https, log, runtime, encode, normalize, search) {
             _config = getEquifaxConfig(isSandbox);
             
             // Verificar si se debe forzar generación de nuevo token
-            const forceRefresh = options.forceNewToken === false;
-            
-            if (forceRefresh) {
+            const forceNewToken = options.forceNewToken === true;
+            if (forceNewToken) {
                 log.audit({
                     title: 'Equifax Token Force Refresh',
-                    details: 'Generando nuevo token por solicitud explícita (forceNewToken=false)'
+                    details: 'Generando nuevo token por solicitud explícita (forceNewToken=true)'
                 });
             }
-            
-            // const accessToken = getValidToken(isSandbox, forceRefresh);
 
             const tokenField = search.lookupFields({
                 type: 'customrecord_elm_config_servicion',
                 id: 1,
-                columns: ['custrecord_elm_token_prov']
+                columns: ['custrecord_elm_token_prov', 'custrecord_elm_token_ref_date']
             });
-            const accessToken = tokenField.custrecord_elm_token_prov;
-            
+
+            let accessToken = tokenField.custrecord_elm_token_prov;
+            const dateRefreshToken = parseNsDateTime(tokenField.custrecord_elm_token_ref_date);
+
+            const tokenTooOld = !dateRefreshToken || ((Date.now() - dateRefreshToken.getTime()) >= TOKEN_MAX_AGE_MS);
+    
+            const needsNewToken = !accessToken || tokenTooOld;
+
+           if (needsNewToken) {
+                log.audit({
+                    title: 'Creating new Equifax token',
+                    details: 'Token is missing or too old, creating a new one.'
+                });
+                 accessToken = getValidToken(false, true);
+                // accessToken = 'eyJraWQiOiJlMTNmX1ZnOXdXcGp4NTkzX3FmWTRzMmU1eUtlTnBWU0xkc1AwUk9PRGU4IiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkM2cFNkYmlYSG5uOHo2WjNsSXE1eXJMSGNjbVdaTVYwWTBpNGVLOEV0bzQiLCJpc3MiOiJodHRwczovL2VxdWlmYXgtaWNnLWNhbi1nY3Aub2t0YS5jb20vb2F1dGgyL2F1czE4N2h0bHRPb05ZWG80NWQ3IiwiYXVkIjoiOTc3YmUyMWIwNzcwNDhlNjhkNDY3OTlhMWY5YzA4NzAiLCJpYXQiOjE3NjU4OTQ3NTYsImV4cCI6MTc2NTk4MTE1NiwiY2lkIjoiMG9hZzh4bHcxeTZCdjZJYkI1ZDciLCJ1aWQiOiIwMHVybnR4OHg2RGNkSGdKUTVkNyIsInNjcCI6WyJvcGVuaWQiXSwiYXV0aF90aW1lIjoxNzY1ODk0NzU2LCJzdWIiOiJ1c2VydXltYW5kYXp5Iiwicm9sZXMiOlsiRUZYX0lDX1JPTEVfTEFUQU1fQ09ORklHVVJBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV9MQVRBTV9DQUxDVUxBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV91cm46c2w6aWQ9RXF1aWZheFJ1bGVFeGVjdXRvcklDR0NQIiwiRUZYX0lDX1JPTEVfVXNlciJdLCJncm91cHMiOiJHdWVzdCIsImxvY2tlZFVzZXIiOiIwIiwiZ2l2ZW5fbmFtZSI6InVzZXJ1eW1hbmRhenkiLCJzdHNfdXNlciI6ImZhbHNlIiwib2ZmaWNlX2lkIjoiIiwiVXNlcklkIjoidXNlcnV5bWFuZGF6eSIsIm5hbWUiOiJ1c2VyIiwib3JnYW5pemF0aW9ucyI6WyJFRlhfSUNfT1JHX1VZSUNNQU5EQVpZIiwiRUZYX0lDX09SR19VWUlDQk9YIiwiRUZYX0lDX09SR19VWUNPUkUiLCJFRlhfSUNfT1JHX1VZQ01TIl0sInVzZXJFbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJlbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJzdGF0dXMiOiIwIn0.i8dVmCW9jr5Z1zArjqVYwqX0eVDJ_vg3bfsISzxdsmDe0-8Da3znh-olYY8pf_CuTM1VUv5b9h18hLc8rUNgn0IN1UdcDpc6lp1qkHWI5zUeK_TeZkGlrd1PW7oeWw7B-vgfC6oSg6FvWgIAc2JyJtgwD6LdULeBIOsJYe-LbB6xEh_pXhSAxGdaqX42-zGojKtR74watL0VqeInXNich1zwQzOIql9yGTLSKwof_8IRPvaYShfrT_7GXyWodr6Uu6GJvmWX8PH_OcHwjDxcY6Zl_YrO80UyeUjA-Y3S61-_W4D1zbOcY7SYeLewD1WATbNkRHHP3roerkKJHVCYkQ';
+                try {
+                    const idLogrecord = record.submitFields({
+                        type: 'customrecord_elm_config_servicion',
+                        id: 1,
+                        values: {
+                            custrecord_elm_token_prov: accessToken,
+                            custrecord_elm_token_ref_date: new Date()
+                        },
+                        options: {
+                            enableSourcing: false,
+                            ignoreMandatoryFields: true
+                        }
+                    });
+
+                log.audit({
+                        title: 'Equifax Token Persisted',
+                        details: 'Nuevo token guardado en custom record, ID: ' + idLogrecord
+                    });
+                } catch (e) {
+                    // Si fal la persistencia, igual intentamos continuar con el token en memoria
+                    
+                    log.debug({
+                        title: 'Equifax Token Persist Error',
+                        details: (e && e.message) ? e.message : String(e)
+                    });
+                    
+                }
+            }
+
             // Request optimizado con timeout corto
             const response = executeEquifaxRequest(documento, accessToken, options, periodMonths);
  
@@ -109,6 +149,8 @@ function (https, log, runtime, encode, normalize, search) {
             throw createEquifaxError('EQUIFAX_FETCH_ERROR', error.message, error);
         }
     }
+
+    
 
     /**
      * Genera un nuevo token de Equifax mediante OAuth2.
@@ -221,10 +263,10 @@ function (https, log, runtime, encode, normalize, search) {
 
         const response = https.request(requestOptions);
         
-        log.debug({
+/*         log.debug({
             title: 'Equifax Response',
             details: 'Code: ' + response.code + ', Body: ' + response.body
-        });
+        }); */
 
         if (response.code !== 200) {
             throw mapEquifaxHttpError(response.code, response.body);
@@ -374,6 +416,54 @@ function (https, log, runtime, encode, normalize, search) {
         if (details) error.details = details;
         return error;
     }
+
+     /**
+     * Parse robusto de Date/Time para valores devueltos por search.lookupFields.
+     * NetSuite suele devolver strings en formato de cuenta; intentamos N/format primero.
+     */
+    function parseNsDateTime(value) {
+        if (!value) return null;
+        if (value instanceof Date) return value;
+
+        // A veces viene como array (según tipo de campo), nos quedamos con el primer valor
+        if (Array.isArray(value)) {
+            if (!value.length) return null;
+            value = value[0];
+        }
+
+        const s = String(value);
+
+        // Preferir parser de NetSuite
+        try {
+            if (format && typeof format.parse === 'function' && format.Type && format.Type.DATETIME) {
+                const parsed = format.parse({ value: s, type: format.Type.DATETIME });
+                if (parsed instanceof Date && !isNaN(parsed.getTime())) return parsed;
+            }
+        } catch (e) {
+            // fallback a parsing manual
+        }
+
+        // Fallback: Date nativo (funciona si viene ISO)
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) return d;
+
+        // Fallback: formatos comunes dd/mm/yyyy hh:mm(:ss)
+        const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) {
+            const day = parseInt(m[1], 10);
+            const month = parseInt(m[2], 10) - 1;
+            let year = parseInt(m[3], 10);
+            if (year < 100) year += 2000;
+            const hour = m[4] ? parseInt(m[4], 10) : 0;
+            const minute = m[5] ? parseInt(m[5], 10) : 0;
+            const second = m[6] ? parseInt(m[6], 10) : 0;
+            const dd = new Date(year, month, day, hour, minute, second);
+            if (!isNaN(dd.getTime())) return dd;
+        }
+
+        return null;
+    }
+
 
 
 

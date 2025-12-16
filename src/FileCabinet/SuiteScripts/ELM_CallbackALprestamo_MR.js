@@ -21,8 +21,8 @@
  * 
  */
 
-define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equifaxAdapter', 'N/record'], 
-    function (search, error, https, runtime) {
+define(['N/search', 'N/error', 'N/https', 'N/record'], 
+    function (search, error, https, record) {
 
     // ============================================
     // CONFIGURACIÓN
@@ -50,16 +50,6 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
             TRACKING_ID: 'custentity_track_id_al_prestamo',
             SOURCE: 'custentity_elm_canal',
             ESTADO_GESTION: 'custentity_elm_aprobado',
-            
-            // Campos opcionales - Comentados por ahora, no se enviarán en el postback
-            // AMOUNT: 'custentity_elm_monto_oferta_final',
-            // INSTALLMENTS: 'custentity_elm_plazo_oferta_final',
-            // PRODUCT: 'custentity_elm_producto',
-            // EMAIL: 'email',
-            // PHONE: 'phone',
-            // VALIDATED_TIMESTAMP: 'custentity_elm_validated_timestamp',
-            // OFFERED_TIMESTAMP: 'custentity_elm_offered_timestamp',
-            // GRANTED_TIMESTAMP: 'custentity_elm_granted_timestamp'
         }
     };
 
@@ -83,7 +73,7 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
                         "AND", 
                         ["custentity_elm_lead_repetido_original","anyof","@NONE@"] , 
                         "AND", 
-                        ["datecreated","within","thismonth"], 
+                        ["datecreated","notbefore","monthsago1"], 
                         "AND", 
                         ["custentity_elm_aprobado","noneof","1","4","27","26","3","16","15","23","25"]
                     ],
@@ -91,16 +81,6 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
                     search.createColumn({ name: 'internalid', label: 'ID' }),
                     search.createColumn({ name: CONFIG.FIELDS.TRACKING_ID, label: 'Tracking ID' }),
                     search.createColumn({ name: CONFIG.FIELDS.ESTADO_GESTION, label: "Estado de Gestión" }),
-
-                    // Columnas opcionales - Comentadas por ahora
-                    // search.createColumn({ name: CONFIG.FIELDS.AMOUNT, label: 'Amount' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.INSTALLMENTS, label: 'Installments' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.PRODUCT, label: 'Product' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.EMAIL, label: 'Email' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.PHONE, label: 'Phone' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.VALIDATED_TIMESTAMP, label: 'Validated TS' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.OFFERED_TIMESTAMP, label: 'Offered TS' }),
-                    // search.createColumn({ name: CONFIG.FIELDS.GRANTED_TIMESTAMP, label: 'Granted TS' })
                 ]
             });
 
@@ -141,15 +121,7 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
             log.debug(logTitle, `ESTADO_GESTION: ${JSON.stringify(estadoGestion)}`);
             const postbackStatus =  statusNormalize(estadoGestion);
              log.debug(logTitle, `postbackStatus ID: ${postbackStatus}`);
-            // Valores opcionales - Comentados por ahora, no se enviarán
-            // const amount = leadData.values[CONFIG.FIELDS.AMOUNT];
-            // const installments = leadData.values[CONFIG.FIELDS.INSTALLMENTS];
-            // const product = leadData.values[CONFIG.FIELDS.PRODUCT];
-            // const email = leadData.values[CONFIG.FIELDS.EMAIL];
-            // const phone = leadData.values[CONFIG.FIELDS.PHONE];
-            // const validatedTs = leadData.values[CONFIG.FIELDS.VALIDATED_TIMESTAMP];
-            // const offeredTs = leadData.values[CONFIG.FIELDS.OFFERED_TIMESTAMP];
-            // const grantedTs = leadData.values[CONFIG.FIELDS.GRANTED_TIMESTAMP];
+       
             
             // Validar estado obligatorio
             if (!postbackStatus) {
@@ -203,6 +175,18 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
                     message: `HTTP ${response.code}: ${response.body}`
                 });
             }
+            const idUpdated = record.submitFields({
+                type: record.Type.CUSTOMER,
+                id: leadId,
+                values: {
+                    custentity_elm_estado_alprestamo: postbackStatus
+                },
+                options: {
+                    enableSourcing: false,
+                    ignoreMandatoryFields : true
+                }
+            });
+            log.debug(logTitle, `Lead actualizado con postback enviado: ${idUpdated}`);
             
         } catch (e) {
             log.error(logTitle, `✗ Error procesando Lead ${leadId}: ${e.message}`);
@@ -217,10 +201,6 @@ define(['N/search', 'N/error', 'N/https', 'N/runtime', './bcuScore/adapters/equi
         const logTitle = 'summarize';
         try {
             
-
-  
-
-
             log.audit(logTitle, '========== RESUMEN EJECUCIÓN ==========');
             log.audit(logTitle, `Uso: ${summary.usage} unidades`);
             log.audit(logTitle, `Concurrencia: ${summary.concurrency}`);

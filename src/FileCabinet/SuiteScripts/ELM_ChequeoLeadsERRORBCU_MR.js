@@ -22,7 +22,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                     [
                        ["status","anyof","7","6"], 
                        "AND", 
-                        [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_elm_aprobado","anyof","15", "28"]],
+                        [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_response_score_bcu","contains","Error interno Equifax"],"OR",["custentity_elm_aprobado","anyof","15", "28"]],
                         "AND", 
                        ["custentity_elm_lead_repetido_original","anyof","@NONE@"]/* 
                          ,"AND",
@@ -149,9 +149,6 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
                                  isLatente = false;
                               }
-                              /*  if ((source == 2 || source == 'AlPrestamo') && (!ofertaFinal?.oferta || ofertaFinal?.oferta <= 0)) {
-                                  isLatente = false;
-                              } */
                               if (isLatente) {
                                   const estadoAprobExternal = mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.estadoLatente;
                                   const estadoAprobadoInTernal =  mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.pendienteDeEvaluacion;
@@ -161,8 +158,6 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                                   if (estadoAprobExternal == objScriptParam.estadoAprobado || estadoAprobadoInTernal == objScriptParam.estadoAprobado) {
                                      auxLib.snapshotAprobados(docNumber, leadId, objScriptParam.estadoAprobado, 105);
                                   }
-                                  
-
                                } else {
                                   log.audit('Error', 'No hay oferta para el documento: ' + docNumber);
                                   auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, montoCuotaObj?.montoCuotaName, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, t2Quals, t6Quals);

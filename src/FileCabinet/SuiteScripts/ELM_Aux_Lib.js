@@ -525,8 +525,11 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
 
             var firstResult = results && results[0];
 
+            log.debug('getInfoRepetido', 'firstResult: ' +  JSON.stringify(firstResult)); 
+
             // Modo liviano: sólo existencia
             if (onlyExists) {
+               log.debug('getInfoRepetido', 'Existence check result: ' + !!firstResult);
                return !!firstResult;
             }
 
@@ -1083,12 +1086,14 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                   filters,
                columns:
                   [
-                     search.createColumn({ name: "custentity_elm_aprobado" })
+                     search.createColumn({ name: "custentity_elm_aprobado" }),
+                     search.createColumn({ name: "custentity_score" })
                   ]
             });
             leadSearch.run().each(function (result) {
                lead.id = result.id;
                lead.status = result.getValue('custentity_elm_aprobado');
+               lead.score = result.getValue('custentity_score');
             });
             return lead;
          } catch (error) {
