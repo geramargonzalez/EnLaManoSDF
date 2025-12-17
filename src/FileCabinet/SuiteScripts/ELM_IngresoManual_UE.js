@@ -47,8 +47,8 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
         
          try {
 
-               if (type == scriptContext.UserEventType.CREATE) {
-               idLog = auxLib.createLogRecord(docNumber, null, false, 5, 'Manual');
+            if (type == scriptContext.UserEventType.CREATE) {
+              idLog = auxLib.createLogRecord(docNumber, null, false, 5, 'Manual');
             }
             if(estadoGestionPendienteSinRespuesta == 22) {
                return null

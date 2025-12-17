@@ -56,9 +56,6 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', './bcuScore/a
                 const scriptObj = runtime.getCurrentScript();
                 const idConfig = parseInt(scriptObj.getParameter({ name: 'custscript_elm_qty_assigned' })) || 1;
                 const equifaxTokenInfo = equifaxAdapter.getValidToken(false, false);
-                // const equifaxTokenInfo = 'eyJraWQiOiJlMTNmX1ZnOXdXcGp4NTkzX3FmWTRzMmU1eUtlTnBWU0xkc1AwUk9PRGU4IiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULldxcHlVY3NnamVDeE15alJlWFd4dTZsM2VQM3hMd0YwU25zVktPRVZfR1EiLCJpc3MiOiJodHRwczovL2VxdWlmYXgtaWNnLWNhbi1nY3Aub2t0YS5jb20vb2F1dGgyL2F1czE4N2h0bHRPb05ZWG80NWQ3IiwiYXVkIjoiOTc3YmUyMWIwNzcwNDhlNjhkNDY3OTlhMWY5YzA4NzAiLCJpYXQiOjE3NjU3NjQxMjgsImV4cCI6MTc2NTg1MDUyOCwiY2lkIjoiMG9hZzh4bHcxeTZCdjZJYkI1ZDciLCJ1aWQiOiIwMHVybnR4OHg2RGNkSGdKUTVkNyIsInNjcCI6WyJvcGVuaWQiXSwiYXV0aF90aW1lIjoxNzY1NzY0MTI4LCJzdWIiOiJ1c2VydXltYW5kYXp5Iiwicm9sZXMiOlsiRUZYX0lDX1JPTEVfTEFUQU1fQ09ORklHVVJBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV9MQVRBTV9DQUxDVUxBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV91cm46c2w6aWQ9RXF1aWZheFJ1bGVFeGVjdXRvcklDR0NQIiwiRUZYX0lDX1JPTEVfVXNlciJdLCJncm91cHMiOiJHdWVzdCIsImxvY2tlZFVzZXIiOiIwIiwiZ2l2ZW5fbmFtZSI6InVzZXJ1eW1hbmRhenkiLCJzdHNfdXNlciI6ImZhbHNlIiwib2ZmaWNlX2lkIjoiIiwiVXNlcklkIjoidXNlcnV5bWFuZGF6eSIsIm5hbWUiOiJ1c2VyIiwib3JnYW5pemF0aW9ucyI6WyJFRlhfSUNfT1JHX1VZSUNNQU5EQVpZIiwiRUZYX0lDX09SR19VWUlDQk9YIiwiRUZYX0lDX09SR19VWUNPUkUiLCJFRlhfSUNfT1JHX1VZQ01TIl0sInVzZXJFbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJlbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJzdGF0dXMiOiIwIn0.Ccw2g3qHYaqj2suctldjW0MltrHqCwZOqi1ah8IGVPJjFCOUkWgYgHtcewLIzfzA7GvfvTogr_Zy5amkPnwyTKjvkfnuQNMaYpeIUKF7gJ6WFLXyuAVpGUbcadnQTV1q2lIsVpHNPYHxKHtSvRoSmjg-kUUOp3Po0Cbf97znUBdnGzSe38r2BvxUxtgYuI9a1MyLruyOh6qVg-OPhGPZpCkuBiXaspxszX6WDAmF_bzLov7QlJYWf7kJMhPEavtycZ9zqVj_CjSKFy7TbwZOkAjvg9dPvgUdnmPu8RdL_Ig_OcVCyC_UIkCZj1MPvM-yiyPflt729SVwq7IFZ9QJbA'
-                const tokenRefreshDate = new Date();
-                log.audit(logTitle, `Equifax Token Válido Hasta: ${equifaxTokenInfo}`);
                 const idToken = record.submitFields({
                     type: 'customrecord_elm_config_servicion',
                     id: idConfig,
@@ -73,17 +70,17 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', './bcuScore/a
                     }
                 });
                 log.audit(logTitle, `Equifax Token Actualizado en Configuración (ID Registro: ${idToken})`);
-                trySendNotification({
-                    scriptObj,
-                    subject: '[EnLaMano] Token Equifax actualizado correctamente',
-                    body: [
-                        'Se actualizó correctamente el token de Equifax.',
-                        `Fecha/Hora: ${tokenRefreshDate.toISOString()}`,
-                        `Config record ID: ${idConfig}`,
-                        `Record actualizado (submitFields): ${idToken}`,
-                        `Token/Info (enmascarado): ${maskTokenLikeString(equifaxTokenInfo)}`
-                    ].join('\n')
-                });
+                if (idToken) {   
+                    trySendNotification({
+                        scriptObj,
+                        subject: '[EnLaMano] Token Equifax actualizado correctamente',
+                        body: [
+                            'Se actualizó correctamente el token de Equifax.',
+                            `Fecha/Hora: ${tokenRefreshDate.toISOString()}`,
+                            `Token/Info (enmascarado): ${maskTokenLikeString(equifaxTokenInfo)}`
+                        ].join('\n')
+                    });
+                }
 
             } catch (e) {
                 log.error(logTitle, 'Error en ejecución: ' + e.message);

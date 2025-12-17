@@ -14,6 +14,20 @@ function (https, log, runtime, encode, normalize, search, record, format) {
     let _config = null;
 
     /**
+     * OPTIMIZADO: Error mapping con lookup table
+     */
+    const HTTP_ERROR_MAP = {
+        400: ['EQUIFAX_BAD_REQUEST', 'Solicitud inválida'],
+        401: ['EQUIFAX_UNAUTHORIZED', 'Token inválido'],
+        403: ['EQUIFAX_FORBIDDEN', 'Sin permisos'],
+        404: ['EQUIFAX_NOT_FOUND', 'Documento no encontrado'],
+        418: ['EQUIFAX_REJECTED', 'Solicitud rechazada por Equifax (418) - verificar datos o rate limit'],
+        429: ['EQUIFAX_RATE_LIMIT', 'Límite de requests excedido'],
+        500: ['EQUIFAX_SERVER_ERROR', 'Error interno Equifax'],
+        503: ['EQUIFAX_UNAVAILABLE', 'Servicio no disponible']
+    };
+
+    /**
      * Determina si el adapter debe operar en modo SANDBOX/UAT o PRODUCTION.
      * Prioridad:
      * 1) options.isSandbox (boolean)
@@ -122,7 +136,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
                     });
                 } catch (e) {
                     // Si fal la persistencia, igual intentamos continuar con el token en memoria
-                    
                     log.debug({
                         title: 'Equifax Token Persist Error',
                         details: (e && e.message) ? e.message : String(e)
@@ -157,10 +170,9 @@ function (https, log, runtime, encode, normalize, search, record, format) {
      * NOTA: Esta función genera un nuevo token en cada llamada.
      * Para mejor performance, usar lookupFields del custom record donde se almacena el token.
      * @param {boolean} isSandbox - true para UAT, false para Production
-     * @param {boolean} forceRefresh - Parámetro legacy, ignorado (siempre genera nuevo token)
      * @returns {string} accessToken
      */
-    function getValidToken(isSandbox, forceRefresh) {
+    function getValidToken(isSandbox) {
         const envKey = isSandbox ? 'sandbox' : 'production';
     
         // Generar nuevo token
@@ -179,22 +191,12 @@ function (https, log, runtime, encode, normalize, search, record, format) {
             timeout: 10000
         });
 
-      /*   log.debug({
-            title: 'Equifax Token Response',
-            details: 'Response Code: ' + tokenResponse.code
-        }); */
-
         if (!tokenResponse || tokenResponse.code !== 200) {
             throw createEquifaxError('TOKEN_ERROR', 'Token request failed: ' + (tokenResponse ? tokenResponse.code : 'NO_RESPONSE'));
         }
 
         const tokenData = JSON.parse(tokenResponse.body);
         const accessToken = tokenData.access_token;
-
-      /*   log.audit({
-            title: 'Equifax Token Generated',
-            details: 'New token generated for ' + envKey + ' (preview: ' + accessToken.substring(0, 20) + '...)'
-        }); */
 
         return accessToken;
     }
@@ -237,15 +239,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
             }
         };
 
-       /*  log.debug({
-            title: 'Equifax Request Payload',
-            details: JSON.stringify(payload)
-        });
- */
-        // Log completo del request para enviar a técnicos
-        // const requestHeaders = _config.requestHeaders(accessToken);
-        
-        // Crear representación explícita con comillas para debugging
 
         const requestOptions = {
             url: _config.apiUrl,
@@ -263,10 +256,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
 
         const response = https.request(requestOptions);
         
-/*         log.debug({
-            title: 'Equifax Response',
-            details: 'Code: ' + response.code + ', Body: ' + response.body
-        }); */
 
         if (response.code !== 200) {
             throw mapEquifaxHttpError(response.code, response.body);
@@ -274,11 +263,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
 
         const responseBody = JSON.parse(response.body);
         
-        // Agregar correlationId al objeto de respuesta para que esté disponible en normalize
-      /*   if (correlationId) {
-            responseBody._equifaxCorrelationId = correlationId;
-        }
- */
         return responseBody;
     }
     
@@ -384,20 +368,9 @@ function (https, log, runtime, encode, normalize, search, record, format) {
     }
 
     /**
-     * OPTIMIZADO: Error mapping con lookup table
+     * mapEquifaxHttpError: Mapeo rápido de errores HTTP a errores Equifax específicos
      */
-    const HTTP_ERROR_MAP = {
-        400: ['EQUIFAX_BAD_REQUEST', 'Solicitud inválida'],
-        401: ['EQUIFAX_UNAUTHORIZED', 'Token inválido'],
-        403: ['EQUIFAX_FORBIDDEN', 'Sin permisos'],
-        404: ['EQUIFAX_NOT_FOUND', 'Documento no encontrado'],
-        418: ['EQUIFAX_REJECTED', 'Solicitud rechazada por Equifax (418) - verificar datos o rate limit'],
-        429: ['EQUIFAX_RATE_LIMIT', 'Límite de requests excedido'],
-        500: ['EQUIFAX_SERVER_ERROR', 'Error interno Equifax'],
-        503: ['EQUIFAX_UNAVAILABLE', 'Servicio no disponible']
-    };
-
-    function mapEquifaxHttpError(httpStatus, responseBody) {
+    function mapEquifaxHttpError(httpStatus) {
         const mapping = HTTP_ERROR_MAP[httpStatus];
         if (mapping) {
             return createEquifaxError(mapping[0], mapping[1], { httpStatus: httpStatus });
@@ -406,7 +379,7 @@ function (https, log, runtime, encode, normalize, search, record, format) {
     }
 
     /**
-     * OPTIMIZADO: Error creation mínima
+     * createEquifaxError: Crea un Error estandarizado para errores de Equifax
      */
     function createEquifaxError(code, message, details) {
         const error = new Error(message);

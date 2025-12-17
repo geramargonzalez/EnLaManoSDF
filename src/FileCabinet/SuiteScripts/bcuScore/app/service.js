@@ -25,7 +25,7 @@ define([
     const DOCUMENT_REGEX = /^\d{7,8}$/;
 
     /**
-     * OPTIMIZADO: Calcula score con caché agresivo y mínimo logging
+     * calculateScore: Calcula score con caché agresivo y mínimo logging
      */
     function calculateScore(documento, options) {
         options = options || {};

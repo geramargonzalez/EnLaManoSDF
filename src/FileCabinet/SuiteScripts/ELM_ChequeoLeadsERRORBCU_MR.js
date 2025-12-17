@@ -24,9 +24,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                        "AND", 
                         [["custentity_response_score_bcu","contains","Error al obtener datos del BCU"],"OR",["custentity_response_score_bcu","contains","Error interno Equifax"],"OR",["custentity_elm_aprobado","anyof","15", "28"]],
                         "AND", 
-                       ["custentity_elm_lead_repetido_original","anyof","@NONE@"]/* 
-                         ,"AND",
-                       ["custentity_sdb_nrdocumento","is","49878016"] */
+                       ["custentity_elm_lead_repetido_original","anyof","@NONE@"]
                     ],
                     columns:
                     [
@@ -47,7 +45,7 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                  // Enviar email si hay más de 40 leads con error BCU
                  const threashold = runtime.getCurrentScript().getParameter({ name: 'custscript_elm_umbral_toler' }) || 30;
                   if (searchResultCount > threashold) {
-                     sendHighVolumeAlert(searchResultCount);
+                      sendHighVolumeAlert(searchResultCount);
                  }
         
                 return customerSearchObj;
@@ -90,23 +88,14 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
     
                       if (!infoRepetido?.id) { 
                            
-                              let score;
-                              if (approvalStatus == 28) {
-                                    score = bcuScoreLib.scoreFinal(docNumber, { provider: '2', forceRefresh: false, debug: false, strictRules: true });
-                              } else {
-                                    score = scoreLib.scoreFinal(docNumber);
-                              }
-                              const bcuData = auxLib.extractBcuData(score);
-                              const t2Info = auxLib.getBcuPeriodInfo(bcuData.t2, 't2');
-                              const endeudamientoT2 = t2Info?.rubrosGenerales[0]?.MnPesos || 0;
-                              const cantEntidadesT2 = t2Info?.entidades.length || 0;
-                              const t6Info = auxLib.getBcuPeriodInfo(bcuData.t6, 't6');
-                              const endeudamientoT6 = t6Info?.rubrosGenerales[0]?.MnPesos || 0;
-                              const cantEntidadesT6 = t6Info?.entidades.length || 0;
-                              
-                              const t2Quals = bcuData.t2Qualifications?.map(q => q.calificacion);
-                              // Get all qualification values from T6  
-                              const t6Quals = bcuData.t6Qualifications?.map(q => q.calificacion);
+
+                              const score = bcuScoreLib.scoreFinal(docNumber, { provider: '2', forceRefresh: false, debug: false, strictRules: true });
+                             
+                              const bcuVars = auxLib.extractBcuVariables(score);
+                              const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
+
+                              log.debug(`BCU vars extraídas`, { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, endeudamiento: score.endeudamiento });
+                           
 
                               // Manejo de rechazo BCU con calificación visible
                               if (score?.error_reglas) {
@@ -153,17 +142,17 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', "./SDB-Enlama
                                   const estadoAprobExternal = mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.estadoLatente;
                                   const estadoAprobadoInTernal =  mobilePhone ? objScriptParam.estadoAprobado : objScriptParam.pendienteDeEvaluacion;
                                   log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + parseFloat(ofertaFinal?.cuotaFinal));
-                                  auxLib.submitFieldsEntity(leadId, service == objScriptParam.serviceExternal ? estadoAprobExternal : estadoAprobadoInTernal, null,  objScriptParam.leadStatus, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-                                 cantEntidadesT6, t2Quals, t6Quals, 105);
+                                  auxLib.submitFieldsEntity(leadId, service == objScriptParam.serviceExternal ? estadoAprobExternal : estadoAprobadoInTernal, null,  objScriptParam.leadStatus, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudT2, endeudT6, cantEntT2,
+                                 cantEntT6, peorCalifT2, peorCalifT6, 105);
                                   if (estadoAprobExternal == objScriptParam.estadoAprobado || estadoAprobadoInTernal == objScriptParam.estadoAprobado) {
                                      auxLib.snapshotAprobados(docNumber, leadId, objScriptParam.estadoAprobado, 105);
                                   }
                                } else {
                                   log.audit('Error', 'No hay oferta para el documento: ' + docNumber);
-                                  auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, montoCuotaObj?.montoCuotaName, score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, t2Quals, t6Quals);
+                                  auxLib.submitFieldsEntity(leadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, montoCuotaObj?.montoCuotaName, score, null, endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6);
                                }
                             } else {
-                              auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, 'Score Minimo', score, null, endeudamientoT2, endeudamientoT6, cantEntidadesT2, cantEntidadesT6, score?.calificacionMinima, t6Quals);
+                              auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoRechazado, objScriptParam.rechazoNoHayOferta,  null, 0, 0, 0, 'Score Minimo', score, null, endeudT2, endeudT6, cantEntT2, cantEntT6, score?.calificacionMinima, peorCalifT6);
 
                             }
     
