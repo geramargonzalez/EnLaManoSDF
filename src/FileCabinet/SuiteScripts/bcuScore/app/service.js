@@ -15,7 +15,7 @@ define([
 ], function (log, cache, equifaxAdapter, bcuAdapter, mymAdapter, scoreEngine, scoringRules, auxLib) {
     'use strict';
 
-    const  PROVIDER_EQUIFAX = 'equifax';
+    const PROVIDER_EQUIFAX = 'equifax';
     const PROVIDER_BCU = 'bcu';
     const PROVIDER_MYM = 'mym';
     const CACHE_TTL_SECONDS = 180; // 30 minutos - caché más agresivo
@@ -53,7 +53,8 @@ define([
             const __tFetch0 = Date.now();
             const idLog = auxLib.createLogRecord(documento, null, false, 6, options?.provider, null);
             // Para Equifax, usar período 2 (T2) en lugar de 0 para obtener datos actuales
-            const periodForT2 = (options.provider == PROVIDER_EQUIFAX) ? 2 : 0;
+            const requestedProvider = (options.provider || PROVIDER_EQUIFAX);
+            const periodForT2 = (requestedProvider == PROVIDER_EQUIFAX) ? 2 : 0;
             const normalizedData = fetchProviderData(documento, options, periodForT2);
             let normalizedDataT6 = null;
             
@@ -178,14 +179,13 @@ define([
      */
     function fetchProviderData(documento, options, periodMonths) {
         const provider = options.provider || PROVIDER_EQUIFAX; // Default a Equifax
-        
         try {
             switch (provider.toLowerCase()) {
                 case PROVIDER_EQUIFAX:
                     return equifaxAdapter.fetch(documento, options, periodMonths);
                     
-                case PROVIDER_BCU:
-                    return bcuAdapter.fetch(documento, options, periodMonths);
+                /* case PROVIDER_BCU:
+                    return bcuAdapter.fetch(documento, options, periodMonths); */
                     
                 case PROVIDER_MYM:
                     return mymAdapter.fetch(documento, options);
@@ -196,33 +196,82 @@ define([
                         title: 'BCU Score Provider Fallback',
                         details: 'Unknown provider "' + provider + '", falling back to Equifax'
                     });
-                    return equifaxAdapter.fetch(documento, options);
+                    options.provider = PROVIDER_EQUIFAX;
+                    return equifaxAdapter.fetch(documento, options, getEquifaxPeriodForRequest(periodMonths));
             }
         } catch (providerError) {
-            // Para MYM, no hacer fallback automático (puede funcionar independientemente)
-            // Solo hacer fallback para BCU ya que es un stub
-            if (provider === PROVIDER_BCU && !options.noFallback) {
-                log.debug({
-                    title: 'BCU Score Provider Fallback',
-                    details: {
-                        originalProvider: provider,
-                        error: providerError.toString(),
-                        fallbackTo: PROVIDER_EQUIFAX
-                    }
-                });
-                
-                try {
-                    return equifaxAdapter.fetch(documento, options);
-                } catch (fallbackError) {
-                    // Si ambos fallan, lanzar error original
+            // Respetar bandera para evitar fallback y/o bucles
+            if (options && options.noFallback) {
+                throw providerError;
+            }
+
+            // Fallback cruzado según lo solicitado:
+            // - Si provider es Equifax y falla, intentar MYM
+            // - Si provider es MYM y falla, intentar Equifax
+            const providerLower = (provider || '').toString().toLowerCase();
+            let fallbackProvider = null;
+            if (providerLower === PROVIDER_EQUIFAX) fallbackProvider = PROVIDER_MYM;
+            if (providerLower === PROVIDER_MYM) fallbackProvider = PROVIDER_EQUIFAX;
+
+            // Mantener el fallback anterior para BCU (stub)
+            if (!fallbackProvider && providerLower === PROVIDER_BCU) {
+                fallbackProvider = PROVIDER_EQUIFAX;
+            }
+
+            if (!fallbackProvider) {
+                throw providerError;
+            }
+
+            log.debug({
+                title: 'BCU Score Provider Fallback',
+                details: {
+                    originalProvider: providerLower,
+                    error: providerError.toString(),
+                    fallbackTo: fallbackProvider
+                }
+            });
+
+            // Clonar options para evitar que un intento fallido ensucie el siguiente,
+            // pero reflejar en options.provider el provider realmente usado si el fallback tiene éxito.
+            const fallbackOptions = Object.assign({}, options, {
+                provider: fallbackProvider,
+                noFallback: true
+            });
+
+            try {
+                let data;
+                if (fallbackProvider === PROVIDER_EQUIFAX) {
+                    // Asegurar período correcto para datos actuales en Equifax
+                    const eqPeriod = getEquifaxPeriodForRequest(periodMonths);
+                    data = equifaxAdapter.fetch(documento, fallbackOptions, eqPeriod);
+                } else if (fallbackProvider === PROVIDER_MYM) {
+                    data = mymAdapter.fetch(documento, fallbackOptions);
+                } else {
+                    // Caso inesperado, mantener el error original
                     throw providerError;
                 }
+
+                // Importantísimo: el resto del flujo debe saber qué provider se usó realmente
+                options.provider = fallbackProvider;
+                return data;
+            } catch (fallbackError) {
+                // Si ambos fallan, conservar el error original para no ocultar la causa primaria
+                throw providerError;
             }
-            
-            // Para MYM y otros providers, lanzar error original sin fallback
-            throw providerError;
         }
     }
+
+    /**
+     * getEquifaxPeriodForRequest - Ajusta período para Equifax requests
+     */
+     function getEquifaxPeriodForRequest(periodMonthsLocal) {
+            // Si el caller pide "actual" (0) pero Equifax requiere T2 para datos actuales,
+            // forzamos 2. Para T6/T8/etc se respeta el valor.
+            if (periodMonthsLocal === 0 || periodMonthsLocal === null || periodMonthsLocal === undefined) {
+                return 2;
+            }
+            return periodMonthsLocal;
+        }
 
     /**
      * Obtiene score desde caché

@@ -33,9 +33,9 @@ define(['N/log', 'N/runtime', './bcuScore/app/service'], function (log, runtime,
                 provider = 'mym';
             }
 
-            if (options.provider == '3') {
+           /*  if (options.provider == '3') {
                 provider = 'bcu';
-            }
+            } */
 
             const newOptions = {
                 provider: provider,

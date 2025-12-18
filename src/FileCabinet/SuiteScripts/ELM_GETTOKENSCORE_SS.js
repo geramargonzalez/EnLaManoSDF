@@ -51,11 +51,11 @@ define(['N/record', 'N/search', 'N/runtime', 'N/error', 'N/email', './bcuScore/a
             const logTitle = 'ELM GETTOKENSCORE - Scheduled';
             try {
                 log.audit(logTitle, '**** INICIO DE OBTENCIÓN DE TOKEN DE SCORE ****');
-                
                 // Obtener parámetros del script
                 const scriptObj = runtime.getCurrentScript();
                 const idConfig = parseInt(scriptObj.getParameter({ name: 'custscript_elm_qty_assigned' })) || 1;
-                const equifaxTokenInfo = equifaxAdapter.getValidToken(false, false);
+                const equifaxTokenInfo = equifaxAdapter.getValidToken(false);
+                const tokenRefreshDate = new Date();
                 const idToken = record.submitFields({
                     type: 'customrecord_elm_config_servicion',
                     id: idConfig,

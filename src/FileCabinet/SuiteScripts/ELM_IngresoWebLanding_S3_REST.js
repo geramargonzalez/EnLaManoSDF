@@ -28,7 +28,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
 
             if (infoRepetido.approvalStatus != "3") {
 
-               let preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.estadoRechazado);
+               let preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.inicial);
                let blackList = auxLib.checkBlacklist(docNumber);
                let isBlacklisted = auxLib.isClientActive(docNumber);
 
@@ -115,7 +115,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                               } else {
                                   approvalStatus = 15;
                               }
-                             
                            }
 
                            if (score.error_reglas == 404) {
@@ -366,6 +365,9 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
             }),
              //custscript_elm_bcu_elec_s3
             providerBCU: scriptObj.getParameter({
+               name: 'custscript_elm_bcu_elec_s3'
+            }),
+            inicial: scriptObj.getParameter({
                name: 'custscript_elm_bcu_elec_s3'
             })
         };

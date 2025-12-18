@@ -19,6 +19,10 @@ function (https, log, normalize) {
         options = options || {};
         
         try {
+
+
+
+            
             // Ejecutar request a RiskAPI
             const response = executeRiskApiRequest(documento, options);
 

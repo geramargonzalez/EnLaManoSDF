@@ -59,7 +59,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
          preLeadId = auxLib.createPreLead(
           params.externalService, docNumber, null, maskedFirstName, maskedLastName,
           activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
-          params?.estadoRechazado, null, source, activityType, trackingId
+          params?.inicial, null, source, activityType, trackingId
         );
       }
 
@@ -381,9 +381,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
         }
 
-        
-      
-
     } catch (e) {
       log.error(`${LOG_PREFIX} post error`, e);
       response.success = false;
@@ -435,7 +432,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
         }),
         providerBCU: s.getParameter({
          name: 'custscript_elm_provider_election'
-        })
+        }),
+        inicial: 29
     };
   }
 

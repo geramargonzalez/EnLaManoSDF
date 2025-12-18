@@ -8,8 +8,15 @@ function (https, log, runtime, encode, normalize, search, record, format) {
     'use strict';
 
     const TIMEOUT_MS = 10000; // REDUCIDO: 15s para respuesta rápida
-    const TOKEN_MAX_AGE_MS = 14 * 60 * 1000; // 14 minutos para forzar refresh frecuente
-    
+    // TTL esperado de tokens Equifax:
+    // - UAT: ~1 hora
+    // - PROD: ~24 horas
+    // La validación se hace automáticamente leyendo el `exp` del JWT cuando existe;
+    // si no se puede, se usa este fallback por ambiente.
+    const DEFAULT_TOKEN_MAX_AGE_UAT_MS = 60 * 60 * 1000;
+    const DEFAULT_TOKEN_MAX_AGE_PROD_MS = 24 * 60 * 60 * 1000;
+    const TOKEN_EXP_SKEW_MS = 2 * 60 * 1000; // refrescar 2 minutos antes del vencimiento
+    const recordEquifaxConfigId = 1; // ID del custom record con configuración Equifax      
     // Pre-compilar URLs y headers para evitar string concatenations
     let _config = null;
 
@@ -40,17 +47,11 @@ function (https, log, runtime, encode, normalize, search, record, format) {
             options = options || {};
             if (typeof options.isSandbox === 'boolean') return options.isSandbox;
 
-            if (runtime && runtime.getCurrentScript) {
-                const script = runtime.getCurrentScript();
-                const envParam = script.getParameter({ name: 'custscript_equifax_environment' }) ||
-                               script.getParameter({ name: 'custscript_equifax_env' }) ||
-                               script.getParameter({ name: 'custscript_equifax_is_sandbox' });
-                if (envParam !== null && envParam !== undefined) {
-                    const s = String(envParam).toLowerCase();
-                    if (s === 'production' || s === 'prod' || s === 'p' || s === '0' || s === 'false') return false;
-                    if (s === 'sandbox' || s === 'uat' || s === 'test' || s === '1' || s === 'true') return true;
-                }
+            // NetSuite runtime: fuente de verdad del ambiente (SANDBOX vs PRODUCTION)
+            if (runtime && runtime.envType && runtime.EnvType) {
+                return runtime.envType === runtime.EnvType.SANDBOX;
             }
+
         } catch (e) {
             // ignore and fallback to env vars
         }
@@ -81,45 +82,55 @@ function (https, log, runtime, encode, normalize, search, record, format) {
         options = options || {};
         try {
             // Determinar ambiente (options -> script parameter -> default SANDBOX)
-            // const isSandbox = determineIsSandbox(options);
-            const isSandbox = false; // FORZADO A PRODUCCION PARA TESTING
+            let isSandbox = determineIsSandbox(options);
+          
 
-            // Obtener configuración para el ambiente especificado
-            _config = getEquifaxConfig(isSandbox);
-            
-            // Verificar si se debe forzar generación de nuevo token
-            const forceNewToken = options.forceNewToken === true;
-            if (forceNewToken) {
-                log.audit({
-                    title: 'Equifax Token Force Refresh',
-                    details: 'Generando nuevo token por solicitud explícita (forceNewToken=true)'
-                });
-            }
-
+            // Obtener configuración para el ambiente especificado 
             const tokenField = search.lookupFields({
                 type: 'customrecord_elm_config_servicion',
-                id: 1,
-                columns: ['custrecord_elm_token_prov', 'custrecord_elm_token_ref_date']
+                id: recordEquifaxConfigId,
+                columns: ['custrecord_elm_token_prov', 'custrecord_elm_token_ref_date','custrecord_elm_forzar_prod']
             });
 
             let accessToken = tokenField.custrecord_elm_token_prov;
+            const forceProd = tokenField.custrecord_elm_forzar_prod;
             const dateRefreshToken = parseNsDateTime(tokenField.custrecord_elm_token_ref_date);
+            
+            if (forceProd) {
+                isSandbox = false; // forzar ambiente producción    
+            }
 
-            const tokenTooOld = !dateRefreshToken || ((Date.now() - dateRefreshToken.getTime()) >= TOKEN_MAX_AGE_MS);
+              
+            log.debug({
+                title: 'Equifax Adapter Fast Fetch',
+                details: 'Document: ' + documento.substr(-4) + ', isSandbox: ' + isSandbox
+            });
+              
+            _config = getEquifaxConfig(isSandbox);
+            
+
+            // 2) Fallback por ambiente si no se pudo leer exp
+            const maxAgeMs = isSandbox ? DEFAULT_TOKEN_MAX_AGE_UAT_MS : DEFAULT_TOKEN_MAX_AGE_PROD_MS;
     
-            const needsNewToken = !accessToken || tokenTooOld;
+            const tokenTooOldByRefDate = !dateRefreshToken || ((Date.now() - dateRefreshToken.getTime()) >= maxAgeMs);
+      
+            const needsNewToken =  !accessToken || tokenTooOldByRefDate;
+
+            log.debug({
+                title: 'Equifax Token Validation',
+                details: 'Needs new token: ' + needsNewToken + ', Force Prod: ' + forceProd
+            });
 
            if (needsNewToken) {
                 log.audit({
                     title: 'Creating new Equifax token',
                     details: 'Token is missing or too old, creating a new one.'
                 });
-                 accessToken = getValidToken(false, true);
-                // accessToken = 'eyJraWQiOiJlMTNmX1ZnOXdXcGp4NTkzX3FmWTRzMmU1eUtlTnBWU0xkc1AwUk9PRGU4IiwiYWxnIjoiUlMyNTYifQ.eyJ2ZXIiOjEsImp0aSI6IkFULkM2cFNkYmlYSG5uOHo2WjNsSXE1eXJMSGNjbVdaTVYwWTBpNGVLOEV0bzQiLCJpc3MiOiJodHRwczovL2VxdWlmYXgtaWNnLWNhbi1nY3Aub2t0YS5jb20vb2F1dGgyL2F1czE4N2h0bHRPb05ZWG80NWQ3IiwiYXVkIjoiOTc3YmUyMWIwNzcwNDhlNjhkNDY3OTlhMWY5YzA4NzAiLCJpYXQiOjE3NjU4OTQ3NTYsImV4cCI6MTc2NTk4MTE1NiwiY2lkIjoiMG9hZzh4bHcxeTZCdjZJYkI1ZDciLCJ1aWQiOiIwMHVybnR4OHg2RGNkSGdKUTVkNyIsInNjcCI6WyJvcGVuaWQiXSwiYXV0aF90aW1lIjoxNzY1ODk0NzU2LCJzdWIiOiJ1c2VydXltYW5kYXp5Iiwicm9sZXMiOlsiRUZYX0lDX1JPTEVfTEFUQU1fQ09ORklHVVJBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV9MQVRBTV9DQUxDVUxBVE9SX1VTRVIiLCJFRlhfSUNfUk9MRV91cm46c2w6aWQ9RXF1aWZheFJ1bGVFeGVjdXRvcklDR0NQIiwiRUZYX0lDX1JPTEVfVXNlciJdLCJncm91cHMiOiJHdWVzdCIsImxvY2tlZFVzZXIiOiIwIiwiZ2l2ZW5fbmFtZSI6InVzZXJ1eW1hbmRhenkiLCJzdHNfdXNlciI6ImZhbHNlIiwib2ZmaWNlX2lkIjoiIiwiVXNlcklkIjoidXNlcnV5bWFuZGF6eSIsIm5hbWUiOiJ1c2VyIiwib3JnYW5pemF0aW9ucyI6WyJFRlhfSUNfT1JHX1VZSUNNQU5EQVpZIiwiRUZYX0lDX09SR19VWUlDQk9YIiwiRUZYX0lDX09SR19VWUNPUkUiLCJFRlhfSUNfT1JHX1VZQ01TIl0sInVzZXJFbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJlbWFpbCI6InVzZXJ1eW1hbmRhenlAZXF1aWZheC5jb20iLCJzdGF0dXMiOiIwIn0.i8dVmCW9jr5Z1zArjqVYwqX0eVDJ_vg3bfsISzxdsmDe0-8Da3znh-olYY8pf_CuTM1VUv5b9h18hLc8rUNgn0IN1UdcDpc6lp1qkHWI5zUeK_TeZkGlrd1PW7oeWw7B-vgfC6oSg6FvWgIAc2JyJtgwD6LdULeBIOsJYe-LbB6xEh_pXhSAxGdaqX42-zGojKtR74watL0VqeInXNich1zwQzOIql9yGTLSKwof_8IRPvaYShfrT_7GXyWodr6Uu6GJvmWX8PH_OcHwjDxcY6Zl_YrO80UyeUjA-Y3S61-_W4D1zbOcY7SYeLewD1WATbNkRHHP3roerkKJHVCYkQ';
+                  accessToken = getValidToken(isSandbox);
                 try {
-                    const idLogrecord = record.submitFields({
+                     const idLogrecord = record.submitFields({
                         type: 'customrecord_elm_config_servicion',
-                        id: 1,
+                        id: recordEquifaxConfigId,
                         values: {
                             custrecord_elm_token_prov: accessToken,
                             custrecord_elm_token_ref_date: new Date()
@@ -128,7 +139,7 @@ function (https, log, runtime, encode, normalize, search, record, format) {
                             enableSourcing: false,
                             ignoreMandatoryFields: true
                         }
-                    });
+                    }); 
 
                 log.audit({
                         title: 'Equifax Token Persisted',
@@ -162,9 +173,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
             throw createEquifaxError('EQUIFAX_FETCH_ERROR', error.message, error);
         }
     }
-
-    
-
     /**
      * Genera un nuevo token de Equifax mediante OAuth2.
      * NOTA: Esta función genera un nuevo token en cada llamada.
@@ -173,7 +181,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
      * @returns {string} accessToken
      */
     function getValidToken(isSandbox) {
-        const envKey = isSandbox ? 'sandbox' : 'production';
     
         // Generar nuevo token
         const cfg = getEquifaxConfig(isSandbox);
@@ -256,6 +263,10 @@ function (https, log, runtime, encode, normalize, search, record, format) {
 
         const response = https.request(requestOptions);
         
+        log.debug({
+            title: 'Equifax Raw Response',
+            details: 'Code: ' + response.code + ', Body: ' + response.body
+        });
 
         if (response.code !== 200) {
             throw mapEquifaxHttpError(response.code, response.body);
@@ -436,9 +447,6 @@ function (https, log, runtime, encode, normalize, search, record, format) {
 
         return null;
     }
-
-
-
 
     // Public API - mínima para performance
     return {
