@@ -183,19 +183,10 @@ define([
             switch (provider.toLowerCase()) {
                 case PROVIDER_EQUIFAX:
                     return equifaxAdapter.fetch(documento, options, periodMonths);
-                    
-                /* case PROVIDER_BCU:
-                    return bcuAdapter.fetch(documento, options, periodMonths); */
-                    
                 case PROVIDER_MYM:
                     return mymAdapter.fetch(documento, options);
                     
                 default:
-                    // Intentar Equifax como fallback
-                    log.debug({
-                        title: 'BCU Score Provider Fallback',
-                        details: 'Unknown provider "' + provider + '", falling back to Equifax'
-                    });
                     options.provider = PROVIDER_EQUIFAX;
                     return equifaxAdapter.fetch(documento, options, getEquifaxPeriodForRequest(periodMonths));
             }
@@ -213,10 +204,10 @@ define([
             if (providerLower === PROVIDER_EQUIFAX) fallbackProvider = PROVIDER_MYM;
             if (providerLower === PROVIDER_MYM) fallbackProvider = PROVIDER_EQUIFAX;
 
-            // Mantener el fallback anterior para BCU (stub)
+           /*  // Mantener el fallback anterior para BCU (stub)
             if (!fallbackProvider && providerLower === PROVIDER_BCU) {
                 fallbackProvider = PROVIDER_EQUIFAX;
-            }
+            } */
 
             if (!fallbackProvider) {
                 throw providerError;

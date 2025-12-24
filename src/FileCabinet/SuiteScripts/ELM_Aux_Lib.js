@@ -2194,7 +2194,9 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             const count = search.create({
                type: 'customrecord_elm_apr_lead_his',
                filters: [
-                  ['custrecord_elm_apr_doc', 'is', docNumber]
+                  ['custrecord_elm_apr_doc', 'is', docNumber],
+                  "AND", 
+                  ["datecreated","within","monthsago1","secondsago0"],
                ],
                columns: [search.createColumn({ name: 'internalid', sort: search.Sort.DESC })]
             }).runPaged().count;
@@ -2559,6 +2561,99 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
    }
 
 
+   /**
+    * Crea un registro en customrecord_elm_score_historico para guardar el historial de scores BCU
+    * @param {Object} options - Objeto con los valores para el registro
+    * @param {number|string} [options.leadId] - Internal ID del Lead/Cliente (custrecord_elm_score_hist_cli)
+    * @param {string|number} [options.score] - Score calculado (custrecord_elm_score_hist_score)
+    * @param {number|string} [options.calificacion] - Internal ID de la calificación (custrecord_elm_score_hist_cali)
+    * @param {string} [options.respuesta] - Respuesta completa del score en JSON (custrecord_score_hist_respuesta)
+    * @param {string|number} [options.t2CantEntidades] - Cantidad de entidades T2 (custrecord_score_hist_ent_t2)
+    * @param {string|number} [options.t2Endeudamiento] - Endeudamiento T2 (custrecord_elm_score_hist_t2_endeud)
+    * @param {string} [options.t2PeorCalificacion] - Peor calificación T2 (custrecord_elm_score_hist_t2_peorcalif)
+    * @param {string|number} [options.t6CantEntidades] - Cantidad de entidades T6 (custrecord_score_hist_ent_t6)
+    * @param {string|number} [options.t6Endeudamiento] - Endeudamiento T6 (custrecord_score_hist_ent_t6_endeud)
+    * @param {string} [options.t6PeorCalificacion] - Peor calificación T6 (custrecord_elm_score_hist_ent_t6_peorcalif)
+    * @param {string|number} [options.endeudamiento] - Endeudamiento general (custrecord_score_hist_endeudamiento)
+    * @returns {number|null} Internal ID del registro creado o null si falla
+    */
+   function createScoreHistoryRecord(options) {
+      const stLogTitle = 'createScoreHistoryRecord';
+      options = options || {};
+      
+      try {
+         const rec = record.create({
+            type: 'customrecord_elm_score_historico',
+            isDynamic: false
+         });
+
+         // Lead/Cliente - List/Record (Customer)
+         if (options.leadId) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_cli', value: options.leadId });
+         }
+
+         // Score - Free-Form Text
+         if (options.score !== undefined && options.score !== null) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_score', value: String(options.score) });
+         }
+
+         // Calificación - List/Record (Calificaciones)
+         if (options.calificacion) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_cali', value: options.calificacion });
+         }
+
+         // Score Respuesta - Long Text
+         if (options.respuesta) {
+            rec.setValue({ fieldId: 'custrecord_score_hist_respuesta', value: String(options.respuesta) });
+         }
+
+         // T2 - Cantidad de Entidades - Free-Form Text
+         if (options.t2CantEntidades !== undefined && options.t2CantEntidades !== null) {
+            rec.setValue({ fieldId: 'custrecord_score_hist_ent_t2', value: String(options.t2CantEntidades) });
+         }
+
+         // T2 - Endeudamiento - Free-Form Text
+         if (options.t2Endeudamiento !== undefined && options.t2Endeudamiento !== null) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_t2_endeud', value: String(options.t2Endeudamiento) });
+         }
+
+         // T2 - Peor calificación - Free-Form Text
+         if (options.t2PeorCalificacion) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_t2_peorcalif', value: String(options.t2PeorCalificacion) });
+         }
+
+         // T6 - Cantidad de Entidades - Free-Form Text
+         if (options.t6CantEntidades !== undefined && options.t6CantEntidades !== null) {
+            rec.setValue({ fieldId: 'custrecord_score_hist_ent_t6', value: String(options.t6CantEntidades) });
+         }
+
+         // T6 - Endeudamiento - Free-Form Text
+         if (options.t6Endeudamiento !== undefined && options.t6Endeudamiento !== null) {
+            rec.setValue({ fieldId: 'custrecord_score_hist_ent_t6_endeud', value: String(options.t6Endeudamiento) });
+         }
+
+         // T6 - Peor Calificación - Free-Form Text
+         if (options.t6PeorCalificacion) {
+            rec.setValue({ fieldId: 'custrecord_elm_score_hist_ent_t6_peorcalif', value: String(options.t6PeorCalificacion) });
+         }
+
+         // Endeudamiento general - Free-Form Text
+         if (options.endeudamiento !== undefined && options.endeudamiento !== null) {
+            rec.setValue({ fieldId: 'custrecord_score_hist_endeudamiento', value: String(options.endeudamiento) });
+         }
+
+         // Guardar registro
+         const newId = rec.save();
+         log.audit(stLogTitle, 'Score History record created with id: ' + newId);
+         return newId;
+
+      } catch (error) {
+         log.error(stLogTitle, 'Error creating Score History record: ' + error.message);
+         return null;
+      }
+   }
+
+
 
       return {
          calculateYearsSinceDate: calculateYearsSinceDate,
@@ -2601,6 +2696,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          getInfoRepetidoSql: getInfoRepetidoSql,
          deactivateLeadsByDocumentNumberSQL: deactivateLeadsByDocumentNumberSQL,
          getInfoRepetidoLight: getInfoRepetidoLight,
+         createScoreHistoryRecord: createScoreHistoryRecord,
       }
    });
 
