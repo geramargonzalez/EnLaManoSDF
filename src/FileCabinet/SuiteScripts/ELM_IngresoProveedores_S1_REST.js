@@ -140,6 +140,20 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
           log.debug(`${LOG_PREFIX} BCU vars extraídas`, { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, endeudamiento: score.endeudamiento });
 
+            const historyId = auxLib.createScoreHistoryRecord({
+              leadId: preLeadId,
+              score: score?.score,
+              calificacion: score?.calificacionMinima,  // ID de lista de calificaciones
+              respuesta: JSON.stringify(score),
+              t2CantEntidades: cantEntT2,
+              t2Endeudamiento: endeudT2,
+              t2PeorCalificacion: peorCalifT2,
+              t6CantEntidades: cantEntT6,
+              t6Endeudamiento: endeudT6,
+              t6PeorCalificacion: peorCalifT6,
+              endeudamiento: score.endeudamiento
+          });
+          log.debug(`${LOG_PREFIX} Score history creado`, historyId);
 
           if (score && toNum(score.score) > params.scoreMin) {
             // Convertir a lead y calcular oferta
@@ -399,8 +413,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
     return response;
   }
-
-
     function getScriptParametersCached() {
     // Llamada única por ejecución del Restlet
     const s = runtime.getCurrentScript();
