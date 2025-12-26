@@ -2189,7 +2189,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                filters: [
                   ['custrecord_elm_apr_doc', 'is', docNumber],
                   "AND", 
-                  ["datecreated","within","monthsago1","secondsago0"],
+                  ["created","within","monthsago1","secondsago0"],
                ],
                columns: [search.createColumn({ name: 'internalid', sort: search.Sort.DESC })]
             }).runPaged().count;
