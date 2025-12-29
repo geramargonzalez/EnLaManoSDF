@@ -333,31 +333,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       // ---------- Ya estaba LATENTE ----------
       } else {
         const infoRep = auxLib.getInfoRepetidoSql(docNumber, null,null, false);
-        /*
-        
-        if (source === 'AlPrestamo' && infoRep?.canal !== '2') {
-          const ponder = auxLib.getPonderador(infoRep?.score, infoRep?.calificacionMinima, infoRep?.endeudamiento, salary, activity, age, source);
-          const montoCuota = toNum(salary) * toNum(ponder?.ponderador);
-          const ofertaFinal = getOfertaFinal(source, montoCuota);
-
-          if (ofertaFinal) {
-            submitLeadOfertaFields(infoRep.id, {
-              montoCuota,
-              ofertaFinal,
-              activity, dateOfBirth, workStartDate, salary,
-              channel: '2', score: infoRep?.score
-            });
-            response.success = true;
-            response.result = 'Listo para recibir datos en servicio 2';
-          } else {
-            response.success = false;
-            response.result = 'Repetido';
-          }
-        } else {
-          if (source === 'Creditleads') response.oferta = infoRep?.montoOfrecido;
-          response.success = true;
-          response.result = 'Listo para recibir datos en servicio 2';
-        } */
 
         // Comentario (creación directa, dynamic:false)
         const coment = record.create({ type: 'customrecord_elm_comentarios', isDynamic: false });
