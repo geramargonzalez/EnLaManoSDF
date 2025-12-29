@@ -938,7 +938,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
        * @param {number} endeudamientoT6 - The T6 indebtedness to set.
        */
       function submitFieldsEntity(entity, approvalStatus, rejectReason, newEntityStatus, infoRepetido, montoCuota, ofertaFinal, montoCuotaName, score, plazo, endeudamientoT2, endeudamientoT6, cantEntidadesT2,
-         cantEntidadesT6, peroCalifT2, peroCalifT6, canal, endeudamiento) {
+         cantEntidadesT6, peroCalifT2, peroCalifT6, canal, endeudamiento, solID) {
          let stLogTitle = 'submitFieldsEntity';
          try {
             let firstName;
@@ -977,7 +977,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                custentity_elm_t6_cant_de_enti: cantEntidadesT6 || null,
                custentity_elm_peor_calif: peroCalifT2 || null,
                custentity_t6_elm_pero_cal: peroCalifT6 || null,
-               custentity_elm_end_lead: endeudamiento || null   
+               custentity_elm_end_lead: endeudamiento || null,
+               custentity_elm_sol_vig: solID   
 
             }
 
@@ -1439,6 +1440,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             });
          }
       }
+
+
 
       /**
        * checkVale - Checks if a record with the given document number exists in the Vale custom record type.
@@ -2600,6 +2603,41 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       }
    }
 
+
+   function findSolicitudVigenteByLead(leadId) {
+      const stLogTitle = 'findSolicitudVigenteByLead';
+      try {
+         const solicitudes = [];
+         const solicitudSearch = search.create({
+               type: "customrecord_elm_solicitud",
+               filters:
+               [
+                  ["custrecord_elm_sol_cliente","anyof",leadId],
+                  "AND",
+                 ["created","within","monthsago1","secondsago0"],  
+            ],
+            columns: [
+               search.createColumn({ name: "internalid" })
+            ]
+         });
+         solicitudSearch.run().each(function (result) {
+            solicitudes.push({
+               id: result.getValue('internalid')
+            });
+            return true;
+         });
+         return solicitudes;
+      } catch (error) {
+         log.error(stLogTitle, error);
+         throw errorModule.create({
+            name: 'FIND_SOLICITUD_VIGENTE_BY_LEAD_ERROR',
+            message: 'Error finding Solicitud Vigente by Lead ID: ' + leadId + '. Details: ' + error.message,
+            notifyOff: true
+         });
+      }
+   }
+
+
    /**
     * Crea un registro de Etapa Solicitud (hijo de Solicitud Vale)
     * @param {Object} options - Objeto con los valores para el registro
@@ -2655,6 +2693,213 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
 
       } catch (error) {
          log.error(stLogTitle, 'Error creating Etapa Solicitud: ' + error.message);
+         return null;
+      }
+   }
+
+   /**
+    * Actualiza un registro de Solicitud Vale (padre) y crea una nueva Etapa Solicitud (hijo) si el estado de gestión cambia
+    * @param {Object} options - Objeto con los valores para actualizar el registro
+    * @param {number|string} options.solicitudId - Internal ID de la Solicitud Vale a actualizar (REQUERIDO)
+    * @param {number|string} [options.leadId] - Internal ID del Lead/Cliente (custrecord_elm_sol_cliente)
+    * @param {number|string} [options.estadoGestion] - Internal ID del Estado de Gestión (custrecord_elm_sol_est_gestion)
+    * @param {number|string} [options.operadorId] - Internal ID del Operador/Employee (custrecord_elm_sol_operador)
+    * @param {number|string} [options.canalId] - Internal ID del Canal/Source (custrecord_elm_sol_canal)
+    * @param {number|string} [options.servicioId] - Internal ID del Servicio (custrecord_elm_sol_servicio)
+    * @param {number|string} [options.motivoRechazoId] - Internal ID del Motivo de Rechazo (custrecord_elm_motivo_rechazo)
+    * @param {number|string} [options.montoCuotaId] - Internal ID del Monto Cuota (custrecord_elm_sol_monto_cuota)
+    * @param {number|string} [options.productoId] - Internal ID del Producto (custrecord_elm_sol_producto)
+    * @param {number} [options.montoSolicitado] - Monto Solicitado (custrecord_elm_sol_monto_sol)
+    * @param {number} [options.montoOtorgado] - Monto Otorgado (custrecord_elm_sol_monto_otorgado)
+    * @param {number} [options.plazo] - Plazo en meses (custrecord_elm_sol_plazo)
+    * @param {number|string} [options.subEstadoId] - Internal ID del Sub-Estado (custrecord_elm_sol_sub_estado)
+    * @param {string} [options.batchId] - Batch ID (custrecord_elm_sol_batch_id)
+    * @param {number} [options.valorCuota] - Valor de la Cuota (custrecord_elm_sol_valor_cuota_)
+    * @param {string} [options.tablaCalculoPrestamo] - HTML Tabla Cálculo Préstamo (custrecord_calculo_prestamo)
+    * @param {string} [options.tablaResultados] - HTML Tabla de Resultados (custrecordelm_sol_tabla_oferta)
+    * @param {string|number} [options.score] - Score BCU (custrecord_elm_sol_score)
+    * @param {string} [options.calificacion] - Calificación BCU (custrecord_elm_cal_d)
+    * @param {string|number} [options.entidades] - Cantidad de Entidades (custrecord_elm_slol_entidades)
+    * @param {string} [options.nroDocumento] - Número de Documento (custrecord_elm_sol_nro_doc)
+    * @param {number|string} [options.actividadId] - Internal ID de la Actividad (custrecord_elm_sol_acti)
+    * @param {string|number} [options.salario] - Salario (custrecord_elm_sol_salario)
+    * @param {string} [options.comentarioEtapa] - Comentario para la nueva etapa (si se crea)
+    * @param {boolean} [options.forzarCrearEtapa=false] - Si es true, crea etapa aunque el estado no cambie
+    * @returns {Object|null} Objeto con { solicitudId, etapaId, estadoCambiado } o null si falla
+    */
+   function updateSolicitudVale(options) {
+      const stLogTitle = 'updateSolicitudVale';
+      options = options || {};
+      
+      try {
+         if (!options.solicitudId) {
+            log.error(stLogTitle, 'solicitudId es requerido');
+            return null;
+         }
+
+         // Obtener el estado de gestión actual para comparar
+         const lookupResult = search.lookupFields({
+            type: 'customrecord_elm_solicitud',
+            id: options.solicitudId,
+            columns: ['custrecord_elm_sol_est_gestion']
+         });
+         
+         const estadoActual = lookupResult.custrecord_elm_sol_est_gestion && lookupResult.custrecord_elm_sol_est_gestion[0] 
+            ? lookupResult.custrecord_elm_sol_est_gestion[0].value 
+            : null;
+
+         // Construir objeto de valores a actualizar
+         const values = {};
+
+         // Lead/Cliente
+         if (options.leadId !== undefined) {
+            values['custrecord_elm_sol_cliente'] = options.leadId;
+         }
+
+         // Estado de Gestión
+         if (options.estadoGestion !== undefined) {
+            values['custrecord_elm_sol_est_gestion'] = options.estadoGestion;
+         }
+
+         // Operador
+         if (options.operadorId !== undefined) {
+            values['custrecord_elm_sol_operador'] = options.operadorId;
+         }
+
+         // Canal
+         if (options.canalId !== undefined) {
+            values['custrecord_elm_sol_canal'] = options.canalId;
+         }
+
+         // Servicio
+         if (options.servicioId !== undefined) {
+            values['custrecord_elm_sol_servicio'] = options.servicioId;
+         }
+
+         // Motivo de Rechazo
+         if (options.motivoRechazoId !== undefined) {
+            values['custrecord_elm_motivo_rechazo'] = options.motivoRechazoId;
+         }
+
+         // Monto Cuota
+         if (options.montoCuotaId !== undefined) {
+            values['custrecord_elm_sol_monto_cuota'] = options.montoCuotaId;
+         }
+
+         // Producto
+         if (options.productoId !== undefined) {
+            values['custrecord_elm_sol_producto'] = options.productoId;
+         }
+
+         // Monto Solicitado
+         if (options.montoSolicitado !== undefined) {
+            values['custrecord_elm_sol_monto_sol'] = options.montoSolicitado;
+         }
+
+         // Monto Otorgado
+         if (options.montoOtorgado !== undefined) {
+            values['custrecord_elm_sol_monto_otorgado'] = options.montoOtorgado;
+         }
+
+         // Plazo
+         if (options.plazo !== undefined) {
+            values['custrecord_elm_sol_plazo'] = parseInt(options.plazo, 10);
+         }
+
+         // Sub-Estado
+         if (options.subEstadoId !== undefined) {
+            values['custrecord_elm_sol_sub_estado'] = options.subEstadoId;
+         }
+
+         // Batch ID
+         if (options.batchId !== undefined) {
+            values['custrecord_elm_sol_batch_id'] = String(options.batchId);
+         }
+
+         // Valor Cuota
+         if (options.valorCuota !== undefined) {
+            values['custrecord_elm_sol_valor_cuota_'] = options.valorCuota;
+         }
+
+         // Tabla Cálculo Préstamo
+         if (options.tablaCalculoPrestamo !== undefined) {
+            values['custrecord_calculo_prestamo'] = options.tablaCalculoPrestamo;
+         }
+
+         // Tabla de Resultados
+         if (options.tablaResultados !== undefined) {
+            values['custrecordelm_sol_tabla_oferta'] = options.tablaResultados;
+         }
+
+         // Score
+         if (options.score !== undefined) {
+            values['custrecord_elm_sol_score'] = String(options.score);
+         }
+
+         // Calificación
+         if (options.calificacion !== undefined) {
+            values['custrecord_elm_cal_d'] = String(options.calificacion);
+         }
+
+         // Entidades
+         if (options.entidades !== undefined) {
+            values['custrecord_elm_slol_entidades'] = String(options.entidades);
+         }
+
+         // Nro de Documento
+         if (options.nroDocumento !== undefined) {
+            values['custrecord_elm_sol_nro_doc'] = String(options.nroDocumento);
+         }
+
+         // Actividad
+         if (options.actividadId !== undefined) {
+            values['custrecord_elm_sol_acti'] = options.actividadId;
+         }
+
+         // Salario
+         if (options.salario !== undefined) {
+            values['custrecord_elm_sol_salario'] = String(options.salario);
+         }
+
+         // Actualizar registro si hay campos para actualizar
+         if (Object.keys(values).length > 0) {
+            record.submitFields({
+               type: 'customrecord_elm_solicitud',
+               id: options.solicitudId,
+               values: values,
+               options: {
+                  enableSourcing: false,
+                  ignoreMandatoryFields: true
+               }
+            });
+            log.audit(stLogTitle, 'Solicitud Vale updated with id: ' + options.solicitudId);
+         }
+
+         // Determinar si el estado de gestión cambió
+         const nuevoEstado = options.estadoGestion ? String(options.estadoGestion) : null;
+         const estadoCambiado = nuevoEstado && estadoActual && String(estadoActual) !== nuevoEstado;
+
+         // Crear nueva etapa si el estado cambió o si se fuerza la creación
+         let etapaId = null;
+         if (estadoCambiado || options.forzarCrearEtapa === true) {
+            etapaId = createEtapaSolicitud({
+               solicitudId: options.solicitudId,
+               estadoGestion: options.estadoGestion,
+               usuarioId: options.operadorId,
+               comentario: options.comentarioEtapa,
+               motivoRechazoId: options.motivoRechazoId
+            });
+            log.audit(stLogTitle, 'Nueva etapa creada por cambio de estado. Anterior: ' + estadoActual + ', Nuevo: ' + nuevoEstado);
+         }
+
+         return {
+            solicitudId: options.solicitudId,
+            etapaId: etapaId,
+            estadoCambiado: estadoCambiado
+         };
+
+      } catch (error) {
+         log.error(stLogTitle, 'Error updating Solicitud Vale: ' + error.message);
          return null;
       }
    }
@@ -2834,6 +3079,34 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       }
    }
 
+   /**
+    * Obtiene el Internal ID de una calificación BCU por su nombre
+    * Lista: customlist_elm_list_calificacion
+    * @param {string} nombreCalificacion - Nombre de la calificación (ej: "1A", "1C", "2A", "2B", "3", "5", "N/C")
+    * @returns {number|null} Internal ID de la calificación o null si no se encuentra
+    */
+   function getCalificacionId(nombreCalificacion) {
+      // Mapeo de calificaciones a Internal IDs según customlist_elm_list_calificacion
+      const CALIFICACION_MAP = {
+         '1C': 1,
+         '2A': 2,
+         '2B': 3,
+         '3': 4,
+         '5': 5,
+         'N/C': 6,
+         '1A': 7
+      };
+
+      if (!nombreCalificacion) {
+         return null;
+      }
+
+      // Normalizar: eliminar espacios y convertir a mayúsculas
+      const calificacionNormalizada = String(nombreCalificacion).trim().toUpperCase();
+      
+      return CALIFICACION_MAP[calificacionNormalizada] || null;
+   }
+
 
    return {
       calculateYearsSinceDate: calculateYearsSinceDate,
@@ -2869,6 +3142,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       createRecordAuditCambios:createRecordAuditCambios,
       createEtapaSolicitud: createEtapaSolicitud,
       createSolicitudVale: createSolicitudVale,
+      updateSolicitudVale: updateSolicitudVale,
       createGestionLead: createGestionLead,
       snapshotAprobados: snapshotAprobados,
       isClientActive: isClientActive,
@@ -2878,6 +3152,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       deactivateLeadsByDocumentNumberSQL: deactivateLeadsByDocumentNumberSQL,
       getInfoRepetidoLight: getInfoRepetidoLight,
       createScoreHistoryRecord: createScoreHistoryRecord,
+      getCalificacionId: getCalificacionId,
+      findSolicitudVigenteByLead: findSolicitudVigenteByLead
    }
 });
 

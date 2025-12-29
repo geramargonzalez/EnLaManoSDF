@@ -53,7 +53,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
       // Crear preLead mínimo al inicio del flujo “no latente”
-      let preLeadId = null;
+      let preLeadId = infoRepExist?.id ? infoRepExist.id : null;
 
         if (notLatente) {
          preLeadId = auxLib.createPreLead(
@@ -61,25 +61,37 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
           params?.inicial, null, source, activityType, trackingId
         );
-      }
+      } 
+        //  creo la solicitud de lead directamente
+        const idSol = auxLib.createSolicitudVale({
+          leadId: preLeadId,
+          estadoGestion: params?.inicial,
+          operadorId: null,
+          canalId: sourceId,
+          montoSolicitado: null,
+          plazo: null,
+          score: null,
+          calificacion: null,
+          nroDocumento: docNumber,
+          comentarioEtapa: 'Solicitud creada desde REST',
+          actividadId: activity,
+          salario: salary,
+          canalId:  sourceId
+      });
+      log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
+      
 
       // ---------- Blacklist/Mocasist early-exit ----------
       const blacklisted = auxLib.checkBlacklist(docNumber);
       if (blacklisted) {
         response.success = false;
         response.result = 'Blacklist';
-        if (infoRepExist?.id) {
-          copyLeadSnapshot({
-            sourceLeadId: infoRepExist.id,
-            targetPreLeadId: preLeadId,
-            docNumber,
-            aprobado: params.estadoRepRechazado,
-            rejectReason: params.rechazoBlacklist,
-            repetidoOriginalId: infoRepExist.id
-          })
-        } else {
-          auxLib.submitFieldsEntity(preLeadId, params?.estadoBlacklist, params?.rechazoBlacklist);
-        }
+        auxLib.submitFieldsEntity(preLeadId, params?.estadoBlacklist, params?.rechazoBlacklist);
+        auxLib.updateSolicitudVale({
+          solicitudId: idSol,
+          estadoGestion: params?.estadoBlacklist,
+          motivoRechazoId: params?.rechazoBlacklist
+      });
         auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
         return response; // EARLY RETURN
       }
@@ -88,18 +100,13 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       if (isMocasist) {
         response.success = false;
         response.result = 'Mocasist';
-        if (infoRepExist?.id) {
-          copyLeadSnapshot({
-            sourceLeadId: infoRepExist.id,
-            targetPreLeadId: preLeadId,
-            docNumber,
-            aprobado: params.estadoRepRechazado,
-            rejectReason: params.rechazoMocasist,
-            repetidoOriginalId: infoRepExist.id
-          });
-        } else {
-          auxLib.submitFieldsEntity(preLeadId, params.estadoMocasist, params.rechazoMocasist);
-        }
+        auxLib.updateSolicitudVale({
+          solicitudId: idSol,
+          estadoGestion: params?.estadoMocasist,
+          motivoRechazoId: params?.rechazoMocasist,
+          
+      });
+        auxLib.submitFieldsEntity(preLeadId, params?.estadoMocasist, params?.rechazoMocasist);
         auxLib.updateLogWithResponse(idLog, response.result, response.success, response);
         return response; // EARLY RETURN
       }
@@ -186,6 +193,17 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
               
               }
 
+              auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params?.estadoLatente,
+                  montoCuotaId: ponder.montoCuotaId,
+                  montoOtorgado: ofertaFinal?.oferta || 0,
+                  plazo: ofertaFinal?.plazo || 0,
+                  score: score?.score,
+                  calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                  valorCuota: toNum(ofertaFinal?.cuotaFinal),
+              });
+
               auxLib.submitFieldsEntity(
                 leadId,
                 params.estadoLatente,
@@ -197,11 +215,18 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 ponder?.montoCuotaName,
                 score,
                 ofertaFinal?.plazo,
-                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
+                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento, idSol
               );
             } else {
               response.success = false;
               response.result = 'No hay oferta';
+
+              auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params?.estadoRechazado,
+                  motivoRechazoId:params.rechazoNoHayOferta,
+              });
+
               auxLib.submitFieldsEntity(
                 leadId,
                 params.estadoRechazado,
@@ -211,12 +236,17 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 ponder?.montoCuotaName,
                 score,
                 null,
-                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
+                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento,idSol
               );
             }
           } else {
             response.success = false;
             response.result = 'No hay oferta';
+            auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params?.estadoRechazado,
+                  motivoRechazoId:params.rechazoNoHayOferta,
+              });
             auxLib.submitFieldsEntity(
               preLeadId,
               params.estadoRechazado,
@@ -226,7 +256,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
               'Score Minimo',
               score,
               null,
-              endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento
+              endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento, idSol
             );
           }
 
@@ -244,65 +274,65 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           if (repetidoIsFromExternal && !repetidoIsRejected && !repetidoNoInfo) {
             response.success = false;
             response.result = 'Repetido';
-            copyLeadSnapshot({
+            /* copyLeadSnapshot({
               sourceLeadId: infoRep.id,
               targetPreLeadId: preLeadId,
               docNumber,
               aprobado: infoRep.estadoRepAprobado,
               repetidoOriginalId: infoRep.id
-            });
+            }); */
           } else if (repetidoIsFromExternal && repetidoIsRejected) {
             response.success = false;
             response.result = 'Repetido rechazado';
-            copyLeadSnapshot({
+           /*  copyLeadSnapshot({
               sourceLeadId: infoRep.id,
               targetPreLeadId: preLeadId,
               docNumber,
               aprobado: params.estadoRepRechazado,
               rejectReason: params.rechazoRepRechazado,
               repetidoOriginalId: infoRep.id
-            });
+            }); */
           } else if (!repetidoIsFromExternal) {
             if (repetidoIsPreLead && repetidoIsRejected) {
-              copyLeadSnapshot({
+              /* copyLeadSnapshot({
                 sourceLeadId: infoRep.id,
                 targetPreLeadId: preLeadId,
                 docNumber,
                 aprobado: params.estadoRepRechazado,
                 rejectReason: params.rechazoRepRechazado,
                 repetidoOriginalId: infoRep.id
-              });
+              }); */
             } else if (!repetidoIsPreLead && repetidoIsRejected) {
-              copyLeadSnapshot({
+              /* copyLeadSnapshot({
                 sourceLeadId: infoRep.id,
                 targetPreLeadId: preLeadId,
                 docNumber,
                 aprobado: params.estadoRepRechazado,
                 rejectReason: params.rechazoRepRechazado,
                 repetidoOriginalId: infoRep.id
-              });
+              }); */
             } else if (!repetidoIsRejected && infoRep) {
-              copyLeadSnapshot({
+             /*  copyLeadSnapshot({
                 sourceLeadId: infoRep.id,
                 targetPreLeadId: preLeadId,
                 docNumber,
                 aprobado: params.estadoRepAprobado,
                 repetidoOriginalId: infoRep.id
-              });
+              }); */
             }
           }
 
           if (!repetidoIsRejected && repetidoNoInfo) {
             response.success = false;
             response.result = 'Repetido No Info BCU';
-            copyLeadSnapshot({
+            /* copyLeadSnapshot({
               sourceLeadId: infoRep.id,
               targetPreLeadId: preLeadId,
               docNumber,
               aprobado: '16',
               rejectReason: '3',
               repetidoOriginalId: infoRep.id
-            });
+            }); */
           }
 
           if (isPendienteEvaluacion) {
@@ -347,32 +377,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       // ---------- Ya estaba LATENTE ----------
       } else {
         const infoRep = auxLib.getInfoRepetidoSql(docNumber, null,null, false);
-        /*
         
-        if (source === 'AlPrestamo' && infoRep?.canal !== '2') {
-          const ponder = auxLib.getPonderador(infoRep?.score, infoRep?.calificacionMinima, infoRep?.endeudamiento, salary, activity, age, source);
-          const montoCuota = toNum(salary) * toNum(ponder?.ponderador);
-          const ofertaFinal = getOfertaFinal(source, montoCuota);
-
-          if (ofertaFinal) {
-            submitLeadOfertaFields(infoRep.id, {
-              montoCuota,
-              ofertaFinal,
-              activity, dateOfBirth, workStartDate, salary,
-              channel: '2', score: infoRep?.score
-            });
-            response.success = true;
-            response.result = 'Listo para recibir datos en servicio 2';
-          } else {
-            response.success = false;
-            response.result = 'Repetido';
-          }
-        } else {
-          if (source === 'Creditleads') response.oferta = infoRep?.montoOfrecido;
-          response.success = true;
-          response.result = 'Listo para recibir datos en servicio 2';
-        } */
-
         // Comentario (creación directa, dynamic:false)
         const coment = record.create({ type: 'customrecord_elm_comentarios', isDynamic: false });
         coment.setValue({ fieldId: 'custrecord_elm_com_lead', value: infoRep?.id });
