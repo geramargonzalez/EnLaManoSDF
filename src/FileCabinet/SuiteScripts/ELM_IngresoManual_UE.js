@@ -18,8 +18,18 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          motivoRechazo: 'custentity_elm_reject_reason',
          score: 'custentity_score',
          calificacion: 'custentity_calificacion',
-         montoOfrecido: 'custentity_sdb_montoofrecido',
          canal: 'custentity_elm_channel',
+         plazo: 'custentity_elm_plazo',
+         montoCuota: 'custentity_sdb_valor_cuota',
+         montoOtorgado: 'custentity_sdb_montoofrecido',
+         montoSolicitado: 'custentity_sdb_montosolicitado',
+         calificacion: 'custentity_calificacion',
+         operador: 'custentity_elm_operador',
+         subEstado: 'custentity_elm_sub_estado',
+         servicio: 'custentity_elm_service',
+         productoId: 'custentity6',
+         valorCuota: 'custentity_sdb_valor_cuota',
+         scoreResponse: 'custentity_response_score_bcu'
       };
       /**
      * @author Gerardo Gonzalez
@@ -60,12 +70,6 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
              if (isCreate) {
                auxLib.deactivateLeadsByDocumentNumber(docNumber);
             }
-            const oldValues = {
-               salary: oldRecord?.getValue(FIELDS.salary),
-               dob: oldRecord?.getValue(FIELDS.dob),
-               activity: oldRecord?.getValue(FIELDS.activity),
-               age: auxLib.calculateYearsSinceDate(oldRecord?.getValue(FIELDS.dob))
-            };
 
             const newValues = {
                salary: newRecord.getValue(FIELDS.salary),
@@ -73,16 +77,12 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                activity: newRecord.getValue(FIELDS.activity),
                age: auxLib.calculateYearsSinceDate(newRecord.getValue(FIELDS.dob))
             };
-            const canal = newRecord.getValue(FIELDS.canal);
-            const needsRecalculate = isEdit && (
-               oldValues.salary !== newValues.salary ||
-               oldValues.age !== newValues.age ||
-               oldValues.activity !== newValues.activity
-            );
-           
+            
+            const needsRecalculate = needsCalculation(oldRecord, newRecord, isEdit);
+           const canal = newRecord.getValue(FIELDS.canal);
             if (isCreate || needsRecalculate) {
                if (needsRecalculate) {
-                  [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.calificacion, FIELDS.montoOfrecido].forEach(field => {
+                  [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.calificacion, FIELDS.montoOtorgado].forEach(field => {
                      newRecord.setValue(field, null);
                   });
                }
@@ -312,8 +312,64 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             const estadoGestionOld = oldRecord ? oldRecord.getValue(FIELDS.aprobado) : null;
             const leadId = newRecord.id;
             const inactive = newRecord.getValue('isinactive');
-            const operador = newRecord.getValue('custentity_elm_operador');
-         
+
+            if (type === 'delete') {
+               return;
+            }
+
+            if (type === 'create'  || needsCalculation(oldRecord, newRecord, type === UserEventType.EDIT)) {
+
+               const idSol = auxLib.createSolicitudVale({
+                  leadId: newRecord.id,
+                  estadoGestion: newRecord.getValue(FIELDS.aprobado),
+                  operadorId: newRecord.getValue('owner'),
+                  canalId: newRecord.getValue(FIELDS.canal),
+                  montoSolicitado: newRecord.getValue(FIELDS.montoSolicitado),
+                  plazo: newRecord.getValue(FIELDS.plazo),
+                  score: newRecord.getValue(FIELDS.score),
+                  calificacion: auxLib.getCalificacionId(newRecord.getValue(FIELDS.calificacion)),
+                  nroDocumento: docNumber,
+                  comentarioEtapa: 'Solicitud creada desde Ingreso Manual',
+                  actividadId: newRecord.getValue(FIELDS.activity),
+                  salario: newRecord.getValue(FIELDS.salary),
+                  canalId:  newRecord.getValue(FIELDS.canal),
+                  motivoRechazo: newRecord.getValue(FIELDS.motivoRechazo),
+                  edad: newRecord.getValue(FIELDS.age),
+                  subEstadoId: newRecord.getValue(FIELDS.subEstado),
+                  servicioId: newRecord.getValue(FIELDS.servicio),
+                  productoId: newRecord.getValue(FIELDS.productoId),
+                  valorCuota: newRecord.getValue(FIELDS.valorCuota),
+                  montoOtorgado: newRecord.getValue(FIELDS.montoOtorgado),
+                  montoCuota: auxLib.getMontoCuotaId(newRecord.getValue(FIELDS.montoCuota), newRecord.getValue(FIELDS.canal)),
+                  crearEtapa: true
+               });
+               log.debug(`Solicitud de vale creada directamente`, idSol);
+
+
+               const score = JSON.parse(newRecord.getValue(FIELDS.scoreResponse));
+               const scoreOld = oldRecord ? JSON.parse(oldRecord.getValue(FIELDS.scoreResponse)) : null;
+
+               if (score.score !== scoreOld?.score) {
+                  const bcuVars = auxLib.extractBcuVariables(score);
+                  const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
+                  const preLeadId = newRecord.id;
+                           
+                  const historyId = auxLib.createScoreHistoryRecord({
+                     leadId: preLeadId,
+                     score: score.score,
+                     calificacion: score?.calificacionMinima,  // ID de lista de calificaciones
+                     respuesta: JSON.stringify(score),
+                     t2CantEntidades: cantEntT2,
+                     t2Endeudamiento: endeudT2,
+                     t2PeorCalificacion: peorCalifT2,
+                     t6CantEntidades: cantEntT6,
+                     t6Endeudamiento: endeudT6,
+                     t6PeorCalificacion: peorCalifT6,
+                     endeudamiento: score.endeudamiento
+                  });
+                  log.debug(`Score history creado`, historyId);
+               }
+            }
 
             // Only create gestion lead when event is create or edit AND approval state changed AND execution context is UI
             if (type === 'create' || type === 'edit') {
@@ -373,6 +429,29 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             log.error('afterSubmit', e);
          }
       };
+
+
+      function needsCalculation(oldRecord, newRecord, isEdit) {
+         const oldValues = {
+               salary: oldRecord?.getValue(FIELDS.salary),
+               dob: oldRecord?.getValue(FIELDS.dob),
+               activity: oldRecord?.getValue(FIELDS.activity),
+               age: auxLib.calculateYearsSinceDate(oldRecord?.getValue(FIELDS.dob))
+            };
+
+            const newValues = {
+               salary: newRecord.getValue(FIELDS.salary),
+               dob: newRecord.getValue(FIELDS.dob),
+               activity: newRecord.getValue(FIELDS.activity),
+               age: auxLib.calculateYearsSinceDate(newRecord.getValue(FIELDS.dob))
+            };
+            const needsRecalculate = isEdit && (
+               oldValues.salary !== newValues.salary ||
+               oldValues.age !== newValues.age ||
+               oldValues.activity !== newValues.activity
+            );
+            return needsRecalculate;
+      }
 
 
       return { beforeSubmit, afterSubmit };

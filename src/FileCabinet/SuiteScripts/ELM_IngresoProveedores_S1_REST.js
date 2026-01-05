@@ -45,22 +45,23 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
       // "Apagar" leads activos por doc (siempre antes de crear)
       // Si se desactivaron leads, no es necesario buscar info repetido
-      const leadsDesactivados = auxLib.deactivateLeadsByDocumentNumber(docNumber);
+      // const leadsDesactivados = auxLib.deactivateLeadsByDocumentNumber(docNumber);
 
       // Info repetido (una sola llamada, solo si no se desactivaron leads)
-      const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
+      const infoRepExist = auxLib.getSolicitudVidente (docNumber);
+      // const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
       log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
       const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
       // Crear preLead mínimo al inicio del flujo “no latente”
       let preLeadId = infoRepExist?.id ? infoRepExist.id : null;
 
-        if (notLatente) {
-         preLeadId = auxLib.createPreLead(
-          params.externalService, docNumber, null, maskedFirstName, maskedLastName,
-          activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
-          params?.inicial, null, source, activityType, trackingId
-        );
+      if (notLatente && !infoRepExist?.id) {
+        preLeadId = auxLib.createPreLead(
+        params.externalService, docNumber, null, maskedFirstName, maskedLastName,
+        activity, salary, dateOfBirth, yearsOfWork, age, sourceId, workStartDate,
+        params?.inicial, null, source, activityType, trackingId
+      );
       } 
         //  creo la solicitud de lead directamente
         const idSol = auxLib.createSolicitudVale({
@@ -76,7 +77,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           comentarioEtapa: 'Solicitud creada desde REST',
           actividadId: activity,
           salario: salary,
-          canalId:  sourceId
+          canalId:  sourceId,
+          crearEtapa: false
       });
       log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
       
@@ -146,8 +148,8 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
           log.debug(`${LOG_PREFIX} BCU vars extraídas`, { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, endeudamiento: score.endeudamiento });
-
-            const historyId = auxLib.createScoreHistoryRecord({
+          
+          const historyId = auxLib.createScoreHistoryRecord({
               leadId: preLeadId,
               score: score?.score,
               calificacion: score?.calificacionMinima,  // ID de lista de calificaciones
