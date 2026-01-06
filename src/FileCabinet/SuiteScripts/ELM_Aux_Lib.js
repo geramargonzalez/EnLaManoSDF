@@ -609,9 +609,10 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
          let whereClause = `
             customer.custentity_sdb_nrdocumento = '${docNumber}'
             AND customer.isinactive = 'F'
-            AND customer.datecreated >= SYSDATE - 30
-            AND (customer.custentity_elm_lead_repetido_original IS NULL OR customer.custentity_elm_lead_repetido_original = 0)
          `;
+
+        /*  AND customer.datecreated >= SYSDATE - 30
+            AND (customer.custentity_elm_lead_repetido_original IS NULL OR customer.custentity_elm_lead_repetido_original = 0) */
 
          //    customer.searchStage = 'Lead'
          if (canal) {
@@ -3164,17 +3165,18 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                   label: "Operador"
                })
             ]
-      });
-      const searchResultCount = leadSearchObj.runPaged().count;
-      log.debug("leadSearchObj result count",searchResultCount);
-      leadSearchObj.run().each(function(result){
-         // .run().each has a limit of 4,000 results
-         solicitudes.id = result.id;
-         solicitudes.approvalStatus = result.getValue({ name: "custrecord_elm_sol_est_gestion", join: "CUSTENTITY_ELM_SOL_VIG" });
-         solicitudes.created = result.getValue({ name: "created", join: "CUSTENTITY_ELM_SOL_VIG" });
-         solicitudes.nroDocumento = result.getValue({ name: "custrecord_elm_sol_nro_doc", join: "CUSTENTITY_ELM_SOL_VIG" });
-         solicitudes.operador = result.getValue({ name: "custrecord_elm_sol_operador", join: "CUSTENTITY_ELM_SOL_VIG" });
-      });
+            });
+            const searchResultCount = leadSearchObj.runPaged().count;
+            log.debug("leadSearchObj result count",searchResultCount);
+            leadSearchObj.run().each(function(result){
+               // .run().each has a limit of 4,000 results
+               solicitudes.id = result.id;
+               solicitudes.solID = result.getValue({ name: "internalid", join: "CUSTENTITY_ELM_SOL_VIG" });
+               solicitudes.approvalStatus = result.getValue({ name: "custrecord_elm_sol_est_gestion", join: "CUSTENTITY_ELM_SOL_VIG" });
+               solicitudes.created = result.getValue({ name: "created", join: "CUSTENTITY_ELM_SOL_VIG" });
+               solicitudes.nroDocumento = result.getValue({ name: "custrecord_elm_sol_nro_doc", join: "CUSTENTITY_ELM_SOL_VIG" });
+               solicitudes.operador = result.getValue({ name: "custrecord_elm_sol_operador", join: "CUSTENTITY_ELM_SOL_VIG" });
+            });
 
       return solicitudes;
          
@@ -3235,6 +3237,48 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
             }); 
          }
    }
+
+   /**
+    * getScoreHistorico - Obtiene el último registro de score histórico asociado a un lead
+    * @param {number|string} leadId - Internal ID del Lead/Cliente
+    * @returns {Object|null} Objeto con { id, score } o null si no se encuentra
+    */
+   function getScoreHistorico(leadId) {
+      const stLogTitle = 'getScoreHistorico';
+      try {
+         if (!leadId) {
+            log.error(stLogTitle, 'leadId es requerido');
+            return null;
+         }
+
+         let resultado = null;
+         const scoreSearch = search.create({
+            type: 'customrecord_elm_score_historico',
+            filters: [
+               ['custrecord_elm_score_hist_cli', 'anyof', leadId]
+            ],
+            columns: [
+               search.createColumn({ name: 'internalid' }),
+               search.createColumn({ name: 'custrecord_elm_score_hist_score' }),
+               search.createColumn({ name: 'created', sort: search.Sort.DESC })
+            ]
+         });
+
+         scoreSearch.run().each(function(result) {
+            resultado = {
+               id: result.getValue('internalid'),
+               score: result.getValue('custrecord_elm_score_hist_score')
+            };
+            return false; // Solo obtener el primero (más reciente)
+         });
+
+         return resultado;
+
+      } catch (error) {
+         log.error(stLogTitle, 'Error getting Score Historico: ' + error.message);
+         return null;
+      }
+   }
    
 
 
@@ -3285,7 +3329,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       getCalificacionId: getCalificacionId,
       findSolicitudVigenteByLead: findSolicitudVigenteByLead,
       getSolicitudVidente: getSolicitudVidente,
-      getMontoCuotaId: getMontoCuotaId
+      getMontoCuotaId: getMontoCuotaId,
+      getScoreHistorico: getScoreHistorico
    }
 });
 

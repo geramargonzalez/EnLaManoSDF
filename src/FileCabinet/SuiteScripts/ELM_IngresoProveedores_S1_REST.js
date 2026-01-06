@@ -49,12 +49,13 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
 
       // Info repetido (una sola llamada, solo si no se desactivaron leads)
       const infoRepExist = auxLib.getSolicitudVidente (docNumber);
+      const leadInfo = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
       // const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
       log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
       const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
       // Crear preLead mínimo al inicio del flujo “no latente”
-      let preLeadId = infoRepExist?.id ? infoRepExist.id : null;
+      let preLeadId = leadInfo?.id ? leadInfo.id : null;
 
       if (notLatente && !infoRepExist?.id) {
         preLeadId = auxLib.createPreLead(
@@ -194,7 +195,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 }
               
               }
-
               auxLib.updateSolicitudVale({
                   solicitudId: idSol,
                   estadoGestion: params?.estadoLatente,
@@ -222,13 +222,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
             } else {
               response.success = false;
               response.result = 'No hay oferta';
-
-              auxLib.updateSolicitudVale({
-                  solicitudId: idSol,
-                  estadoGestion: params?.estadoRechazado,
-                  motivoRechazoId:params.rechazoNoHayOferta,
-              });
-
               auxLib.submitFieldsEntity(
                 leadId,
                 params.estadoRechazado,
@@ -238,8 +231,16 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                 ponder?.montoCuotaName,
                 score,
                 null,
-                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento,idSol
-              );
+                endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento,idSol);
+
+                auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params?.estadoRechazado,
+                  motivoRechazoId:params.rechazoNoHayOferta,
+                  score: score?.score,
+                  calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                  montoCuotaId: ponder.montoCuotaId
+              });
             }
           } else {
             response.success = false;
@@ -248,18 +249,19 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
                   solicitudId: idSol,
                   estadoGestion: params?.estadoRechazado,
                   motivoRechazoId:params.rechazoNoHayOferta,
+                  score: score?.score,
               });
-            auxLib.submitFieldsEntity(
-              preLeadId,
-              params.estadoRechazado,
-              params.rechazoNoHayOferta,
-              null,
-              0, 0, 0,
-              'Score Minimo',
-              score,
-              null,
-              endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento, idSol
-            );
+              auxLib.submitFieldsEntity(
+                    preLeadId,
+                    params.estadoRechazado,
+                    params.rechazoNoHayOferta,
+                    null,
+                    0, 0, 0,
+                    'Score Minimo',
+                    score,
+                    null,
+                    endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento, idSol
+                  );
           }
 
         } else {

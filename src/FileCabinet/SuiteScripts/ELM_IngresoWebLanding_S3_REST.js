@@ -22,13 +22,38 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
             result: null
          }; 
          try {
-            auxLib.deactivateLeadsByDocumentNumber(docNumber);
-            const infoRepetido = auxLib.getInfoRepetido(docNumber, null, false);
+            // auxLib.deactivateLeadsByDocumentNumber(docNumber);
+            
+            // Info repetido (una sola llamada, solo si no se desactivaron leads)
+            const infoRepExist = auxLib.getSolicitudVidente (docNumber);
+            const leadInfo = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
+            // const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
+            log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
+            const notPendiente = infoRepExist?.approvalStatus != "3";
+            
+            // const infoRepetido = auxLib.getInfoRepetido(docNumber, null, false);
             let sourceId = auxLib.getProveedorId(source);
+                  // Crear preLead mínimo al inicio del flujo “no latente”
+            let preLeadId = leadInfo?.id ? leadInfo.id : null;
+ 
+            if (notPendiente) {
+               
+               if (preLeadId) {
+                  preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.inicial);
+               }
 
-            if (infoRepetido.approvalStatus != "3") {
+               const idSol = auxLib.createSolicitudVale({
+                  leadId: preLeadId,
+                  estadoGestion: params?.inicial,
+                  canalId: sourceId,
+                  nroDocumento: docNumber,
+                  comentarioEtapa: 'Solicitud creada desde Servicio 3 - Web/Landing',
+                  canalId:  sourceId,
+                  crearEtapa: false
+               });
 
-               let preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.inicial);
+                  log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
+               
                let blackList = auxLib.checkBlacklist(docNumber);
                let isBlacklisted = auxLib.isClientActive(docNumber);
 
@@ -49,6 +74,23 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                            const bcuVars = auxLib.extractBcuVariables(score);
                            const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
+
+                            const historyId = auxLib.createScoreHistoryRecord({
+                              leadId: preLeadId,
+                              score: score?.score,
+                              calificacion: score?.calificacionMinima,  // ID de lista de calificaciones
+                              respuesta: JSON.stringify(score),
+                              t2CantEntidades: cantEntT2,
+                              t2Endeudamiento: endeudT2,
+                              t2PeorCalificacion: peorCalifT2,
+                              t6CantEntidades: cantEntT6,
+                              t6Endeudamiento: endeudT6,
+                              t6PeorCalificacion: peorCalifT6,
+                              endeudamiento: score.endeudamiento
+                           });
+
+                           log.debug(`${LOG_PREFIX} Score history creado`, historyId);
+
                         if (score.calificacionMinima == 'N/C') {
                               log.audit('Error', 'El documento ' + docNumber + ' tiene mala calificación en BCU.');
                               response.success = false;
@@ -60,7 +102,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                         }
                         if (score && score.score > 499) {
                            log.audit('Success', 'El documento ' + docNumber + ' fue evaluado con éxito. Pre Lead aprobado: ' + preLeadId);
-                           auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoPendienteEvaluacion, null, null, null, null, null, null, score, null, endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento );
+                           auxLib.submitFieldsEntity(preLeadId, objScriptParam.estadoPendienteEvaluacion, null, null, null, null, null, null, score, null, endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento, idSol );
 
                            if (repetidoIsFromExternal || repetidoIsFromManual) {
 
@@ -90,14 +132,33 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                                  response.result = 'Listo para recibir datos en servicio 4';
                                  log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + ofertaFinal?.cuotaFinal);
                                  auxLib.submitFieldsEntity(lead, objScriptParam?.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudT2, endeudT6, cantEntT2,
-                                 cantEntT6, peorCalifT2, peorCalifT6,  null, score.endeudamiento );
+                                 cantEntT6, peorCalifT2, peorCalifT6,  null, score.endeudamiento, idSol);
                                  auxLib.snapshotAprobados(docNumber, lead, objScriptParam?.estadoAprobado, 5);
+                                   auxLib.updateSolicitudVale({
+                                    solicitudId: idSol,
+                                    estadoGestion: params?.estadoLatente,
+                                    montoCuotaId: ponder.montoCuotaId,
+                                    montoOtorgado: ofertaFinal?.oferta || 0,
+                                    plazo: ofertaFinal?.plazo || 0,
+                                    score: score?.score,
+                                    calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                                    valorCuota: toNum(ofertaFinal?.cuotaFinal),
+                              });
+                              
 
                               } else {
                                  log.audit('Error', 'No hay oferta para el documento:  ' + docNumber);
                                  response.success = false;
                                  response.result = 'No hay oferta';
                                  auxLib.submitFieldsEntity(lead, objScriptParam?.estadoRechazado, objScriptParam?.rechazoNoHayOferta, null, null, 0, 0, montoCuotaObj?.montoCuotaName, score, null , endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6, null, score.endeudamiento );
+                              
+                                 auxLib.updateSolicitudVale({
+                                    solicitudId: idSol,
+                                    estadoGestion: params?.estadoRechazado,
+                                    motivoRechazoId:params.rechazoNoHayOferta,
+                                    score: score?.score,
+                                    calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                              });
                               }
                            } else {
                                  response.success = true;
@@ -297,7 +358,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                notas:  'Error - Servicio 3: ' + docNumber + ' - details: ' + e, 
             };
             auxLib.createRecordAuditCambios(obj);  
-
          }
          log.debug('Response S3 ' + docNumber, JSON.stringify(response));
          auxLib.updateLogWithResponse(idLog, response.result, response.success, response);

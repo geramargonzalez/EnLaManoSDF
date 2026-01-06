@@ -30,6 +30,7 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
          };
          try {
             const preLeadId = auxLib.findEntity(docNumber, 6);
+            const InfoSol = auxLib.getSolicitudVidente (docNumber);
             if (preLeadId) {
                const age = auxLib.calculateYearsSinceDate(dateOfBirth);
                let yearsOfWork;
@@ -37,6 +38,27 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                let activity = auxLib.getActivityType(activityType);
                let score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
                
+               const scoreHistorico = auxLib.getScoreHistorico(preLeadId);
+
+               if (scoreHistorico.score && scoreHistorico.score != score.score) {
+                  const historyId = auxLib.createScoreHistoryRecord({
+                     leadId: preLeadId,
+                     score: score?.score,
+                     calificacion: score?.calificacionMinima,  // ID de lista de calificaciones
+                     respuesta: JSON.stringify(score),
+                     t2CantEntidades: cantEntT2,
+                     t2Endeudamiento: endeudT2,
+                     t2PeorCalificacion: peorCalifT2,
+                     t6CantEntidades: cantEntT6,
+                     t6Endeudamiento: endeudT6,
+                     t6PeorCalificacion: peorCalifT6,
+                     endeudamiento: score.endeudamiento
+                  });
+               log.debug(`${LOG_PREFIX} Score history creado`, historyId);
+
+               }
+
+
                if (score?.error_reglas) {
                      let approvalStatus = objScriptParam.estadoRechazado;
                      if (score.error_reglas == 500 || score.error_reglas == 400) {
@@ -86,6 +108,16 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                        response.success = true;
                        response.result = 'Lead Aprobado correctamente';
                        auxLib.snapshotAprobados(docNumber, leadId, objScriptParam.estadoAprobado, 8);
+                         auxLib.updateSolicitudVale({
+                           solicitudId: InfoSol.solID,
+                           estadoGestion: 3,
+                           montoCuotaId: montoCuotaObj.montoCuotaId,
+                           montoOtorgado: ofertaFinal?.oferta || 0,
+                           plazo: ofertaFinal?.plazo || 0,
+                           score: score?.score,
+                           calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                           valorCuota: toNum(ofertaFinal?.cuotaFinal),
+                        });
                   } else {
                      log.audit('Error', 'No hay oferta para el documento:  ' + docNumber);
                      response.success = false;
@@ -102,6 +134,14 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                            enableSourcing: false,
                            ignoreMandatoryFields: true
                         }
+                     });
+
+                     auxLib.updateSolicitudVale({
+                           solicitudId: InfoSol.solID,
+                           estadoGestion: objParams.estadoRechazado,
+                           score: score?.score,
+                           calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
+                           montoCuotaId: montoCuotaObj.montoCuotaId,
                      });
 
                      log.debug('idCleanOperator', idCleanOperator);
