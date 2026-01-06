@@ -211,7 +211,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                 approvalStatus = objScriptParam.estadoReAprob;
             }
     
-            if (infoRepetido.id) {
+            if (infoRepetido.id && estadoGestion != 11) {
                 const newCustomerId = auxLib.copyRecordToRecord({
                     sourceType: record.Type.LEAD,
                     sourceId: infoRepetido.id,
@@ -235,9 +235,6 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
 
                     log.audit('Created customer', newCustomerId);
 
-                    /* if (newCustomerId) {
-                        auxLib.createListRepetido(docNumber, nombre)
-                    } */
             }
 
 

@@ -1,0 +1,25 @@
+<suitelet scriptid="customscript_elm_consulta_clearing_sl">
+  <description></description>
+  <isinactive>F</isinactive>
+  <name>ELM | Consulta Clearing (SL)</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptfile>[/SuiteScripts/ELM_ConsultaClearing_SL.js]</scriptfile>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_elm_consulta_clearing_sl">
+      <allemployees>T</allemployees>
+      <allpartners>F</allpartners>
+      <allroles>T</allroles>
+      <audslctrole></audslctrole>
+      <eventtype></eventtype>
+      <isdeployed>T</isdeployed>
+      <isonline>F</isonline>
+      <loglevel>DEBUG</loglevel>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>RELEASED</status>
+      <title>ELM | Consulta Clearing (SL)</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</suitelet>

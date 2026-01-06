@@ -121,4 +121,11 @@
       <subtab></subtab>
     </customrecordcustomfield>
   </customrecordcustomfields>
+  <permissions>
+    <permission>
+      <permittedlevel>FULL</permittedlevel>
+      <permittedrole>[scriptid=customrole1004]</permittedrole>
+      <restriction></restriction>
+    </permission>
+  </permissions>
 </customrecordtype>

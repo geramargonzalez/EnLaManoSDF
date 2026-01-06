@@ -1,4 +1,22 @@
 <manifest projecttype="ACCOUNTCUSTOMIZATION">
   <projectname>EnLaManoSDF</projectname>
   <frameworkversion>1.0</frameworkversion>
+  <dependencies>
+    <features>
+      <feature required="true">SERVERSIDESCRIPTING</feature>
+    </features>
+    <objects>
+      <object>customrecord_elm_estados</object>
+      <object>customlist_elm_reject_reason</object>
+      <object>custentity_elm_operador</object>
+      <object>customlist_elm_list_calificacion</object>
+      <object>customrecord_elm_source</object>
+      <object>customlist_elm_servicios</object>
+      <object>customrecord_monto_cuota</object>
+      <object>customrecord_producto</object>
+      <object>customrecord_elm_sub_estado_por_estado</object>
+      <object>customlist_elm_actividad</object> 
+      <object>customrecord_elm_solicitud</object>
+    </objects>
+  </dependencies>
 </manifest>

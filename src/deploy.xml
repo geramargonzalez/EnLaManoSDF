@@ -1,12 +1,22 @@
 <deploy>
-    <configuration>
-        <path>~/AccountConfiguration/*</path>
-    </configuration>
     <files>
-        <path>~/FileCabinet/*</path>
+        <!-- <path>~/FileCabinet/*</path> -->
+        <path>~/FileCabinet/SuiteScripts/ELM_ConsultaClearing_CL.js</path>
+        <path>~/FileCabinet/SuiteScripts/ELM_ConsultaClearing_SL.js</path>
+        <path>~/FileCabinet/SuiteScripts/ELM_ConsultaClearing_UE.js</path>
     </files>
     <objects>
-        <path>~/Objects/*</path>
+        <!-- <path>~/Objects/*</path> -->
+         <!-- <path>~/Objects/Custom Lists/customlist_elm_list_calificacion.xml</path>  -->
+        <path>~/Objects/User Event Scripts/customscript_elm_btn_clearing.xml</path>
+        <path>~/Objects/Suitelet Scripts/customscript_elm_consulta_clearing_sl.xml</path>
+          <path>~/Objects/Custom Records/customrecord_elm_score_historico.xml</path>
+        <!-- <path>~/Objects/Custom Records/customrecord_clearing_historico.xml</path> -->
+        <!-- <path>~/Objects/Custom Records/customrecord_elm_solicitud.xml</path> -->
+         <path>~/Objects/Custom Records/customrecord_elm_etapa_sol.xml</path>
+       
+
+
     </objects>
     <translationimports>
         <path>~/Translations/*</path>

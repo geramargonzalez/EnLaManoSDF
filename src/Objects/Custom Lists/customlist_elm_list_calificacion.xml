@@ -1,0 +1,36 @@
+<customlist scriptid="customlist_elm_list_calificacion">
+  <description>Calificaciones de BCU</description>
+  <isinactive>F</isinactive>
+  <isordered>T</isordered>
+  <name>Calificaciones</name>
+  <customvalues>
+    <customvalue scriptid="val_6660998_7564430_sb1_349">
+      <isinactive>F</isinactive>
+      <value>1C</value>
+    </customvalue>
+    <customvalue scriptid="val_6660999_7564430_sb1_450">
+      <isinactive>F</isinactive>
+      <value>2A</value>
+    </customvalue>
+    <customvalue scriptid="val_6661000_7564430_sb1_749">
+      <isinactive>F</isinactive>
+      <value>2B</value>
+    </customvalue>
+    <customvalue scriptid="val_6661001_7564430_sb1_456">
+      <isinactive>F</isinactive>
+      <value>3</value>
+    </customvalue>
+    <customvalue scriptid="val_6661002_7564430_sb1_221">
+      <isinactive>F</isinactive>
+      <value>5</value>
+    </customvalue>
+    <customvalue scriptid="val_6661003_7564430_sb1_822">
+      <isinactive>F</isinactive>
+      <value>N/C</value>
+    </customvalue>
+    <customvalue scriptid="val_6661014_7564430_sb1_166">
+      <isinactive>F</isinactive>
+      <value>1A</value>
+    </customvalue>
+  </customvalues>
+</customlist>
