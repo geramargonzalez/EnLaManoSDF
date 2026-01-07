@@ -158,11 +158,10 @@ define(['N/url', 'N/https', 'N/ui/dialog', 'N/ui/message', 'N/currentRecord'],
                 const accionTexto = formatAccion(response.accion);
                 
                 let mensajeDetalle = 'La consulta a Clearing se realizó correctamente.\n\n';
-                mensajeDetalle += ' 📋 Estado: ' + (response.status || 'completed') + '\n';
+                mensajeDetalle += ' 📋 Estado: ' + (response.status || 'Completado') + '\n';
                 mensajeDetalle += ' 📊 Acción: ' + accionTexto + '\n';
                 mensajeDetalle += ' 📈 Score Riesgo: ' + (response.scoreRiesgo || 'N/A') + '\n';
                 mensajeDetalle += ' 📉 Score IF: ' + (response.scoreIF || 'N/A') + '\n';
-                mensajeDetalle += ' 📁 Clearing Historico ID: ' + (response.clearingHistoricoId || 'N/A');
 
                 dialog.alert({
                     title: 'Consulta Completada - Registro Creado',
