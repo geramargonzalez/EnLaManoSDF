@@ -1084,13 +1084,15 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                columns:
                   [
                      search.createColumn({ name: "custentity_elm_aprobado" }),
-                     search.createColumn({ name: "custentity_score" })
+                     search.createColumn({ name: "custentity_score" }),
+                     search.createColumn({ name: "custentity_elm_sol_vig" })
                   ]
             });
             leadSearch.run().each(function (result) {
                lead.id = result.id;
                lead.status = result.getValue('custentity_elm_aprobado');
                lead.score = result.getValue('custentity_score');
+               lead.solID = result.getValue('custentity_elm_sol_vig');
             });
             return lead;
          } catch (error) {

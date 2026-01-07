@@ -55,6 +55,17 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
                   if (source) {
                    channel = auxLib.getProveedorId(source);
                 }
+
+                if (lead.solID) {
+                     auxLib.updateSolicitudVale({
+                        solicitudId: lead.solID,
+                        estadoGestion: approvalStatus,
+                        canal: source ? channel : ''
+               
+                  });
+                }
+
+
                }
                
                const values = {

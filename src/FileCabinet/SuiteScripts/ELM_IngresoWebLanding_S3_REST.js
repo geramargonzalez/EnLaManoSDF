@@ -52,7 +52,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                   crearEtapa: false
                });
 
-                  log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
+               log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
                
                let blackList = auxLib.checkBlacklist(docNumber);
                let isBlacklisted = auxLib.isClientActive(docNumber);
@@ -73,7 +73,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
 
                            const bcuVars = auxLib.extractBcuVariables(score);
                            const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
-
 
                             const historyId = auxLib.createScoreHistoryRecord({
                               leadId: preLeadId,
