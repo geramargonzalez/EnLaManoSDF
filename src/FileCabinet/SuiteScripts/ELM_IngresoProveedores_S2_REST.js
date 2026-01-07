@@ -64,8 +64,6 @@ define(['N/record', './ELM_Aux_Lib.js', 'N/runtime'],
                
                   });
                 }
-
-
                }
                
                const values = {

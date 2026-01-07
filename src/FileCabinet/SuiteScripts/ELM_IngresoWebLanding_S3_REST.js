@@ -25,34 +25,40 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
             // auxLib.deactivateLeadsByDocumentNumber(docNumber);
             
             // Info repetido (una sola llamada, solo si no se desactivaron leads)
-            const infoRepExist = auxLib.getSolicitudVidente (docNumber);
-            const leadInfo = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
-            // const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
-            log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
-            const notPendiente = infoRepExist?.approvalStatus != "3";
+            const solVigObj = auxLib.getSolicitudVidente (docNumber);
+            const infoRepetido = auxLib.getInfoRepetidoSql(docNumber,null,'exists', false);
+            // const solVigObj = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
+            log.debug(`Info repetido existente`, solVigObj);
+            const notPendiente = solVigObj?.approvalStatus != "3";
             
             // const infoRepetido = auxLib.getInfoRepetido(docNumber, null, false);
             let sourceId = auxLib.getProveedorId(source);
                   // Crear preLead mínimo al inicio del flujo “no latente”
-            let preLeadId = leadInfo?.id ? leadInfo.id : null;
+            let preLeadId = infoRepetido?.id ? infoRepetido?.id : null;
  
             if (notPendiente) {
                
-               if (preLeadId) {
+               if (!preLeadId) {
                   preLeadId = auxLib.createPreLead(objScriptParam?.webLandingService, docNumber, mobilePhone, null, null, null, null, null, null, null, sourceId, null,objScriptParam.inicial);
                }
 
-               const idSol = auxLib.createSolicitudVale({
-                  leadId: preLeadId,
-                  estadoGestion: params?.inicial,
-                  canalId: sourceId,
-                  nroDocumento: docNumber,
-                  comentarioEtapa: 'Solicitud creada desde Servicio 3 - Web/Landing',
-                  canalId:  sourceId,
-                  crearEtapa: false
-               });
+               let idSol = null;
+               if (preLeadId) {
+                   idSol = auxLib.createSolicitudVale({
+                     leadId: preLeadId,
+                     estadoGestion: objScriptParam?.inicial,
+                     canalId: sourceId,
+                     nroDocumento: docNumber,
+                     comentarioEtapa: 'Solicitud creada desde Servicio 3 - Web/Landing',
+                     canalId:  sourceId,
+                     crearEtapa: false
+                  });
+                  log.debug(`Solicitud de vale creada directamente`, idSol);
+               }
 
-               log.debug(`${LOG_PREFIX} Solicitud de vale creada directamente`, idSol);
+              
+
+               
                
                let blackList = auxLib.checkBlacklist(docNumber);
                let isBlacklisted = auxLib.isClientActive(docNumber);
@@ -67,7 +73,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                      let repetidoIsFromExternal = infoRepetido?.service === objScriptParam.externalService;
                      let repetidoIsFromManual = infoRepetido?.service === objScriptParam.manualService;
 
-                     if (!infoRepetido.id || (repetidoIsFromExternal && repetidoIsPreLead && repetidoIsRejected)) {
+                     if (!infoRepetido?.id || (repetidoIsFromExternal && repetidoIsPreLead && repetidoIsRejected)) {
                         //const score = scoreLib.scoreFinal(docNumber);
                         const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
 
@@ -88,7 +94,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                               endeudamiento: score.endeudamiento
                            });
 
-                           log.debug(`${LOG_PREFIX} Score history creado`, historyId);
+                           log.debug(`Score history creado`, historyId);
 
                         if (score.calificacionMinima == 'N/C') {
                               log.audit('Error', 'El documento ' + docNumber + ' tiene mala calificación en BCU.');
@@ -132,10 +138,10 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                                  log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + ofertaFinal?.cuotaFinal);
                                  auxLib.submitFieldsEntity(lead, objScriptParam?.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudT2, endeudT6, cantEntT2,
                                  cantEntT6, peorCalifT2, peorCalifT6,  null, score.endeudamiento, idSol);
-                                 auxLib.snapshotAprobados(docNumber, lead, objScriptParam?.estadoAprobado, 5);
+                                 // auxLib.snapshotAprobados(docNumber, lead, objScriptParam?.estadoAprobado, 5);
                                    auxLib.updateSolicitudVale({
                                     solicitudId: idSol,
-                                    estadoGestion: params?.estadoLatente,
+                                    estadoGestion: objScriptParam.estadoPendienteEvaluacion,
                                     montoCuotaId: ponder.montoCuotaId,
                                     montoOtorgado: ofertaFinal?.oferta || 0,
                                     plazo: ofertaFinal?.plazo || 0,
@@ -153,8 +159,8 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                               
                                  auxLib.updateSolicitudVale({
                                     solicitudId: idSol,
-                                    estadoGestion: params?.estadoRechazado,
-                                    motivoRechazoId:params.rechazoNoHayOferta,
+                                    estadoGestion: objScriptParam?.estadoRechazado,
+                                    motivoRechazoId:objScriptParam?.rechazoNoHayOferta,
                                     score: score?.score,
                                     calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
                               });
@@ -162,6 +168,11 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                            } else {
                                  response.success = true;
                                  response.result = 'Listo para recibir datos en servicio 4';
+
+                                  auxLib.updateSolicitudVale({
+                                    solicitudId: idSol,
+                                    estadoGestion: objScriptParam.estadoPendienteEvaluacion,
+                              });
                            }
                         } else {
                            log.audit('Error', 'El documento ' + docNumber + ' tiene mala calificación en BCU.');
@@ -327,7 +338,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                      auxLib.submitFieldsEntity(preLeadId, objScriptParam?.estadoBlacklist, objScriptParam?.rechazoBlacklist);
                   }
                   
-               }
+               } 
             } else {
                const comentRec = record.create({
                   type: 'customrecord_elm_comentarios',
@@ -426,9 +437,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
             providerBCU: scriptObj.getParameter({
                name: 'custscript_elm_bcu_elec_s3'
             }),
-            inicial: scriptObj.getParameter({
-               name: 'custscript_elm_bcu_elec_s3'
-            })
+            inicial: 29
         };
       
          return objParams;

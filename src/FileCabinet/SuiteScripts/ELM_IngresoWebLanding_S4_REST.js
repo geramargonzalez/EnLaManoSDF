@@ -110,7 +110,7 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                        auxLib.snapshotAprobados(docNumber, leadId, objScriptParam.estadoAprobado, 8);
                          auxLib.updateSolicitudVale({
                            solicitudId: InfoSol.solID,
-                           estadoGestion: 3,
+                           estadoGestion: objScriptParam.estadoAprobado,
                            montoCuotaId: montoCuotaObj.montoCuotaId,
                            montoOtorgado: ofertaFinal?.oferta || 0,
                            plazo: ofertaFinal?.plazo || 0,
@@ -138,7 +138,10 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
 
                      auxLib.updateSolicitudVale({
                            solicitudId: InfoSol.solID,
-                           estadoGestion: objParams.estadoRechazado,
+                           estadoGestion: objScriptParam.estadoRechazado,
+                           motivoRechazoId: objScriptParam.rechazoNoHayOferta,
+                           montoOtorgado: 0,
+                           plazo: 0,
                            score: score?.score,
                            calificacion: auxLib.getCalificacionId(score?.calificacionMinima),
                            montoCuotaId: montoCuotaObj.montoCuotaId,
