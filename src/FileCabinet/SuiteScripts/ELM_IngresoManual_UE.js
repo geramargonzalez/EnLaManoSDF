@@ -305,7 +305,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
       const afterSubmit = (scriptContext) => {
          try {
             
-            const { newRecord, oldRecord, type } = scriptContext;
+            const { newRecord, oldRecord, type, UserEventType } = scriptContext;
             const objScriptParam = getScriptParameters();
             const docNumber = newRecord.getValue(FIELDS.docNumber);
             const estadoGestion = newRecord.getValue(FIELDS.aprobado);
@@ -322,7 +322,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const idSol = auxLib.createSolicitudVale({
                   leadId: newRecord.id,
                   estadoGestion: newRecord.getValue(FIELDS.aprobado),
-                  operadorId: newRecord.getValue('owner'),
+                  operadorId: newRecord.getValue(FIELDS.operador),
                   canalId: newRecord.getValue(FIELDS.canal),
                   montoSolicitado: newRecord.getValue(FIELDS.montoSolicitado),
                   plazo: newRecord.getValue(FIELDS.plazo),
@@ -345,7 +345,18 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                });
                log.debug(`Solicitud de vale creada directamente`, idSol);
 
-
+               if (newRecord.getValue(FIELDS.aprobado) === objScriptParam.estadoAprobado) {
+                  //  const updateSolVig = record.submitFields({
+                     const updateSolVig = record.submitFields({
+                           type: record.Type.LEAD,
+                           id: leadId,
+                           values: {
+                              custentity_elm_sol_vig: idSol
+                           }
+                     });
+                                        
+                  log.debug(`Solicitud de vale actualizada a Vigente`, updateSolVig);
+               }
                const score = JSON.parse(newRecord.getValue(FIELDS.scoreResponse));
                const scoreOld = oldRecord ? JSON.parse(oldRecord.getValue(FIELDS.scoreResponse)) : null;
 
@@ -392,8 +403,6 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                   }
                }
             }
-
-           
 
             // Buscar snapshot existente por combinación (doc, estado)
             let existingRecords = [];

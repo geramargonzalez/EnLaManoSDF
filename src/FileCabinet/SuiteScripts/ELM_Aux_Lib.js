@@ -3332,7 +3332,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       findSolicitudVigenteByLead: findSolicitudVigenteByLead,
       getSolicitudVidente: getSolicitudVidente,
       getMontoCuotaId: getMontoCuotaId,
-      getScoreHistorico: getScoreHistorico
+      getScoreHistorico: getScoreHistorico,
+      createEtapaSolicitud: createEtapaSolicitud
    }
 });
 

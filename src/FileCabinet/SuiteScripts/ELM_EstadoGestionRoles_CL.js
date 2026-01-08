@@ -89,7 +89,10 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
             const rechazadoPorAsesor = 24;
             
             const currentRecord = context.currentRecord;
-          
+             
+            const values = {};
+            const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
+            
             if (context.fieldId === "custpage_estadogestion" ) {
                 const estadoGestion = currentRecord.getValue({ fieldId: 'custpage_estadogestion' });
                 if (estadoGestion != aprobado && estadoGestion) {
@@ -123,7 +126,7 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
             if (context.fieldId === "custentity_elm_aprobado" ) {
                 // Enable reject reason field when estado gestion is 1
                 const estadoGestion = currentRecord.getValue({ fieldId: 'custentity_elm_aprobado' });
-                // const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
+                const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
                 // const motivoRechazado = currentRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
                 
                 if (estadoGestion == rechazado || estadoGestion == rechazadoPorAsesor) {
@@ -169,21 +172,13 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                     }).isMandatory = false;
                 }
 
-            /*     if (solVigente) {
-                    const id = record.submitFields({
-                    type: 'customrecord_elm_solicitud',
-                    id: solVigente,
-                    values: {
-                        custrecord_elm_sol_est_gestion: estadoGestion
-                    }
-                });
-                console.log('ID de solicitud actualizado:', id);
+                 if (solVigente) {
+                    
+                    values.custrecord_elm_sol_est_gestion = estadoGestion;
 
-                
 
-                //auxlib.createEtapaSolicitud(estadoGestion, runtime.getCurrentUser().id, solVigente);
 
-                 } */
+                 }
 
                  auxlib.createGestionLead({
                     leadId: currentRecord.id,
@@ -193,6 +188,50 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                 });
 
             }
+
+            if (context.fieldId === "custentity_elm_sub_estado" ) {
+                // Enable reject reason field when estado gestion is 1
+                const subEstado = currentRecord.getValue({ fieldId: 'custentity_elm_sub_estado' });
+                values.custrecord_elm_sol_sub_estado = subEstado;
+
+            }
+
+             if (context.fieldId === "custentity_elm_reject_reason" ) {
+                // Enable reject reason field when estado gestion is 1
+                const custentity_elm_reject_reason = currentRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
+                values.custrecord_elm_motivo_rechazo = custentity_elm_reject_reason;
+
+            }
+
+            if (context.fieldId === "custentity_elm_channel" ) {
+                // Enable reject reason field when estado gestion is 1
+                const custentity_elm_channel = currentRecord.getValue({ fieldId: 'custentity_elm_channel' });
+                values.custrecord_elm_sol_canal = custentity_elm_channel;
+
+            }
+
+            if (context.fieldId === "custentity_elm_operador" ) {
+                // Enable reject reason field when estado gestion is 1
+                const custentity_elm_operador = currentRecord.getValue({ fieldId: 'custentity_elm_operador' });
+                values.custrecord_elm_sol_operador = custentity_elm_operador;
+
+            }
+            if (context.fieldId === "custentity_elm_service" ) {
+                // Enable reject reason field when estado gestion is 1
+                const custentity_elm_service = currentRecord.getValue({ fieldId: 'custentity_elm_service' });
+                values.custrecord_elm_sol_servicio = custentity_elm_service;
+
+            }
+            if(!values || !solVigente) {
+                return
+            }
+
+            const id = record.submitFields({
+                type: 'customrecord_elm_solicitud',
+                id: solVigente,
+                values: values
+            });
+            console.log('ID de solicitud actualizado:', id);
 
         
                 
