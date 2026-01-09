@@ -13,18 +13,16 @@ define(['N/record', 'N/https', 'N/log', 'N/runtime', 'N/error', 'N/cache', 'N/se
     
     // URLs del servicio Equifax
     const EQUIFAX_URLS = {
-        UAT: {
-            token: 'https://api.uat.latam.equifax.com/v2/oauth/token',
-            api: 'https://api.uat.latam.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
-        },
+        // UAT: {
+        //     token: 'https://api.uat.latam.equifax.com/v2/oauth/token',
+        //     api: 'https://api.uat.latam.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
+        // },
         PROD: {
             token: 'https://api.latam.equifax.com/v2/oauth/token',
             api: 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations/execute'
         }
     };
 
-    // Scope para OAuth
-    const OAUTH_SCOPE = 'https://api.latam.equifax.com/business/interconnect/v1/decision-orchestrations';
 
     // Configuración productData (ajustar según ambiente)
     const PRODUCT_DATA = {
@@ -166,6 +164,8 @@ define(['N/record', 'N/https', 'N/log', 'N/runtime', 'N/error', 'N/cache', 'N/se
         try {
             // Obtener configuración
             const config = getScriptParameters();
+
+            log.debug('Config Mandazy', config);
  
             const tokenField = search.lookupFields({
                 type: 'customrecord_elm_config_servicion',
