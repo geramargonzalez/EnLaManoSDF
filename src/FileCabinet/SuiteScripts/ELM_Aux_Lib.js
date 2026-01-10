@@ -2911,6 +2911,167 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
    }
 
    /**
+    * getEstadoById - Obtiene la información de un estado basado en su ID interno o nombre
+    * @param {string|number} idOrName - El ID interno del estado o su nombre
+    * @param {string} [searchField='auto'] - Campo por el cual buscar ('internalid', 'name', o 'auto' para detección automática)
+    * @returns {Object|null} Objeto con la información del estado (id, name, internalid) o null si no se encuentra
+    */
+   function getEstadoById(idOrName, searchField = 'auto') {
+      const stLogTitle = 'getEstadoById';
+      try {
+         if (!idOrName) {
+            log.debug(stLogTitle, 'No se proporcionó ID o nombre del estado');
+            return null;
+         }
+
+         // Determinar el campo de búsqueda basado en el tipo de parámetro
+         let filterField = searchField;
+         let filterValue = idOrName;
+
+         // Auto-detectar si es ID o nombre
+         if (searchField === 'auto') {
+            if (typeof idOrName === 'number' || (!isNaN(parseInt(idOrName)) && parseInt(idOrName).toString() === idOrName.toString())) {
+               filterField = 'internalid';
+               filterValue = parseInt(idOrName);
+            } else {
+               filterField = 'name';
+               filterValue = idOrName;
+            }
+         }
+
+         const estadoSearch = search.create({
+            type: 'customlist_elm_gestion_estados', // Tipo de registro de estados de gestión
+            filters: [
+               [filterField, 'is', filterValue]
+            ],
+            columns: [
+               search.createColumn({ name: 'internalid' }),
+               search.createColumn({ name: 'name' })
+            ]
+         });
+
+         let estadoInfo = null;
+         estadoSearch.run().each(function(result) {
+            estadoInfo = {
+               id: result.getValue('internalid'),
+               internalid: result.getValue('internalid'),
+               name: result.getValue('name')
+            };
+            return false; // Solo necesitamos el primer resultado
+         });
+
+         if (!estadoInfo) {
+            log.debug(stLogTitle, `Estado no encontrado con ${filterField}: ${filterValue}`);
+            return null;
+         }
+
+         log.debug(stLogTitle, `Estado encontrado: ${JSON.stringify(estadoInfo)}`);
+         return estadoInfo;
+
+      } catch (error) {
+         log.error(stLogTitle, `Error obteniendo estado: ${error.message}`);
+         return null;
+      }
+   }
+
+   /**
+    * getEstadosGestion - Obtiene todos los estados de gestión específicos del sistema o valida si un ID específico es un estado de gestión válido
+    * @param {boolean|string|number} [asObjectOrId=false] - Si es boolean, indica formato de retorno; si es string/number, valida ese ID específico
+    * @param {boolean} [asObject=false] - Si se pasa ID como primer parámetro, este indica el formato de retorno
+    * @returns {Array|Object|boolean|null} Lista de estados de gestión, true/false para validación de ID, o null si hay error
+    */
+   function getEstadosGestion(asObjectOrId = false, asObject = false) {
+      const stLogTitle = 'getEstadosGestion';
+      try {
+         // Estados específicos del sistema de gestión
+         const estadosRequeridos = [
+            'Aprobado',
+            'Gestionado', 
+            'En validación',
+            'Pendiente de Doc',
+            'Revisión',
+            'Sin respuesta'
+         ];
+
+         // Si se pasa un ID específico, validar si pertenece a los estados de gestión
+         if (typeof asObjectOrId === 'string' || typeof asObjectOrId === 'number') {
+            const estadoSearch = search.create({
+               type: 'customrecord_elm_estados',
+               filters: [
+                  ['internalid', 'anyof', asObjectOrId]
+               ],
+               columns: [
+                  search.createColumn({ name: 'internalid' }),
+                  search.createColumn({ name: 'name' })
+               ]
+            });
+
+            let estadoEncontrado = null;
+            estadoSearch.run().each(function(result) {
+               estadoEncontrado = {
+                  id: result.getValue('internalid'),
+                  internalid: result.getValue('internalid'),
+                  name: result.getValue('name')
+               };
+               return false; // Solo necesitamos el primer resultado
+            });
+
+            if (!estadoEncontrado) {
+               log.debug(stLogTitle, `Estado con ID ${asObjectOrId} no encontrado`);
+               return false;
+            }
+
+            // Verificar si el nombre del estado está en los estados requeridos
+            const esEstadoGestion = estadosRequeridos.includes(estadoEncontrado.name);
+            log.debug(stLogTitle, `Estado ID ${asObjectOrId} (${estadoEncontrado.name}) es estado de gestión: ${esEstadoGestion}`);
+            return esEstadoGestion;
+         }
+
+         // Lógica original para obtener todos los estados de gestión
+         const estadoSearch = search.create({
+            type: 'customrecord_elm_estados',
+            filters: [
+               ['name', 'anyof', estadosRequeridos]
+            ],
+            columns: [
+               search.createColumn({ name: 'internalid' }),
+               search.createColumn({ name: 'name' })
+            ]
+         });
+
+         const estados = [];
+         const estadosObj = {};
+
+         estadoSearch.run().each(function(result) {
+            const estadoInfo = {
+               id: result.getValue('internalid'),
+               internalid: result.getValue('internalid'),
+               name: result.getValue('name')
+            };
+
+            estados.push(estadoInfo);
+            estadosObj[estadoInfo.name] = estadoInfo;
+            return true;
+         });
+
+         if (estados.length === 0) {
+            log.debug(stLogTitle, 'No se encontraron estados de gestión');
+            return null;
+         }
+
+         log.debug(stLogTitle, `Estados de gestión encontrados: ${estados.length}`);
+         
+         // Usar el primer parámetro como boolean para formato de retorno
+         const returnAsObject = typeof asObjectOrId === 'boolean' ? asObjectOrId : asObject;
+         return returnAsObject ? estadosObj : estados;
+
+      } catch (error) {
+         log.error(stLogTitle, `Error obteniendo estados de gestión: ${error.message}`);
+         return null;
+      }
+   }
+
+   /**
     * Crea un registro en customrecord_elm_gestion_leads
     * @param {Object} options
     * @param {number|string} [options.leadId] - Internal id del Lead/Cliente (customer)
@@ -3333,7 +3494,9 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
       getSolicitudVidente: getSolicitudVidente,
       getMontoCuotaId: getMontoCuotaId,
       getScoreHistorico: getScoreHistorico,
-      createEtapaSolicitud: createEtapaSolicitud
+      createEtapaSolicitud: createEtapaSolicitud,
+      getEstadoById: getEstadoById,
+      getEstadosGestion: getEstadosGestion
    }
 });
 

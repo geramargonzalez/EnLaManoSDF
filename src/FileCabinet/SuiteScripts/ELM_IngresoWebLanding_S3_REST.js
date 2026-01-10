@@ -56,10 +56,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                   log.debug(`Solicitud de vale creada directamente`, idSol);
                }
 
-              
-
-               
-               
                let blackList = auxLib.checkBlacklist(docNumber);
                let isBlacklisted = auxLib.isClientActive(docNumber);
 
@@ -74,7 +70,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                      let repetidoIsFromManual = infoRepetido?.service === objScriptParam.manualService;
 
                      if (!infoRepetido?.id || (repetidoIsFromExternal && repetidoIsPreLead && repetidoIsRejected)) {
-                        //const score = scoreLib.scoreFinal(docNumber);
+                        
                         const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: true, strictRules: true, debug: true });
 
                            const bcuVars = auxLib.extractBcuVariables(score);
@@ -138,7 +134,6 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                                  log.audit('Success', 'Oferta para el documento: ' + docNumber + '. Oferta: ' + ofertaFinal?.oferta + ' - Cuota Final: ' + ofertaFinal?.cuotaFinal);
                                  auxLib.submitFieldsEntity(lead, objScriptParam?.estadoAprobado, null, null, null, parseFloat(ofertaFinal?.cuotaFinal), parseFloat(ofertaFinal?.oferta), montoCuotaObj?.montoCuotaName, score, ofertaFinal?.plazo, endeudT2, endeudT6, cantEntT2,
                                  cantEntT6, peorCalifT2, peorCalifT6,  null, score.endeudamiento, idSol);
-                                 // auxLib.snapshotAprobados(docNumber, lead, objScriptParam?.estadoAprobado, 5);
                                    auxLib.updateSolicitudVale({
                                     solicitudId: idSol,
                                     estadoGestion: objScriptParam.estadoPendienteEvaluacion,
@@ -195,79 +190,70 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                         }
 
                      } else {
-                       
-                        if (!repetidoIsFromExternal && repetidoIsPreLead && repetidoIsRejected) {
-                           log.audit('Error', 'El documento ' + docNumber + ' tiene un Pre-Lead Repetido rechazado creado por Web y Landing o Ingreso Manual.');
+
+
+                        const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
+                        log.debug(`${LOG_PREFIX} Info repetido completo`, infoRep);
+                        const repetidoNoInfo = infoRep.approvalStatus == params.NohayInfoBCU;
+                        const estadoRechazado = infoRep.approvalStatus == params.estadoRechazado || infoRep.approvalStatus == params.estadoRepRechazado;
+                        const estadoRepAprobado = infoRep.approvalStatus == params.estadoRepAprobado || infoRep.approvalStatus == params.estadoAprobado;
+                        const estadoGestion = auxLib.getEstadosGestion(infoRep.approvalStatus)
+                        if (repetidoNoInfo) {
                            response.success = false;
-                           response.result = 'Pre-Lead Repetido rechazado';
-                           const newCustomerId = auxLib.copyRecordToRecord({
-                              sourceType: record.Type.LEAD,
-                              sourceId: infoRepetido.id,
-                              targetId: preLeadId,
-                              defaultValues:{
-                              },
-                              fieldMap: {
-                                 'custrecord_sdb_nrodoc': docNumber,
-                                 'custentity_elm_aprobado': objScriptParam.estadoRepRechazado,
-                                 'custentity_elm_reject_reason': objScriptParam.rechazoRepRechazado,
-                                 'custentity_elm_lead_repetido_original': infoRepetido.id,
-                                 'isinactive': true
-                                 
-                              }
+                           response.result = 'Repetido - No Hay Info en BCU';
+
+                           auxLib.updateSolicitudVale({
+                              solicitudId: idSol,
+                              estadoGestion: params.NohayInfoBCU
                            });
-
-                           log.audit('Created customer', newCustomerId);
-                        }  
-                        
-                         if (!repetidoIsFromExternal && !repetidoIsPreLead && repetidoIsRejected) {
-                           log.audit('Error', 'El documento ' + docNumber + ' tiene un Lead Repetido rechazado creado por Web y Landing o Ingreso Manual.');
-                           response.success = false;
-                           response.result = 'Lead Repetido rechazado';
-                           const newCustomerId = auxLib.copyRecordToRecord({
-                              sourceType: record.Type.LEAD,
-                              sourceId: infoRepetido.id,
-                              targetId: preLeadId,
-                              defaultValues:{
-                              },
-                              fieldMap: {
-                                 
-                                 'custrecord_sdb_nrodoc': docNumber,
-                                 'custentity_elm_aprobado': objScriptParam.estadoRepRechazado,
-                                 'custentity_elm_reject_reason': objScriptParam.rechazoRepRechazado,
-                                 'custentity_elm_lead_repetido_original': infoRepetido.id,
-
-                                 'isinactive': true
-                                 
-                              }
-                           });
-
-                           log.audit('Created customer', newCustomerId);
-                        
-                        }  
-
-                    
-                        if (!repetidoIsFromExternal && !repetidoIsPreLead && !repetidoIsRejected) {
-                           log.audit('Error', 'El documento ' + docNumber + ' tiene un Lead Repetido rechazado creado por Web y Landing o Ingreso Manual.');
-                           response.success = false;
-                           response.result = 'Lead Repetido';
                         }
+
+                        if (estadoRechazado) {
+                           response.success = false;
+                           response.result = 'Repetido Rechazado';
+
+                           auxLib.updateSolicitudVale({
+                              solicitudId: idSol,
+                              estadoGestion: params.estadoRepRechazado
+                           });
+                        }
+
+                        if (estadoRepAprobado) {
+                           response.success = false;
+                           response.result = 'Repetido Rechazado con solicitud anterior aprobada';
+
+                           auxLib.updateSolicitudVale({
+                                 solicitudId: idSol,
+                                 estadoGestion: params.estadoRepAprobado
+                           });
+                        }
+
+                        if(estadoGestion) {
+                           response.success = false;
+                           response.result = 'Repetido Rechazado - Lead con solicitud en curso';
+
+                           auxLib.updateSolicitudVale({
+                                 solicitudId: idSol,
+                                 estadoGestion: params.estadoRepRechazado
+                           });
+                       }
 
                         if(infoRepetido.approvalStatus == objScriptParam?.estadoLatente) {
 
-                            const idUpdated = record.submitFields({
+                           const idUpdated = record.submitFields({
                               type: record.Type.LEAD,
                               id: infoRepetido.id,
                               values: {
-                                  'custentity_elm_service': '2',
-                                  'custentity_elm_channel': sourceId,
-                                  'mobilephone': mobilePhone,
-                                  'custentity_elm_aprobado': 2
-                                  
+                                 'custentity_elm_service': '2',
+                                 'custentity_elm_channel': sourceId,
+                                 'mobilephone': mobilePhone,
+                                 'custentity_elm_aprobado': 2
+                                 
                               }
                            });
-                             log.audit('Updated lead original', idUpdated);
+                           log.audit('Updated lead original', idUpdated);
                         }
-                        auxLib.createListRepetido(docNumber, isSandbox ? 'default default' : (infoRepetido.firstName + ' ' + infoRepetido.lastName));
+                     
                      }
                   } else {
                      log.audit('Error', 'El documento ' + docNumber + ' pertenece a Mocasist.');

@@ -26,8 +26,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                     });
                     createEstadoGestionField(form,estatusGestion, role);
                 }
-               
-
+            
                   const montoCuota = newRecord.getValue({ fieldId: 'custentity_elm_monto_cuota' });
 
                  if (montoCuota) {

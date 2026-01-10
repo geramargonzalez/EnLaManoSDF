@@ -50,7 +50,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
       // Info repetido (una sola llamada, solo si no se desactivaron leads)
       const infoRepExist = auxLib.getSolicitudVidente (docNumber);
       const leadInfo = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
-      // const infoRepExist = leadsDesactivados ? {id:null} : auxLib.getInfoRepetidoSql(docNumber, null, 'exists', false);
+
       log.debug(`${LOG_PREFIX} Info repetido existente`, infoRepExist);
       const notLatente = infoRepExist?.approvalStatus != params?.estadoLatente;
 
@@ -268,76 +268,53 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
           // REPETIDO con múltiples escenarios, sin duplicar ramas
           const infoRep = auxLib.getInfoRepetidoSql(docNumber,null,null, false);
           log.debug(`${LOG_PREFIX} Info repetido completo`, infoRep);
-          const repetidoIsPreLead = infoRep.status === params.preLeadStatus;
-          const repetidoIsRejected = infoRep.approvalStatus === params.estadoRechazado;
-          const repetidoNoInfo = infoRep.approvalStatus === params.NohayInfoBCU;
-          const repetidoIsFromExternal = infoRep.service === params.externalService;
+
+          const repetidoNoInfo = infoRep.approvalStatus == params.NohayInfoBCU;
+          const estadoRechazado = infoRep.approvalStatus == params.estadoRechazado || infoRep.approvalStatus == params.estadoRepRechazado;
+          const estadoRepAprobado = infoRep.approvalStatus == params.estadoRepAprobado || infoRep.approvalStatus == params.estadoAprobado;
+          const estadoGestion = auxLib.getEstadosGestion(infoRep.approvalStatus);
           const isPendienteEvaluacion = infoRep.approvalStatus == '3';
 
-          // Agrupación de outcomes
-          if (repetidoIsFromExternal && !repetidoIsRejected && !repetidoNoInfo) {
+          if (repetidoNoInfo) {
             response.success = false;
-            response.result = 'Repetido';
-            /* copyLeadSnapshot({
-              sourceLeadId: infoRep.id,
-              targetPreLeadId: preLeadId,
-              docNumber,
-              aprobado: infoRep.estadoRepAprobado,
-              repetidoOriginalId: infoRep.id
-            }); */
-          } else if (repetidoIsFromExternal && repetidoIsRejected) {
-            response.success = false;
-            response.result = 'Repetido rechazado';
-           /*  copyLeadSnapshot({
-              sourceLeadId: infoRep.id,
-              targetPreLeadId: preLeadId,
-              docNumber,
-              aprobado: params.estadoRepRechazado,
-              rejectReason: params.rechazoRepRechazado,
-              repetidoOriginalId: infoRep.id
-            }); */
-          } else if (!repetidoIsFromExternal) {
-            if (repetidoIsPreLead && repetidoIsRejected) {
-              /* copyLeadSnapshot({
-                sourceLeadId: infoRep.id,
-                targetPreLeadId: preLeadId,
-                docNumber,
-                aprobado: params.estadoRepRechazado,
-                rejectReason: params.rechazoRepRechazado,
-                repetidoOriginalId: infoRep.id
-              }); */
-            } else if (!repetidoIsPreLead && repetidoIsRejected) {
-              /* copyLeadSnapshot({
-                sourceLeadId: infoRep.id,
-                targetPreLeadId: preLeadId,
-                docNumber,
-                aprobado: params.estadoRepRechazado,
-                rejectReason: params.rechazoRepRechazado,
-                repetidoOriginalId: infoRep.id
-              }); */
-            } else if (!repetidoIsRejected && infoRep) {
-             /*  copyLeadSnapshot({
-                sourceLeadId: infoRep.id,
-                targetPreLeadId: preLeadId,
-                docNumber,
-                aprobado: params.estadoRepAprobado,
-                repetidoOriginalId: infoRep.id
-              }); */
-            }
+            response.result = 'Repetido - No Hay Info en BCU';
+
+            auxLib.updateSolicitudVale({
+                solicitudId: idSol,
+                estadoGestion: params.NohayInfoBCU
+            });
           }
 
-          if (!repetidoIsRejected && repetidoNoInfo) {
+          if (estadoRechazado) {
             response.success = false;
-            response.result = 'Repetido No Info BCU';
-            /* copyLeadSnapshot({
-              sourceLeadId: infoRep.id,
-              targetPreLeadId: preLeadId,
-              docNumber,
-              aprobado: '16',
-              rejectReason: '3',
-              repetidoOriginalId: infoRep.id
-            }); */
+            response.result = 'Repetido Rechazado';
+
+            auxLib.updateSolicitudVale({
+                solicitudId: idSol,
+                estadoGestion: params.estadoRepRechazado
+            });
           }
+
+          if (estadoRepAprobado) {
+              response.success = false;
+              response.result = 'Repetido Rechazado con solicitud anterior aprobada';
+
+              auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params.estadoRepAprobado
+              });
+          }
+
+          if(estadoGestion) {
+             response.success = false;
+              response.result = 'Repetido Rechazado - Lead con solicitud en curso';
+
+              auxLib.updateSolicitudVale({
+                  solicitudId: idSol,
+                  estadoGestion: params.estadoRepRechazado
+              });
+          }
+
 
           if (isPendienteEvaluacion) {
             const ponder = auxLib.getPonderador(infoRep.score, infoRep.calificacion, infoRep.endeudamiento, salary, activity, age, '6');
@@ -372,9 +349,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
               options: { enableSourcing: false, ignoreMandatoryFields: true }
             });
           }
-
-          response.success = false;
-          response.result =  'Repetido';
 
         }
 
@@ -458,27 +432,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
     };
   }
 
-  // Helper para reducir duplicación en copias de lead/prelead
-  function copyLeadSnapshot({ sourceLeadId, targetPreLeadId, docNumber, aprobado, rejectReason, repetidoOriginalId, extraDefaults = {} }) {
-    const defaults = Object.assign({
-      'custrecord_sdb_nrodoc': docNumber,
-      'custentity_elm_aprobado': aprobado || '',
-      'custentity_elm_reject_reason': rejectReason || '',
-      'custentity_elm_lead_repetido_original': repetidoOriginalId || '',
-      'isinactive': true
-    }, extraDefaults);
 
-    const fieldMap = Object.assign({}, defaults); // mismo set a espejo
-    const newId = auxLib.copyRecordToRecord({
-      sourceType: record.Type.LEAD,
-      sourceId: sourceLeadId,
-      targetId: targetPreLeadId,
-      defaultValues: defaults,
-      fieldMap
-    });
-    log.audit(`${LOG_PREFIX} - Snapshot creado`, newId);
-    return newId;
-  }
 
   // Calcular oferta final eficientemente (1 query, top 1)
   function getOfertaFinal(source, montoCuota) {
@@ -526,37 +480,6 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
     }
   }
 
-  // Agrupa lógica común para setear campos de oferta en LEAD con submitFields
-  function submitLeadOfertaFields(leadId, {
-    montoCuota, ofertaFinal, activity, dateOfBirth, workStartDate, salary, statusWhenOffer, channel, score, mobilephone, montoCuotaName, edad
-  }) {
-    const values = {
-      'custentity_elm_channel': isEmpty(channel) ? undefined : String(channel),
-      'custentity_sdb_valor_cuota': toNum(montoCuota) || '',
-      'custentity_sdb_montoofrecido': ofertaFinal?.internalid ? toNum(ofertaFinal.oferta) : '',
-      'custentity_elm_oferta_final': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
-      'custentity_sdb_valor_cuota_vale': ofertaFinal?.internalid ? toNum(ofertaFinal.cuotaFinal) : '',
-      'custentity_elm_monto_cuota': montoCuotaName || '',
-      'custentity_elm_plazo': ofertaFinal?.plazo || '',
-      'custentity_sdb_actividad': activity || '',
-      'custentity_sdb_fechanac': dateOfBirth || '',
-      'custentity_elm_fecha_ingreso': workStartDate || '',
-      'custentity_sdb_infolab_importe': isEmpty(salary) ? '' : salary,
-      'custentity_score': isEmpty(score) ? '' : score,
-      'mobilephone': mobilephone || '',
-      'custentity_sdb_edad': edad || '',
-    };
-
-    // Limpieza de undefined para evitar errores en submitFields
-    Object.keys(values).forEach(k => values[k] === undefined && delete values[k]);
-
-    return record.submitFields({
-      type: record.Type.LEAD,
-      id: leadId,
-      values: values,
-      options: { enableSourcing: false, ignoreMandatoryFields: true }
-    });
-  }
 
   return { post };
 });

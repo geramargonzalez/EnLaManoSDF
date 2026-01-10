@@ -321,26 +321,26 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
 
                const idSol = auxLib.createSolicitudVale({
                   leadId: newRecord.id,
-                  estadoGestion: newRecord.getValue(FIELDS.aprobado),
-                  operadorId: newRecord.getValue(FIELDS.operador),
-                  canalId: newRecord.getValue(FIELDS.canal),
+                  estadoGestion: newRecord.getValue(FIELDS.aprobado) ? newRecord.getValue(FIELDS.aprobado) : null,
+                  operadorId: newRecord.getValue(FIELDS.operador) ? newRecord.getValue(FIELDS.operador) : null,
+                  canalId: newRecord.getValue(FIELDS.canal) ? newRecord.getValue(FIELDS.canal) : null,
                   montoSolicitado: newRecord.getValue(FIELDS.montoSolicitado),
-                  plazo: newRecord.getValue(FIELDS.plazo),
-                  score: newRecord.getValue(FIELDS.score),
-                  calificacion: auxLib.getCalificacionId(newRecord.getValue(FIELDS.calificacion)),
+                  plazo: newRecord.getValue(FIELDS.plazo) ? newRecord.getValue(FIELDS.plazo) : null,
+                  score: newRecord.getValue(FIELDS.score) ? newRecord.getValue(FIELDS.score) : 0,
+                  calificacion: auxLib.getCalificacionId(newRecord.getValue(FIELDS.calificacion)) ? auxLib.getCalificacionId(newRecord.getValue(FIELDS.calificacion)) : null,
                   nroDocumento: docNumber,
                   comentarioEtapa: 'Solicitud creada desde Ingreso Manual',
-                  actividadId: newRecord.getValue(FIELDS.activity),
-                  salario: newRecord.getValue(FIELDS.salary),
-                  canalId:  newRecord.getValue(FIELDS.canal),
-                  motivoRechazo: newRecord.getValue(FIELDS.motivoRechazo),
-                  edad: newRecord.getValue(FIELDS.age),
-                  subEstadoId: newRecord.getValue(FIELDS.subEstado),
-                  servicioId: newRecord.getValue(FIELDS.servicio),
-                  productoId: newRecord.getValue(FIELDS.productoId),
-                  valorCuota: newRecord.getValue(FIELDS.valorCuota),
-                  montoOtorgado: newRecord.getValue(FIELDS.montoOtorgado),
-                  montoCuota: auxLib.getMontoCuotaId(newRecord.getValue(FIELDS.montoCuota), newRecord.getValue(FIELDS.canal)),
+                  actividadId: newRecord.getValue(FIELDS.activity) ? newRecord.getValue(FIELDS.activity) : null,
+                  salario: newRecord.getValue(FIELDS.salary)   ? newRecord.getValue(FIELDS.salary) : 0,
+                  canalId:  newRecord.getValue(FIELDS.canal) ? newRecord.getValue(FIELDS.canal) : null,
+                  motivoRechazo: newRecord.getValue(FIELDS.motivoRechazo) ? newRecord.getValue(FIELDS.motivoRechazo) : null,
+                  edad: newRecord.getValue(FIELDS.age)  ? newRecord.getValue(FIELDS.age) : 0,
+                  subEstadoId: newRecord.getValue(FIELDS.subEstado) ? newRecord.getValue(FIELDS.subEstado) : null,
+                  servicioId: newRecord.getValue(FIELDS.servicio) ? newRecord.getValue(FIELDS.servicio) : null,
+                  productoId: newRecord.getValue(FIELDS.productoId) ? newRecord.getValue(FIELDS.productoId) : null,
+                  valorCuota: newRecord.getValue(FIELDS.valorCuota) ? newRecord.getValue(FIELDS.valorCuota) : null,
+                  montoOtorgado: newRecord.getValue(FIELDS.montoOtorgado) ? newRecord.getValue(FIELDS.montoOtorgado) : null,
+                  montoCuotaId: auxLib.getMontoCuotaId(newRecord.getValue(FIELDS.montoCuota), newRecord.getValue(FIELDS.canal)),
                   crearEtapa: true
                });
                log.debug(`Solicitud de vale creada directamente`, idSol);
@@ -357,7 +357,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                                         
                   log.debug(`Solicitud de vale actualizada a Vigente`, updateSolVig);
                }
-               const score = JSON.parse(newRecord.getValue(FIELDS.scoreResponse));
+               const score = newRecord.getValue(FIELDS.scoreResponse) ? JSON.parse(newRecord.getValue(FIELDS.scoreResponse)) : null;
                const scoreOld = oldRecord ? JSON.parse(oldRecord.getValue(FIELDS.scoreResponse)) : null;
 
                if (score.score !== scoreOld?.score) {

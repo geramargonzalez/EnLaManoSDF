@@ -173,11 +173,7 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                 }
 
                  if (solVigente) {
-                    
                     values.custrecord_elm_sol_est_gestion = estadoGestion;
-
-
-
                  }
 
                  auxlib.createGestionLead({
