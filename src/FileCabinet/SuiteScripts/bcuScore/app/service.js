@@ -63,7 +63,9 @@ define([
                 const worstRating = normalizedData?.metadata?.worstRating || '0';
                 const shouldFetchT6 = worstRating === '1C' || worstRating === '2A' || worstRating === 'N/C';
                 if (shouldFetchT6) {
+                    const idLogT6 = auxLib.createLogRecord(documento, null, false, 6, options?.provider, null);
                     normalizedDataT6 = fetchProviderData(documento, options, 8);
+                    auxLib.updateLogWithResponse(idLogT6, null,  true, normalizedDataT6, {t6: true} );
                      // log.debug({ title: 'Normalized Data t6 months', details: { idLog, normalizedDataT6 } });
                 } else {
                     log.debug({ title: 'T6 Fetch Skipped', details: { worstRating: worstRating } });

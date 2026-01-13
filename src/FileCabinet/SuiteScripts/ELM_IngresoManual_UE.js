@@ -71,7 +71,8 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                salary: newRecord.getValue(FIELDS.salary),
                dob: newRecord.getValue(FIELDS.dob),
                activity: newRecord.getValue(FIELDS.activity),
-               age: auxLib.calculateYearsSinceDate(newRecord.getValue(FIELDS.dob))
+               age: auxLib.calculateYearsSinceDate(newRecord.getValue(FIELDS.dob)),
+               
             };
             const canal = newRecord.getValue(FIELDS.canal);
             const needsRecalculate = isEdit && (
@@ -79,6 +80,8 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                oldValues.age !== newValues.age ||
                oldValues.activity !== newValues.activity
             );
+
+            const calificacion = newRecord.getValue(FIELDS.calificacion);
            
             if (isCreate || needsRecalculate) {
                if (needsRecalculate) {
@@ -142,7 +145,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const isRejected = infoRepetido?.approvalStatus === objScriptParam.estadoRechazado;
                const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
                const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
-               if (shouldScore) {
+
+               // tHEN CHANGE THIS LOGIC TO CHECK IF IT SHOULD SCORE OR NOT
+               if (shouldScore && !calificacion) {
                   const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
                   const bcuVars = auxLib.extractBcuVariables(score);
                   const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;

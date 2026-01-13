@@ -83,7 +83,7 @@ function (https, log, runtime, encode, normalize, search, record, format) {
         try {
             // Determinar ambiente (options -> script parameter -> default SANDBOX)
             let isSandbox = determineIsSandbox(options);
-          
+        
 
             // Obtener configuración para el ambiente especificado 
             const tokenField = search.lookupFields({
@@ -157,9 +157,10 @@ function (https, log, runtime, encode, normalize, search, record, format) {
 
             // Request optimizado con timeout corto
             const response = executeEquifaxRequest(documento, accessToken, options, periodMonths);
- 
+            const responseNormalized = normalize.normalizeEquifaxResponse(response);
+          
             // Normalización rápida
-            return normalize.normalizeEquifaxResponse(response);
+            return responseNormalized;
 
         } catch (error) {
             // Log mínimo para no afectar performance
