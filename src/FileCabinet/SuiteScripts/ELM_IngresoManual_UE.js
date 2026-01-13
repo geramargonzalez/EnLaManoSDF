@@ -81,12 +81,12 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             const needsRecalculate = needsCalculation(oldRecord, newRecord, isEdit);
            const canal = newRecord.getValue(FIELDS.canal);
             if (isCreate || needsRecalculate) {
-               if (needsRecalculate) {
-                  [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.calificacion, FIELDS.montoOtorgado].forEach(field => {
+              /*  if (needsRecalculate) {
+                  [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.montoOtorgado].forEach(field => {
                      newRecord.setValue(field, null);
                   });
                }
-
+ */
                newRecord.setValue(FIELDS.age, newValues.age);
 
                const workStartDate = newRecord.getValue(FIELDS.workStart);
@@ -100,7 +100,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                         infoRepetido = {};
                   } 
                }
-             log.debug('infoRepetido test', JSON.stringify(infoRepetido));
+      
                if (auxLib.checkBlacklist(docNumber)) {
                  
                   if (infoRepetido?.id) {
@@ -142,7 +142,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const isRejected = infoRepetido?.approvalStatus === objScriptParam.estadoRechazado;
                const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
                const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
-               if (shouldScore) {
+               const calificationId = newRecord.getValue(FIELDS.calificacion);
+              /*  log.debug('Decision BCU', calificationId); */
+               if (shouldScore && !calificationId) {
                   const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
                   const bcuVars = auxLib.extractBcuVariables(score);
                   const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
