@@ -80,7 +80,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
             
             const needsRecalculate = needsCalculation(oldRecord, newRecord, isEdit);
            const canal = newRecord.getValue(FIELDS.canal);
-            if (isCreate || needsRecalculate) {
+            const calificationId = newRecord.getValue(FIELDS.calificacion);
+            
+            if ((isCreate || needsRecalculate) && calificationId == null) {
                if (needsRecalculate) {
                   [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.calificacion, FIELDS.montoOtorgado].forEach(field => {
                      newRecord.setValue(field, null);
@@ -142,7 +144,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const isRejected = infoRepetido?.approvalStatus === objScriptParam.estadoRechazado;
                const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
                const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
-               const calificationId = newRecord.getValue(FIELDS.calificacion);
+            
                log.debug('Decision BCU', );
                if (shouldScore && !calificationId) {
                   const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
