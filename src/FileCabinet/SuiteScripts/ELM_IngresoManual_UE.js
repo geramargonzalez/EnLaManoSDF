@@ -82,7 +82,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
            const canal = newRecord.getValue(FIELDS.canal);
             const calificationId = newRecord.getValue(FIELDS.calificacion);
             
-            if ((isCreate || needsRecalculate) && calificationId == null) {
+            if (isCreate || needsRecalculate) {
                if (needsRecalculate) {
                   [FIELDS.yearsWork, FIELDS.aprobado, FIELDS.motivoRechazo, FIELDS.score, FIELDS.calificacion, FIELDS.montoOtorgado].forEach(field => {
                      newRecord.setValue(field, null);
@@ -145,9 +145,17 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const isFromExternal = infoRepetido?.service === objScriptParam.externalService;
                const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
             
-               log.debug('Decision BCU', );
-               if (shouldScore && !calificationId) {
-                  const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+               
+               if (shouldScore) {
+                  let score;
+                  if (!calificationId) {
+                      score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+                  } else {
+                     log.debug('Decision BCU', calificationId);
+                     score = newRecord.getValue(FIELDS.scoreResponse);
+                  }
+                  
+                  // const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
                   const bcuVars = auxLib.extractBcuVariables(score);
                   const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
