@@ -20,6 +20,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          calificacion: 'custentity_calificacion',
          montoOfrecido: 'custentity_sdb_montoofrecido',
          canal: 'custentity_elm_channel',
+         scoreResponse: 'custentity_response_score_bcu',
       };
       /**
      * @author Gerardo Gonzalez
@@ -147,8 +148,14 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                const shouldScore = !infoRepetido?.id || (isFromExternal && isPreLead && isRejected) || needsRecalculate || isCreate;
 
                // tHEN CHANGE THIS LOGIC TO CHECK IF IT SHOULD SCORE OR NOT
-               if (shouldScore && !calificacion) {
-                  const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+               if (shouldScore) {
+                  let score;
+                  if (!calificacion) {
+                      score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+                  } else {
+                     score = newRecord.getValue(FIELDS.scoreResponse);
+                  }
+                 
                   const bcuVars = auxLib.extractBcuVariables(score);
                   const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
 
