@@ -10,7 +10,7 @@ define(['N/log'], function (log) {
     const PROVIDER_BCU = 'bcu';
     const PROVIDER_MYM = 'mym';
 
-    const BAD_RATINGS = ['2B', '2', '3', '4', '5'];
+    const BAD_RATINGS = ['2B', '2', '3', '4', '5', '0'];
 
     /**
      * Normaliza respuesta de Equifax IC GCP REPORTE a formato uniforme

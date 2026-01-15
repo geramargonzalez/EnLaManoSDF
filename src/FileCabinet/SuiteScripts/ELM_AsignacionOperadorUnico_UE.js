@@ -24,7 +24,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                     estatusGestionField.updateDisplayType({
                         displayType : serverWidget.FieldDisplayType.DISABLED
                     });
-                    createEstadoGestionField(form,estatusGestion, role);
+                    createEstadoGestionField(form,estatusGestion, role, estatusGestion == objScriptParam.estadoConvertido);
                 }
                
 
@@ -269,6 +269,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
             asesorVentasrole: scriptObj.getParameter({ name: 'custscript_elm_asesor_estado_rol' }),
             analistaRole: scriptObj.getParameter({ name: 'custscript_elm_analista_rol' }),
             tienePrestomo: scriptObj.getParameter({ name: 'custscript_tiene_prestamos_pm' }),
+            estadoConvertido: scriptObj.getParameter({ name: 'custscript_elm_convertido_rol' }) || 11,
             alPrestamo: 2,
             noHayOferta: 4
          };
@@ -336,7 +337,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
      * @param {string} estatusGestion
      * @param {string} role
      */
-    function createEstadoGestionField(form, estatusGestion, role) {
+    function createEstadoGestionField(form, estatusGestion, role, isConvertido) {
         try {
             const objScriptParam = getScriptParameters();
             const textLabel = role == objScriptParam.asesorVentasrole || role == 1010 ? 'Estado de Gestión Ventas' : 'Estado de Gestión Análisis';
@@ -362,6 +363,7 @@ define([ 'N/runtime', 'N/search', 'N/error', 'N/record',"./ELM_Aux_Lib.js", 'N/u
                 });
             });
             estadoGestion.defaultValue = estatusGestion;
+            estadoGestion.isDisabled = isConvertido;
         } catch (e) {
             log.error('Error createEstadoGestionField:', e);
         }

@@ -123,9 +123,7 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
             if (context.fieldId === "custentity_elm_aprobado" ) {
                 // Enable reject reason field when estado gestion is 1
                 const estadoGestion = currentRecord.getValue({ fieldId: 'custentity_elm_aprobado' });
-                // const solVigente = currentRecord.getValue({ fieldId: 'custentity_elm_sol_vig' });
-                // const motivoRechazado = currentRecord.getValue({ fieldId: 'custentity_elm_reject_reason' });
-                
+
                 if (estadoGestion == rechazado || estadoGestion == rechazadoPorAsesor) {
                     currentRecord.getField({
                         fieldId: 'custentity_elm_reject_reason'
@@ -156,9 +154,6 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                     }).isMandatory = false;
                 }
 
-                // Handle mandatory field for sub estado based on approval status
-                // Enable or disable sub estado field based on estado gestion
-
                 if (estadoGestion == sinRepuesta) {
                     currentRecord.getField({
                         fieldId: 'custentity_elm_sub_estado'
@@ -168,22 +163,6 @@ define(['N/runtime', 'N/ui/dialog', 'N/search', 'N/record', "./ELM_Aux_Lib.js"],
                         fieldId: 'custentity_elm_sub_estado'
                     }).isMandatory = false;
                 }
-
-            /*     if (solVigente) {
-                    const id = record.submitFields({
-                    type: 'customrecord_elm_solicitud',
-                    id: solVigente,
-                    values: {
-                        custrecord_elm_sol_est_gestion: estadoGestion
-                    }
-                });
-                console.log('ID de solicitud actualizado:', id);
-
-                
-
-                //auxlib.createEtapaSolicitud(estadoGestion, runtime.getCurrentUser().id, solVigente);
-
-                 } */
 
                  auxlib.createGestionLead({
                     leadId: currentRecord.id,
