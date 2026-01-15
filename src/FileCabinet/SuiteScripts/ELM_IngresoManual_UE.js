@@ -152,7 +152,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                       score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
                   } else {
                      log.debug('Decision BCU', calificationId);
-                     score = newRecord.getValue(FIELDS.scoreResponse);
+                     score = JSON.parse(newRecord.getValue(FIELDS.scoreResponse));
                   }
                   
                   // const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
@@ -165,9 +165,9 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                      const ofertaFinal = auxLib.getOfertaFinal(montoCuota);
 
                      let isApproved = true;
-
-                      if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
-                           log.debug('Rechazo VAR END');
+                     log.debug(' montoCuotaObj', montoCuotaObj);
+                      if (montoCuotaObj?.esRechazo) {
+                           log.debug('Rechazo esRechazo');
                            isApproved = false;
                         }
  

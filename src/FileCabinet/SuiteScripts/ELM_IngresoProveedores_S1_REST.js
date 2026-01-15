@@ -176,7 +176,7 @@ function (search, scoreLib, runtime, auxLib, record, bcuScoreLib) {
             const ofertaFinal = getOfertaFinal(source, montoCuota);
 
             let isLatente = true;
-            if (ponder?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) isLatente = false;
+            if (ponder?.esRechazo) isLatente = false;
             // if (source === 'AlPrestamo' && !ofertaFinal) isLatente = false;
 
             if (isLatente) {
