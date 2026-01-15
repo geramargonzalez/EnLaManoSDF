@@ -32,14 +32,7 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
          let idLog = null;
          const docNumber = newRecord.getValue(FIELDS.docNumber);
          const estadoGestionPendienteSinRespuesta = newRecord.getValue(FIELDS.aprobado);
-
-          // En sandbox, enmascarar nombres de leads/preleads
-          const isSandbox = runtime.envType === runtime.EnvType.SANDBOX;
-          if (isSandbox) {
-             newRecord.setValue('firstname', 'default');
-             newRecord.setValue('lastname', 'default');
-          }
-
+         
          const response = {
                docNumber: docNumber,
                success: true,
@@ -150,10 +143,14 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
                // tHEN CHANGE THIS LOGIC TO CHECK IF IT SHOULD SCORE OR NOT
                if (shouldScore) {
                   let score;
-                  if (!calificacion) {
-                      score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+                  // const score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
+
+                  if (calificacion) {
+                     log.audit('Using existing calificacion', calificacion);
+                     score = JSON.parse(newRecord.getValue(FIELDS.scoreResponse));
                   } else {
-                     score = newRecord.getValue(FIELDS.scoreResponse);
+                     log.audit('Calculating new score for document', docNumber);
+                      score = bcuScoreLib.scoreFinal(docNumber, { provider: objScriptParam.providerBCU, forceRefresh: false, debug: false, strictRules: true });
                   }
                   const bcuVars = auxLib.extractBcuVariables(score);
                   const { endeudT2, endeudT6, cantEntT2, cantEntT6, peorCalifT2, peorCalifT6 } = bcuVars;
@@ -165,10 +162,10 @@ define(['./SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/runtime', 'N/error', '
 
                      let isApproved = true;
 
-                      if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
-                           log.debug('Rechazo VAR END');
-                           isApproved = false;
-                        }
+                     if (montoCuotaObj?.esRechazo) {
+                        log.debug('esRechazo');
+                        isApproved = false;
+                     }
  
                      if (isApproved) {
                         log.audit('Success', `Oferta para el documento: ${docNumber}. Oferta: ${ofertaFinal?.oferta} - Cuota Final: ${ofertaFinal?.cuotaFinal}`);

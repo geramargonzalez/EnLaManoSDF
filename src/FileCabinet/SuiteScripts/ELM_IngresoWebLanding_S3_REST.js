@@ -82,7 +82,7 @@ define(["./SDB-Enlamano-score.js", "./ELM_Aux_Lib.js", "N/runtime",  "N/record",
                               let montoCuota = parseFloat(infoRepetido.salary) * parseFloat(montoCuotaObj.ponderador);
                               let ofertaFinal = auxLib.getOfertaFinal(montoCuota);
                               let isLatente = true;
-                               if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
+                               if (montoCuotaObj?.esRechazo) {
                                  isLatente = false;
                               }
                               if (isLatente) {

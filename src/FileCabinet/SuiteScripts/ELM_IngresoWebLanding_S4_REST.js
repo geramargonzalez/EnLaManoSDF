@@ -75,7 +75,7 @@ define(['N/runtime', './SDB-Enlamano-score.js', './ELM_Aux_Lib.js', 'N/record','
                   log.debug('ofertaFinal', ofertaFinal);
 
                   let isLatente = true;
-                  if (montoCuotaObj?.montoCuotaName?.toUpperCase()?.includes('RECHAZO VAR END')) {
+                  if (montoCuotaObj?.esRechazo) {
                       isLatente = false;
                   }
 

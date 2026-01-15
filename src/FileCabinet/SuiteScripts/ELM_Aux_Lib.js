@@ -1201,7 +1201,8 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                filters: filters,
                columns: [
                   search.createColumn({ name: "custrecord_ponderador" }),
-                  search.createColumn({ name: "name" })
+                  search.createColumn({ name: "name" }),
+                  search.createColumn({ name: "custrecord_es_rechazo" })
                ]
             });
             
@@ -1211,6 +1212,7 @@ define(['N/query', 'N/record', 'N/search', 'N/error'],
                montoCuotaObj.montoCuotaId = result.id;
                montoCuotaObj.montoCuotaName = result.getValue('name');
                montoCuotaObj.ponderador = result.getValue('custrecord_ponderador');
+               montoCuotaObj.esRechazo = result.getValue('custrecord_es_rechazo');
                return true;
             });
             return montoCuotaObj;
